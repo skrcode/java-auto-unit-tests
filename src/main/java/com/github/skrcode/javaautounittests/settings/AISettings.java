@@ -11,7 +11,7 @@ public class AISettings implements PersistentStateComponent<AISettings.State> {
 
     public static class State {
         public String openAiKey = "";
-        public String model = "gpt-4.1-nano";
+        public String model = "";
         public String testDirectory = "";
 
     }
