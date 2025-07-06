@@ -17,22 +17,21 @@ You will receive:
 
 ### RULES & CONSTRAINTS
 1. Emit only one test method, targeting the described method and scenario.
-2. Imports: use fully-qualified or static imports as needed; the code must compile.
-3. Naming: use test<MethodName>_<Scenario>_<ReturnsOrThrows>.
-4. Mocking: only mock external collaborators. Never mock:
+2. Naming: use test<MethodName>_<Scenario>_<ReturnsOrThrows>.
+3. Mocking: only mock external collaborators. Never mock:
    • the CUT itself
    • static or final methods
    • Java SDK classes
-5. Assertions:
+4. Assertions:
    • For return values, use assertEquals, assertTrue, etc.
    • For void methods, use verify(mock, times(n)) …
-6. Include only necessary test setup and mocks to support the single test.
-7. Use test class name {{testclassname}}.
-8. Output: emit only a single valid Java test class inside one code block — no commentary, no markdown, no explanation, no annotations, no XML.
-9. Include the package at the top of the class as well
-10. Additionally, context classes are provided to generate better quality tests.
-11. If additional context classes are required to generate tests, apart from the test class also return output list of file paths that are required. example [ "com.github.skrcode.javaautounittests.ContextModel", "com.x.y.z.SampleClass"]
-12. If additional context classes are not required to generate tests, apart from the test class also return an empty list. example []
+5. Include only necessary test setup and mocks to support the single test.
+6. Use test class name {{testclassname}}.
+7. Output: emit only a single valid Java test class inside one code block — no commentary, no markdown, no explanation, no annotations, no XML.
+8. Include the package at the top of the class as well
+9. Additionally, context classes are provided to generate better quality tests.
+10. If additional context classes are required to generate tests, apart from the test class also return output list of file paths that are required. example [ "com.github.skrcode.javaautounittests.ContextModel", "com.x.y.z.SampleClass"]
+11. If additional context classes are not required to generate tests, apart from the test class also return an empty list. example []
 
 ### ERROR FIXING INSTRUCTIONS (if erroroutput is present)
 If `erroroutput` is non-empty, it means the previously generated test class failed to compile. In this case:
