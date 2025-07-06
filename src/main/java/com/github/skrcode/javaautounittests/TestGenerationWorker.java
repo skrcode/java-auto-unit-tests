@@ -61,11 +61,11 @@ public final class TestGenerationWorker {
             String getSingleTestPromptPlaceholder = PromptBuilder.getPromptPlaceholder("get-single-test-prompt");
             String getAggregateTestClassPromptPlaceholder = PromptBuilder.getPromptPlaceholder("aggregate-test-class-prompt");
 
-            indicator.setText("Generating scenarios for " + cutName);
-            ScenariosResponseOutput scenarios = JAIPilotLLM.getScenarios(getScenariosPromptPlaceholder, cutClass);
+//            indicator.setText("Generating scenarios for " + cutName);
+//            ScenariosResponseOutput scenarios = JAIPilotLLM.getScenarios(getScenariosPromptPlaceholder, cutClass);
 
-            int MAX_TESTS = scenarios.testScenarios.size();
-            List<ScenariosResponseOutput.TestScenario> testableScenarios = scenarios.testScenarios.subList(0, Math.min(MAX_TESTS, scenarios.testScenarios.size()));
+            int MAX_TESTS = 1;//scenarios.testScenarios.size();
+//            List<ScenariosResponseOutput.TestScenario> testableScenarios = scenarios.testScenarios.subList(0, Math.min(MAX_TESTS, scenarios.testScenarios.size()));
             Set<Integer> completedTests = new HashSet<>();
             List<String> individualTestCases = new ArrayList<>(), errorOutputOfindividualTestCases = new ArrayList<>(), existingIndividualTestClasses = new ArrayList<>(), individualTestFileNames = new ArrayList<>();
             List<List<String>> contextClassesForEachIndividualTest = new ArrayList<>();
@@ -73,7 +73,7 @@ public final class TestGenerationWorker {
             for (int index = 0; index < MAX_TESTS; index++) {
                 individualTestCases.add("");
                 errorOutputOfindividualTestCases.add("");
-                individualTestFileNames.add(cutName + "TmpTest" + index + ".java");
+                individualTestFileNames.add(cutName + "Test" + ".java");
                 existingIndividualTestClasses.add("");
                 contextClassesForEachIndividualTest.add(new ArrayList<>());
             }
@@ -107,7 +107,7 @@ public final class TestGenerationWorker {
                         contextClassesForTest -> getSourceCodeOfContextClasses(project,contextClassesForTest)
                 ).collect(Collectors.toList());
 
-                SingleTestPromptResponseOutput singleTestPromptResponseOutput = JAIPilotLLM.getAllSingleTest(completedTests, getSingleTestPromptPlaceholder, individualTestFileNames, cutClass, testableScenarios, existingIndividualTestClasses, errorOutputOfindividualTestCases, contextClassesSourceForEachIndividualClass, attempt);
+                SingleTestPromptResponseOutput singleTestPromptResponseOutput = JAIPilotLLM.getAllSingleTest(completedTests, getSingleTestPromptPlaceholder, individualTestFileNames, cutClass, new ArrayList<>(), existingIndividualTestClasses, errorOutputOfindividualTestCases, contextClassesSourceForEachIndividualClass, attempt);
                 indicator.setText("Successfully invoked LLM #" + attempt + "/" + MAX_ATTEMPTS);
 
                 // 3. Write to temp files
@@ -119,11 +119,11 @@ public final class TestGenerationWorker {
                     BuilderUtil.write(project, individualTestFile, singleTestPromptResponseOutput.getTestClassCodeForEachIndividualClass().get(index), packageDir, individualTestFileNames.get(index));
                 }
             }
-            BuilderUtil.deleteFiles(project, individualTestFileNames, packageDir);
+//            BuilderUtil.deleteFiles(project, individualTestFileNames, packageDir);
 
             String testFileName = cutName + "Test.java";
-            indicator.setText("Aggregating Test Class " + testFileName);
-            runAggregationPipeline(indicator, project, testFileName, individualTestCases, getAggregateTestClassPromptPlaceholder, packageDir);
+//            indicator.setText("Aggregating Test Class " + testFileName);
+//            runAggregationPipeline(indicator, project, testFileName, individualTestCases, getAggregateTestClassPromptPlaceholder, packageDir);
             indicator.setText("Successfully generated Test Class " + testFileName);
         }
         catch (Throwable t) {

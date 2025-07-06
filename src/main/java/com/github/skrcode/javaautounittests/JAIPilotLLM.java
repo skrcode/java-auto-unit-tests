@@ -187,7 +187,7 @@ public final class JAIPilotLLM {
                     "{{inputclass}}", inputClass,
                     "{{testclass}}", existingTestClasses.get(idx),
                     "{{erroroutput}}", errorOutputs.get(idx),
-                    "{{testscenario}}", testScenarios.get(idx).toString(),
+//                    "{{testscenario}}", testScenarios.get(idx).toString(),
                     "{{testclassname}}", testClassNames.get(idx),
                     "{{contextclasses}}", contextClassesSourceForEachIndividualClass.get(idx).toString()
             );
