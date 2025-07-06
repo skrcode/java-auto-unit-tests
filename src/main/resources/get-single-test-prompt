@@ -32,6 +32,7 @@ You will receive:
 9. Additionally, context classes are provided to generate better quality tests.
 10. If additional context classes are required to generate tests, apart from the test class also return output list of file paths that are required. example [ "com.github.skrcode.javaautounittests.ContextModel", "com.x.y.z.SampleClass"]
 11. If additional context classes are not required to generate tests, apart from the test class also return an empty list. example []
+12. Context Classes requested are preferred to be classes that are specific to this codebase and not generic classes which are already known about.
 
 ### ERROR FIXING INSTRUCTIONS (if erroroutput is present)
 If `erroroutput` is non-empty, it means the previously generated test class failed to compile. In this case:
