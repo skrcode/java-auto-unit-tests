@@ -200,6 +200,7 @@ public class BuilderUtil {
                 newPsi = createAndAddFile(project, packageDir, testFileName, testSource);
             }
             JavaCodeStyleManager.getInstance(project).optimizeImports(newPsi);
+            JavaCodeStyleManager.getInstance(project).shortenClassReferences(newPsi);
             CodeStyleManager.getInstance(project).reformat(newPsi);
             testFile.set(newPsi);                   // 🔑 update the Ref to the NEW file
         });
