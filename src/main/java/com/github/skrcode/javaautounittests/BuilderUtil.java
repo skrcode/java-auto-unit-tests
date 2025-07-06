@@ -1,4 +1,5 @@
 package com.github.skrcode.javaautounittests;
+import com.github.skrcode.javaautounittests.settings.AISettings;
 import com.intellij.execution.*;
 import com.intellij.execution.configurations.ConfigurationFactory;
 import com.intellij.execution.executors.DefaultRunExecutor;
@@ -40,6 +41,10 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -236,6 +241,19 @@ public class BuilderUtil {
         PsiFile file = PsiFileFactory.getInstance(project)
                 .createFileFromText(name, JavaFileType.INSTANCE, source);
         return (PsiFile) dir.add(file);
+    }
+
+    public static void writeToTempDirectory(String suffixPath, String fileName, String content) {
+        try {
+            Path dirPath = Paths.get(AISettings.getInstance().getTestDirectory()+suffixPath);
+            if (!Files.exists(dirPath)) {
+                Files.createDirectories(dirPath); // create parent dirs if not exist
+            }
+            Path filePath = dirPath.resolve(fileName);
+            Files.write(filePath, content.getBytes(StandardCharsets.UTF_8));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
 

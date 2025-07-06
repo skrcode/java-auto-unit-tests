@@ -27,6 +27,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
+import static com.github.skrcode.javaautounittests.BuilderUtil.writeToTempDirectory;
 
 /** Convenience façade so we can switch out or mock in tests. */
 public final class JAIPilotLLM {
@@ -197,16 +198,7 @@ public final class JAIPilotLLM {
             }
             String finalPrompt = prompt;
 
-            try {
-                Path dirPath = Paths.get(AISettings.getInstance().getTestDirectory()+"/prompt-logs");
-                if (!Files.exists(dirPath)) {
-                    Files.createDirectories(dirPath); // create parent dirs if not exist
-                }
-                Path filePath = dirPath.resolve("Prompt"+testClassNames.get(idx)+"-"+attempt+".txt");
-                Files.write(filePath, finalPrompt.getBytes(StandardCharsets.UTF_8));
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+            writeToTempDirectory("/prompt-logs","Prompt"+testClassNames.get(idx)+"-"+attempt+".txt",finalPrompt);
 
             CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
                 try {

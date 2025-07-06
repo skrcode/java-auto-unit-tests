@@ -54,11 +54,8 @@ public final class TestGenerationWorker {
             }
 
             String cutName = ReadAction.compute(() -> cut.isValid() ? cut.getName() : "<invalid>");
-            String cutClass  = ReadAction.compute(() -> {
-                if (!cut.isValid()) return "<invalid>";
-                PsiFile file = cut.getContainingFile();
-                return file != null ? file.getText() : "<no file>";
-            });
+            String cutClass = CUTUtil.cleanedSourceForLLM(project, cut);
+
 
             String getScenariosPromptPlaceholder = PromptBuilder.getPromptPlaceholder("get-scenarios-prompt");
             String getSingleTestPromptPlaceholder = PromptBuilder.getPromptPlaceholder("get-single-test-prompt");
