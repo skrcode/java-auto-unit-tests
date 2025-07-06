@@ -148,11 +148,11 @@ public final class JAIPilotLLM {
         return testClasses;
     }
 
-    public static SingleTestPromptResponseOutput getAllSingleTest(Set<Integer> completedTests, String promptPlaceholder, List<String> testClassNames, String inputClass, List<ScenariosResponseOutput.TestScenario> testScenarios, List<String> existingTestClasses, List<String> errorOutputs, List<List<String>> contextClassesSourceForEachIndividualClass, int attempt) {
+    public static SingleTestPromptResponseOutput getAllSingleTest(Set<Integer> completedTests, String promptPlaceholder, List<String> testClassNames, String inputClass, List<String> existingTestClasses, List<String> errorOutputs, List<List<String>> contextClassesSourceForEachIndividualClass, int attempt) {
         ExecutorService executor = Executors.newCachedThreadPool();
         List<CompletableFuture<Void>> futures = new ArrayList<>();
-        List<String> testClasses = new ArrayList<>(Collections.nCopies(testScenarios.size(), ""));
-        List<List<String>> contextClasses = new ArrayList<>(Collections.nCopies(testScenarios.size(), List.of()));
+        List<String> testClasses = new ArrayList<>(Collections.nCopies(1, ""));
+        List<List<String>> contextClasses = new ArrayList<>(Collections.nCopies(1, List.of()));
 
 
         Schema schema = Schema.builder()
@@ -174,7 +174,7 @@ public final class JAIPilotLLM {
         GenerateContentConfig generateContentConfig = GenerateContentConfig.builder().responseMimeType("application/json").candidateCount(1).responseSchema(schema).build();
         ObjectMapper mapper = new ObjectMapper();
 
-        for (int i = 0; i < testScenarios.size(); i++) {
+        for (int i = 0; i < 1; i++) {
             int idx = i;
 
             if (completedTests.contains(idx)) {

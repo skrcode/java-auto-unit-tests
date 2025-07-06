@@ -107,7 +107,7 @@ public final class TestGenerationWorker {
                         contextClassesForTest -> getSourceCodeOfContextClasses(project,contextClassesForTest)
                 ).collect(Collectors.toList());
 
-                SingleTestPromptResponseOutput singleTestPromptResponseOutput = JAIPilotLLM.getAllSingleTest(completedTests, getSingleTestPromptPlaceholder, individualTestFileNames, cutClass, new ArrayList<>(), existingIndividualTestClasses, errorOutputOfindividualTestCases, contextClassesSourceForEachIndividualClass, attempt);
+                SingleTestPromptResponseOutput singleTestPromptResponseOutput = JAIPilotLLM.getAllSingleTest(completedTests, getSingleTestPromptPlaceholder, individualTestFileNames, cutClass, existingIndividualTestClasses, errorOutputOfindividualTestCases, contextClassesSourceForEachIndividualClass, attempt);
                 indicator.setText("Successfully invoked LLM #" + attempt + "/" + MAX_ATTEMPTS);
 
                 // 3. Write to temp files
