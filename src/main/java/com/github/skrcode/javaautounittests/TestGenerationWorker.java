@@ -155,13 +155,13 @@ public final class TestGenerationWorker {
             PsiClass psiClass = ReadAction.compute(() -> psiFacade.findClass(contextClassPath, scope));
 
             if (psiClass == null || !psiClass.isValid()) {
-                result.add("");
+                result.add(contextClassPath+" is not valid. Attempt to change this.");
                 continue;
             }
 
             PsiFile file = psiClass.getContainingFile();
             if (file == null || !file.isValid()) {
-                result.add("");
+                result.add(contextClassPath+" is not valid. Attempt to change this.");
                 continue;
             }
             String code = ReadAction.compute(file::getText);
