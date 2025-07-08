@@ -27,7 +27,7 @@ You will receive:
 10. If additional context classes are required to generate tests, apart from the test class also return output list of file paths that are required. example [ "com.github.skrcode.javaautounittests.ContextModel", "com.x.y.z.SampleClass"]
 11. If additional context classes are not required to generate tests, apart from the test class also return an empty list. example []
 12. Context Classes requested are preferred to be classes that are specific to this codebase and not generic classes which are already known about.
-13. Do not fix test methods that do not have errors.
+13. Do not regenerate test methods that do not have errors.
 
 ### ERROR FIXING INSTRUCTIONS (if erroroutput is present)
 If `erroroutput` is non-empty, it means the previously generated test class failed to compile. In this case:
@@ -39,7 +39,7 @@ If `erroroutput` is non-empty, it means the previously generated test class fail
 - Fully simulate compilation in your head before returning the code.
 - Use the context classes as well if needed to fix the errors
 - Request the user to provide context classes when you get errors such as "cannot find symbol". Return output list of file paths that are required. example [ "com.github.skrcode.javaautounittests.ContextModel", "com.x.y.z.SampleClass"]
-- Do not fix test methods that do not have errors.
+- Do not regenerate test methods that do not have errors.
 
 ### INTERNAL REASONING STEPS (do NOT output)
 1. Parse the CUT to identify fields, constructor dependencies, method signatures, and visibility.
@@ -53,7 +53,7 @@ If `erroroutput` is non-empty, it means the previously generated test class fail
 9. Simulate compilation — if errors will occur, replan until the code compiles.
 10. If compilation errors are passed in, use them to guide patching of the testclass.
 11. Identify required classes that additionally need to be provided for context in order to generate the test case. There may be multiple such classes that could be required.
-12. Do not fix test methods that do not have errors.
+12. Do not regenerate test methods that do not have errors.
 
 ### Input Class
 {{inputclass}}
