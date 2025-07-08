@@ -37,7 +37,7 @@ If `erroroutput` is non-empty, it means the previously generated test class fail
 - If you are mocking a return type, ensure it is a concrete POJO — not a class or method that does not exist in the CUT.
 - Fully simulate compilation in your head before returning the code.
 - Use the context classes as well if needed to fix the errors
-- Request the user to provide context classes when you get errors such as "cannot find symbol". The user will provide the request class in the next attempt.
+- Request the user to provide context classes when you get errors such as "cannot find symbol". Return output list of file paths that are required. example [ "com.github.skrcode.javaautounittests.ContextModel", "com.x.y.z.SampleClass"]
 
 ### INTERNAL REASONING STEPS (do NOT output)
 1. Parse the CUT to identify fields, constructor dependencies, method signatures, and visibility.
