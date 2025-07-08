@@ -28,6 +28,54 @@ You will receive:
 11. If additional context classes are not required to generate tests, apart from the test class also return an empty list. example []
 12. Context Classes requested are preferred to be classes that are specific to this codebase and not generic classes which are already known about.
 13. Do not regenerate test methods that do not have errors.
+14. You do not need to generate any additional helper classes or helper code. All you need is the test class with correct imports, annotations, test methods, properly mocked objects, before and after methods if required or can be kept empty.
+15. You need to follow this structure. This is a boilerplate test class.
+package org.springframework.samples.petclinic.service;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.samples.petclinic.repository.OwnerRepository;
+import org.springframework.samples.petclinic.repository.PetRepository;
+import org.springframework.samples.petclinic.repository.VetRepository;
+import org.springframework.samples.petclinic.repository.VisitRepository;
+
+@ExtendWith(MockitoExtension.class)
+class ClinicServiceImplTest {
+
+    @Mock
+    private PetRepository petRepository;
+
+    @Mock
+    private VetRepository vetRepository;
+
+    @Mock
+    private OwnerRepository ownerRepository;
+
+    @Mock
+    private VisitRepository visitRepository;
+
+    @InjectMocks
+    private ClinicServiceImpl clinicService;
+
+    @BeforeEach
+    void setUp() {
+    }
+
+    @AfterEach
+    void destroy() {
+
+    }
+
+    @Test
+    void testFindPetTypes_Success_ReturnsPetTypes() {
+    }
+}
+
 
 ### ERROR FIXING INSTRUCTIONS (if erroroutput is present)
 If `erroroutput` is non-empty, it means the previously generated test class failed to compile. In this case:
