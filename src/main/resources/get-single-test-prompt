@@ -27,7 +27,7 @@ You will receive:
 10. If additional context classes are required to generate tests, apart from the test class, also return output list of class paths that are required. example [ "com.github.skrcode.javaautounittests.ContextModel", "com.x.y.z.SampleClass"]
 11. If additional context classes are not required to generate tests, apart from the test class also return an empty list. example []
 12. Context Classes requested are preferred to be classes that are specific to this codebase and not generic classes which are already known about.
-13. Do not regenerate test methods that do not have errors.
+13. Do not regenerate test methods that do not have errors. Do not regenerate or update tests which do not have errors. Existing working test cases should remain as they were.
 14. You do not need to generate any additional classes. All you need is the test class with correct imports, annotations, test methods, properly mocked objects, before and after methods if required or can be kept empty.
 15. You need to follow this structure. This is a boilerplate test class.
 package org.springframework.samples.petclinic.service;
