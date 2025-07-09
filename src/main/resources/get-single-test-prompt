@@ -97,7 +97,7 @@ If `erroroutput` is non-empty, it means the previously generated test class fail
 5. Validate method arguments and return type.
 6. Resolve all missing types — avoid nested types that don't exist (e.g., avoid `.Data.class` if not found).
 7. Plan test inputs and mocks based on scenario.
-8. Generate only one test method using real types, return values, and expected behaviors.
+8. Generate test methods using real types, return values, and expected behaviors.
 9. Simulate compilation — if errors will occur, replan until the code compiles.
 10. If compilation errors are passed in, use them to guide patching of the testclass.
 11. Identify required classes that additionally need to be provided for context in order to generate the test case. There may be multiple such classes that could be required.
