@@ -1,5 +1,6 @@
 package com.github.skrcode.javaautounittests;
 import com.github.skrcode.javaautounittests.settings.AISettings;
+import com.intellij.compiler.CompilerMessageImpl;
 import com.intellij.execution.*;
 import com.intellij.execution.configurations.ConfigurationFactory;
 import com.intellij.execution.executors.DefaultRunExecutor;
@@ -25,10 +26,7 @@ import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleUtilCore;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.ContentFolder;
-import com.intellij.openapi.util.Computable;
-import com.intellij.openapi.util.Key;
-import com.intellij.openapi.util.Pair;
-import com.intellij.openapi.util.Ref;
+import com.intellij.openapi.util.*;
 import com.intellij.openapi.vfs.VfsUtil;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -162,7 +160,9 @@ public class BuilderUtil {
                 } else if (errors > 0) {
                     result.append("COMPILATION_FAILED\n");
                     for (CompilerMessage msg : context.getMessages(CompilerMessageCategory.ERROR)) {
-                        result.append(msg.getMessage()).append('\n');
+                        int line = ((CompilerMessageImpl) msg).getLine();
+                        String codeLine = (line > 0) ? getLineFromVirtualFile(project, msg.getVirtualFile(), line) : "<unknown>";
+                        result.append("Error at line :" + codeLine + "\n"+msg.getMessage()).append("\n\n");
                     }
                 }
                 latch.countDown();
@@ -181,29 +181,55 @@ public class BuilderUtil {
         return result.toString().trim();
     }
 
+    private static String getLineFromVirtualFile(Project project, VirtualFile file, int lineNumber) {
+        if (lineNumber < 1) return "<invalid line number>";
+
+        Document doc = FileDocumentManager.getInstance().getDocument(file);
+        if (doc == null) return "<document not found>";
+
+        int lineIndex = lineNumber - 1;
+        if (lineIndex >= doc.getLineCount()) return "<line number out of bounds>";
+
+        int startOffset = doc.getLineStartOffset(lineIndex);
+        int endOffset = doc.getLineEndOffset(lineIndex);
+
+        return doc.getText(new TextRange(startOffset, endOffset)).trim();
+    }
+
+
     public static void write(Project project, Ref<PsiFile> testFile, String testSource, PsiDirectory packageDir, String testFileName) {
         WriteCommandAction.runWriteCommandAction(project, () -> {
-            PsiFile newPsi;
+            PsiFile tempPsi = PsiFileFactory.getInstance(project).createFileFromText(
+                    testFileName,
+                    JavaFileType.INSTANCE,
+                    testSource
+            );
 
-            if (testFile.get() != null) {           // update existing
+            JavaCodeStyleManager.getInstance(project).shortenClassReferences(tempPsi);
+            JavaCodeStyleManager.getInstance(project).optimizeImports(tempPsi);
+            CodeStyleManager.getInstance(project).reformat(tempPsi);
+
+            String finalText = tempPsi.getText();
+
+            PsiFile newPsi;
+            if (testFile.get() != null) {
                 PsiDocumentManager docMgr = PsiDocumentManager.getInstance(project);
                 var doc = docMgr.getDocument(testFile.get());
                 if (doc != null) {
-                    doc.setText(testSource);
+                    doc.setText(finalText);
                     docMgr.commitDocument(doc);
                     newPsi = testFile.get();
-                } else {                            // fallback: replace file completely
+                } else {
                     testFile.get().delete();
-                    newPsi = createAndAddFile(project, packageDir, testFileName, testSource);
+                    newPsi = createAndAddFile(project, packageDir, testFileName, finalText);
                 }
-            } else {                                // create fresh file
-                newPsi = createAndAddFile(project, packageDir, testFileName, testSource);
+            } else {
+                newPsi = createAndAddFile(project, packageDir, testFileName, finalText);
             }
-            JavaCodeStyleManager.getInstance(project).optimizeImports(newPsi);
-            JavaCodeStyleManager.getInstance(project).shortenClassReferences(newPsi);
-            CodeStyleManager.getInstance(project).reformat(newPsi);
-            testFile.set(newPsi);                   // 🔑 update the Ref to the NEW file
+
+            testFile.set(newPsi);
         });
+
     }
 
     public static void deleteFile(Project project, PsiFile fileToDelete) {

@@ -77,7 +77,7 @@ public final class TestGenerationWorker {
                 existingIndividualTestClasses.add("");
                 contextClassesForEachIndividualTest.add(new ArrayList<>());
             }
-            BuilderUtil.deleteFiles(project, individualTestFileNames, packageDir);
+//            BuilderUtil.deleteFiles(project, individualTestFileNames, packageDir);
 
             // Attempts
             for (int attempt = 1; ; attempt++) {
