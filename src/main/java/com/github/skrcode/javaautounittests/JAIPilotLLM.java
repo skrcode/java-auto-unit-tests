@@ -10,40 +10,34 @@ import com.google.genai.types.GenerateContentConfig;
 import com.google.genai.types.GenerateContentResponse;
 import com.google.genai.types.Schema;
 import com.google.genai.types.Type;
-import com.intellij.openapi.ui.Messages;
-import com.openai.client.OpenAIClient;
-import com.openai.client.okhttp.OpenAIOkHttpClient;
-import com.openai.models.responses.ResponseCreateParams;
-import com.openai.models.responses.StructuredResponseCreateParams;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /** Convenience façade so we can switch out or mock in tests. */
 public final class JAIPilotLLM {
-    public static String invokeAI(String prompt) {
-        try {
-            OpenAIClient client = OpenAIOkHttpClient.builder().apiKey(AISettings.getInstance().getOpenAiKey()).build();
-
-            StructuredResponseCreateParams<ResponseOutput> params = ResponseCreateParams.builder()
-                    .input(prompt)
-                    .text(ResponseOutput.class)
-                    .model(AISettings.getInstance().getModel())
-                    .build();
-
-            return client.responses().create(params).output().stream()
-                    .flatMap(item -> item.message().stream())
-                    .flatMap(message -> message.content().stream())
-                    .flatMap(content -> content.outputText().stream())
-                    .map(responseTestClass -> responseTestClass.outputTestClass).collect(Collectors.joining());
-        } catch (Throwable t) {
-            t.printStackTrace();
-            Messages.showErrorDialog("AI Error: " + t.getClass().getName() + "\n" + t.getMessage(), "LLM Error");
-            return "ERROR: " + t.getMessage();
-        }
-    }
+//    public static String invokeAI(String prompt) {
+//        try {
+//            OpenAIClient client = OpenAIOkHttpClient.builder().apiKey(AISettings.getInstance().getOpenAiKey()).build();
+//
+//            StructuredResponseCreateParams<ResponseOutput> params = ResponseCreateParams.builder()
+//                    .input(prompt)
+//                    .text(ResponseOutput.class)
+//                    .model(AISettings.getInstance().getModel())
+//                    .build();
+//
+//            return client.responses().create(params).output().stream()
+//                    .flatMap(item -> item.message().stream())
+//                    .flatMap(message -> message.content().stream())
+//                    .flatMap(content -> content.outputText().stream())
+//                    .map(responseTestClass -> responseTestClass.outputTestClass).collect(Collectors.joining());
+//        } catch (Throwable t) {
+//            t.printStackTrace();
+//            Messages.showErrorDialog("AI Error: " + t.getClass().getName() + "\n" + t.getMessage(), "LLM Error");
+//            return "ERROR: " + t.getMessage();
+//        }
+//    }
 
     public static PromptResponseOutput getAllSingleTest(String promptPlaceholder, String testClassName, String inputClass, String existingTestClass, String errorOutput, List<String> contextClassesSources, int attempt) {
         Schema schema = Schema.builder()
