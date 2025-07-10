@@ -42,9 +42,9 @@ public final class TestGenerationWorker {
                 indicator.setText("Generating test : attempt" + attempt + "/" + MAX_ATTEMPTS);
 
                 Ref<PsiFile> testFile = Ref.create(packageDir.findFile(testFileName));
-                if (testFile.get() != null) {
+                if (ReadAction.compute(() -> testFile.get()) != null) {
                     indicator.setText("Compiling #" + attempt + "/" + MAX_ATTEMPTS + " : " + testFileName);
-                    existingIndividualTestClass = testFile.get().getText();
+                    existingIndividualTestClass = ReadAction.compute(() -> testFile.get().getText());
                     errorOutput = BuilderUtil.compileJUnitClass(project, testFile);
                     if (errorOutput.isEmpty() && isLLMGeneratedAtleastOnce) break;
                     indicator.setText("Compiled #" + attempt + "/" + MAX_ATTEMPTS + ": " + testFileName);
@@ -54,6 +54,7 @@ public final class TestGenerationWorker {
                 indicator.setText("Invoking LLM #" + attempt + "/" + MAX_ATTEMPTS);
                 List<String> contextClassesSource = getSourceCodeOfContextClasses(project,contextClasses);
                 PromptResponseOutput promptResponseOutput = JAIPilotLLM.getAllSingleTest( getSingleTestPromptPlaceholder, testFileName, cutClass, existingIndividualTestClass, errorOutput, contextClassesSource, attempt);
+                contextClasses = promptResponseOutput.getContextClasses();
                 isLLMGeneratedAtleastOnce = true;
                 indicator.setText("Successfully invoked LLM #" + attempt + "/" + MAX_ATTEMPTS);
                 BuilderUtil.write(project, testFile, promptResponseOutput.getTestClassCode(), packageDir, testFileName);
@@ -71,11 +72,13 @@ public final class TestGenerationWorker {
     private static @Nullable PsiDirectory resolveTestPackageDir(Project project,
                                                                 PsiDirectory testRoot,
                                                                 PsiClass cut) {
-        PsiPackage cutPkg = JavaDirectoryService.getInstance()
-                .getPackage(cut.getContainingFile().getContainingDirectory());
+
+        PsiPackage cutPkg = ReadAction.compute(() ->
+                JavaDirectoryService.getInstance().getPackage(cut.getContainingFile().getContainingDirectory())
+        );
         if (cutPkg == null) return null;
 
-        String relPath = cutPkg.getQualifiedName().replace('.', '/');
+        String relPath = ReadAction.compute(() -> cutPkg.getQualifiedName().replace('.', '/'));
         return getOrCreateSubdirectoryPath(project, testRoot, relPath);
     }
 
@@ -93,7 +96,7 @@ public final class TestGenerationWorker {
                 continue;
             }
 
-            PsiFile file = psiClass.getContainingFile();
+            PsiFile file = ReadAction.compute(() -> psiClass.getContainingFile());
             if (file == null || !file.isValid()) {
                 result.add(contextClassPath+" is not valid. Attempt to change this.");
                 continue;
