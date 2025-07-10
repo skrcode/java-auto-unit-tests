@@ -1,7 +1,11 @@
 package com.github.skrcode.javaautounittests;
+
 import com.github.skrcode.javaautounittests.settings.AISettings;
 import com.intellij.compiler.CompilerMessageImpl;
-import com.intellij.execution.*;
+import com.intellij.execution.Executor;
+import com.intellij.execution.ProgramRunnerUtil;
+import com.intellij.execution.RunManager;
+import com.intellij.execution.RunnerAndConfigurationSettings;
 import com.intellij.execution.configurations.ConfigurationFactory;
 import com.intellij.execution.executors.DefaultRunExecutor;
 import com.intellij.execution.junit.JUnitConfiguration;
@@ -11,45 +15,31 @@ import com.intellij.execution.process.ProcessEvent;
 import com.intellij.execution.process.ProcessHandler;
 import com.intellij.execution.runners.ExecutionEnvironment;
 import com.intellij.execution.runners.ExecutionEnvironmentBuilder;
-import com.intellij.execution.runners.ExecutionUtil;
 import com.intellij.ide.highlighter.JavaFileType;
 import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.application.WriteAction;
 import com.intellij.openapi.command.WriteCommandAction;
-import com.intellij.openapi.compiler.CompileScope;
 import com.intellij.openapi.compiler.CompilerManager;
 import com.intellij.openapi.compiler.CompilerMessage;
 import com.intellij.openapi.compiler.CompilerMessageCategory;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
-import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleUtilCore;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.roots.ContentFolder;
-import com.intellij.openapi.util.*;
-import com.intellij.openapi.vfs.VfsUtil;
-import com.intellij.openapi.vfs.VfsUtilCore;
+import com.intellij.openapi.util.Key;
+import com.intellij.openapi.util.Ref;
+import com.intellij.openapi.util.TextRange;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.*;
-import com.intellij.psi.codeStyle.CodeStyleManager;
-import com.intellij.psi.codeStyle.JavaCodeStyleManager;
-import com.intellij.testFramework.LightVirtualFile;
-import com.intellij.util.messages.MessageBusConnection;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 
 /**
@@ -197,40 +187,30 @@ public class BuilderUtil {
     }
 
 
-    public static void write(Project project, Ref<PsiFile> testFile, String testSource, PsiDirectory packageDir, String testFileName) {
+    public static void write(Project project,
+                                      Ref<PsiFile> testFile,
+                             PsiDirectory packageDir,
+                                      String testFileName,
+                                      String testSource) {
         WriteCommandAction.runWriteCommandAction(project, () -> {
-            PsiFile tempPsi = PsiFileFactory.getInstance(project).createFileFromText(
-                    testFileName,
-                    JavaFileType.INSTANCE,
-                    testSource
-            );
+            PsiFile existingFile = testFile.get();
 
-            JavaCodeStyleManager.getInstance(project).shortenClassReferences(tempPsi);
-            JavaCodeStyleManager.getInstance(project).optimizeImports(tempPsi);
-            CodeStyleManager.getInstance(project).reformat(tempPsi);
-
-            String finalText = tempPsi.getText();
-
-            PsiFile newPsi;
-            if (testFile.get() != null) {
-                PsiDocumentManager docMgr = PsiDocumentManager.getInstance(project);
-                var doc = docMgr.getDocument(testFile.get());
+            if (existingFile != null && existingFile.isValid()) {
+                Document doc = PsiDocumentManager.getInstance(project).getDocument(existingFile);
                 if (doc != null) {
-                    doc.setText(finalText);
-                    docMgr.commitDocument(doc);
-                    newPsi = testFile.get();
-                } else {
-                    testFile.get().delete();
-                    newPsi = createAndAddFile(project, packageDir, testFileName, finalText);
+                    doc.setText(testSource);
+                    PsiDocumentManager.getInstance(project).commitDocument(doc);
                 }
             } else {
-                newPsi = createAndAddFile(project, packageDir, testFileName, finalText);
+                PsiFile newFile = PsiFileFactory.getInstance(project).createFileFromText(
+                        testFileName, JavaFileType.INSTANCE, testSource);
+                PsiFile addedFile = (PsiFile) packageDir.add(newFile);
+                testFile.set(addedFile);
             }
-
-            testFile.set(newPsi);
         });
-
     }
+
+
 
     public static void deleteFile(Project project, PsiFile fileToDelete) {
         if (fileToDelete == null) return;

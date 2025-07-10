@@ -57,7 +57,7 @@ public final class TestGenerationWorker {
                 contextClasses = promptResponseOutput.getContextClasses();
                 isLLMGeneratedAtleastOnce = true;
                 indicator.setText("Successfully invoked LLM #" + attempt + "/" + MAX_ATTEMPTS);
-                BuilderUtil.write(project, testFile, promptResponseOutput.getTestClassCode(), packageDir, testFileName);
+                BuilderUtil.write(project, testFile, packageDir, testFileName, promptResponseOutput.getTestClassCode());
             }
             indicator.setText("Successfully generated Test Class " + testFileName);
         }

@@ -19,7 +19,7 @@ You will receive:
 4. Assertions:
    • For return values, use assertEquals, assertTrue, etc.
    • For void methods, use verify(mock, times(n)) …
-5. Include only necessary test setup and mocks to support the single test.
+5. Include only necessary test setup and mocks.
 6. Use test class name {{testclassname}}.
 7. Output: emit only a single valid Java test class inside one code block — no commentary, no markdown, no explanation, no annotations, no XML.
 8. Include the package at the top of the class as well
