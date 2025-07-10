@@ -2,19 +2,6 @@ package com.github.skrcode.javaautounittests;
 
 import com.github.skrcode.javaautounittests.settings.AISettings;
 import com.intellij.compiler.CompilerMessageImpl;
-import com.intellij.execution.Executor;
-import com.intellij.execution.ProgramRunnerUtil;
-import com.intellij.execution.RunManager;
-import com.intellij.execution.RunnerAndConfigurationSettings;
-import com.intellij.execution.configurations.ConfigurationFactory;
-import com.intellij.execution.executors.DefaultRunExecutor;
-import com.intellij.execution.junit.JUnitConfiguration;
-import com.intellij.execution.junit.JUnitConfigurationType;
-import com.intellij.execution.process.ProcessAdapter;
-import com.intellij.execution.process.ProcessEvent;
-import com.intellij.execution.process.ProcessHandler;
-import com.intellij.execution.runners.ExecutionEnvironment;
-import com.intellij.execution.runners.ExecutionEnvironmentBuilder;
 import com.intellij.ide.highlighter.JavaFileType;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.command.WriteCommandAction;
@@ -23,14 +10,14 @@ import com.intellij.openapi.compiler.CompilerMessage;
 import com.intellij.openapi.compiler.CompilerMessageCategory;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
-import com.intellij.openapi.module.ModuleUtilCore;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.util.Key;
 import com.intellij.openapi.util.Ref;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.psi.*;
-import org.jetbrains.annotations.NotNull;
+import com.intellij.psi.PsiDirectory;
+import com.intellij.psi.PsiDocumentManager;
+import com.intellij.psi.PsiFile;
+import com.intellij.psi.PsiFileFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -39,8 +26,6 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.regex.Pattern;
 
 /**
  * Compiles a JUnit test class, runs it with coverage, and returns:
@@ -51,91 +36,6 @@ import java.util.regex.Pattern;
 public class BuilderUtil {
 
     private BuilderUtil() {}
-
-
-    public static @NotNull String executeJUnitClass(Project project, Ref<PsiFile> testFileRef) {
-        StringBuilder failures = new StringBuilder();
-        Pattern TEAMCITY_FAIL = Pattern.compile("^##teamcity\\[testFailed");
-
-        PsiFile psiFile = testFileRef.get();
-        if (!(psiFile instanceof PsiJavaFile)) {
-            return "ERROR: Not a Java file";
-        }
-
-        PsiClass[] classes = ((PsiJavaFile) psiFile).getClasses();
-        if (classes.length == 0) {
-            return "ERROR: No class found in file";
-        }
-
-        PsiClass testClass = classes[0];
-
-        ApplicationManager.getApplication().invokeAndWait(() -> {
-            PsiDocumentManager.getInstance(project).commitAllDocuments();
-            FileDocumentManager.getInstance().saveAllDocuments();
-        });
-
-        // ── 1 – Create config ─────────────────────────────────────
-        ConfigurationFactory factory = JUnitConfigurationType.getInstance().getConfigurationFactories()[0];
-        RunnerAndConfigurationSettings settings =
-                RunManager.getInstance(project).createConfiguration(testClass.getName(), factory);
-
-        JUnitConfiguration config = (JUnitConfiguration) settings.getConfiguration();
-        config.setModule(ModuleUtilCore.findModuleForPsiElement(testClass));
-        config.setMainClass(testClass);
-
-        Executor executor = DefaultRunExecutor.getRunExecutorInstance();
-        AtomicBoolean processStarted = new AtomicBoolean(false);
-
-        // ── 2 – Run & wait ────────────────────────────────────────
-        ApplicationManager.getApplication().invokeAndWait(() -> {
-            try {
-                ExecutionEnvironmentBuilder builder = ExecutionEnvironmentBuilder.create(executor, settings);
-
-                ExecutionEnvironment environment = builder.build();
-
-                environment.setCallback(descriptor -> {
-                    ProcessHandler handler = descriptor.getProcessHandler();
-                    if (handler == null) {
-                        failures.append("ERROR: No process handler\n");
-                        return;
-                    }
-
-                    processStarted.set(true);
-
-                    handler.addProcessListener(new ProcessAdapter() {
-                        @Override
-                        public void onTextAvailable(@NotNull ProcessEvent e, @NotNull Key outputType) {
-                            String txt = e.getText().trim();
-                            if (TEAMCITY_FAIL.matcher(txt).find()) {
-                                failures.append(txt.replace("|n", "\n").replace("|r", "\r")).append('\n');
-                            }
-                        }
-
-                        @Override
-                        public void processTerminated(@NotNull ProcessEvent e) {
-                            // nothing to do here – the invokeAndWait already blocks till callback ends
-                        }
-                    });
-
-                    handler.startNotify(); // starts the process listener
-                });
-
-                ProgramRunnerUtil.executeConfiguration(environment, false, true); // block until run completes
-
-            } catch (Throwable t) {
-                failures.append("ERROR: could not launch test – ").append(t.getMessage()).append('\n');
-            }
-        });
-
-        if (!processStarted.get()) {
-            return "ERROR: Test JVM did not start";
-        }
-
-        return failures.toString().trim();
-    }
-
-
-
 
     public static String compileJUnitClass(Project project, Ref<PsiFile> testFile)  {
 

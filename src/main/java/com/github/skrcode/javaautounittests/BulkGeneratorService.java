@@ -1,7 +1,7 @@
 package com.github.skrcode.javaautounittests;
 
-import com.intellij.ide.BrowserUtil;
 import com.intellij.notification.NotificationGroupManager;
+import com.intellij.notification.NotificationListener;
 import com.intellij.notification.NotificationType;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
@@ -57,18 +57,10 @@ public final class BulkGeneratorService {
                                     "If JAIPilot helped you, please <a href=\"https://plugins.jetbrains.com/plugin/27706-jaipilot--ai-unit-test-generator/edit/reviews/new\">leave a review</a> and ⭐️ rate it — it helps a lot!",
                                     NotificationType.INFORMATION
                             )
-                            .setListener((notification, event) -> {
-                                String url = event.getURL().toString();
-                                if (url.startsWith("https://plugins.jetbrains.com")) {
-                                    BrowserUtil.browse(url);
-                                    notification.expire();
-                                }
-                            })
+                            .setListener(NotificationListener.URL_OPENING_LISTENER)
                             .notify(project);
                 });
             }
-
-
         });
     }
 }

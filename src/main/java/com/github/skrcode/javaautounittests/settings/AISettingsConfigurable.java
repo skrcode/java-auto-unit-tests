@@ -3,6 +3,7 @@ package com.github.skrcode.javaautounittests.settings;
 import com.github.skrcode.javaautounittests.PromptBuilder;
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory;
 import com.intellij.openapi.options.Configurable;
+import com.intellij.openapi.ui.TextBrowseFolderListener;
 import com.intellij.openapi.ui.TextFieldWithBrowseButton;
 import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.Nullable;
@@ -46,10 +47,9 @@ public class AISettingsConfigurable implements Configurable {
         testDirField.setAlignmentX(Component.LEFT_ALIGNMENT);
         testDirField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
         testDirField.addBrowseFolderListener(
-                "Select Test Sources Directory",
-                null,
-                null,
-                FileChooserDescriptorFactory.createSingleFolderDescriptor()
+                new TextBrowseFolderListener(
+                        FileChooserDescriptorFactory.createSingleFolderDescriptor()
+                )
         );
 
         // Add components to panel
