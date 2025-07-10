@@ -17,14 +17,14 @@
 - [ ] Click the <kbd>Watch</kbd> button on the top of the [IntelliJ Platform Plugin Template][template] to be notified about releases containing new features and fixes.
 
 <!-- Plugin description -->
-**Generate Robust Unit Tests for Java — Instantly with AI**
+**Generate Robust Unit Tests for Java - Instantly with AI**
 
-*JAIPilot - AI Unit Test Generator* helps you automatically generate complete, context-aware JUnit tests using OpenAI — directly inside IntelliJ.
+*JAIPilot - AI Unit Test Generator* helps you automatically generate complete, context-aware JUnit tests using Gemini - directly inside IntelliJ.
 
-- 🧠 **Understands your code** — generates tests based on method logic, inputs, and edge cases
-- ⚡ **One-click test generation** — right-click on any class or method to generate tests instantly
-- 🔌 **Works with your OpenAI key** — no external setup or backend required
-- 🧪 **Supports standard Java & JUnit** — no custom test framework needed
+- 🧠 **Understands your code** - generates tests based on method logic, inputs, and edge cases
+- ⚡ **One-click test generation** - right-click on any class or method to generate tests instantly
+- 🔌 **Works with your Gemini key** - no external setup or backend required. Gemini provides sufficient free credits to get started.
+- 🧪 **Supports standard Java & JUnit** - no custom test framework needed
 
 Perfect for developers who want fast, high-coverage tests without writing boilerplate. Built for speed, simplicity, and real-world use.
 

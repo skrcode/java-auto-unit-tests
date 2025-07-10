@@ -1,7 +1,7 @@
 package com.github.skrcode.javaautounittests;
 
+import com.intellij.ide.BrowserUtil;
 import com.intellij.notification.NotificationGroupManager;
-import com.intellij.notification.NotificationListener;
 import com.intellij.notification.NotificationType;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
@@ -14,6 +14,7 @@ import com.intellij.psi.PsiDirectory;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import javax.swing.event.HyperlinkEvent;
 import java.util.List;
 
 /**
@@ -57,7 +58,12 @@ public final class BulkGeneratorService {
                                     "If JAIPilot helped you, please <a href=\"https://plugins.jetbrains.com/plugin/27706-jaipilot--ai-unit-test-generator/edit/reviews/new\">leave a review</a> and ⭐️ rate it — it helps a lot!",
                                     NotificationType.INFORMATION
                             )
-                            .setListener(NotificationListener.URL_OPENING_LISTENER)
+                            .setListener((notification, event) -> {
+                                if (event.getEventType() == HyperlinkEvent.EventType.ACTIVATED) {
+                                    BrowserUtil.browse(event.getURL().toString());
+                                    notification.expire();
+                                }
+                            })
                             .notify(project);
                 });
             }
