@@ -41,10 +41,10 @@ public class GenerateTestAction extends AnAction implements DumbAware {
             Messages.showErrorDialog(project, "Please select only single java class.", "JAIPilot");
             return;
         }
-        if (AISettings.getInstance().getModel().isEmpty()|| AISettings.getInstance().getTestDirectory().isEmpty() || AISettings.getInstance().getOpenAiKey().isEmpty()) {
-            Messages.showErrorDialog(project, "Please configure details in settings.", "JAIPilot");
-            return;
-        }
+//        if (AISettings.getInstance().getModel().isEmpty()|| AISettings.getInstance().getTestDirectory().isEmpty() || AISettings.getInstance().getOpenAiKey().isEmpty()) {
+//            Messages.showErrorDialog(project, "Please configure details in settings.", "JAIPilot");
+//            return;
+//        }
         // Show settings dialog
         AISettingsDialog dialog = new AISettingsDialog();
         boolean okPressed = dialog.showAndGet(); // returns true if OK, false if Cancel

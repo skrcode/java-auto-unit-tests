@@ -5,6 +5,7 @@ import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory;
 import com.intellij.openapi.options.Configurable;
 import com.intellij.openapi.ui.TextBrowseFolderListener;
 import com.intellij.openapi.ui.TextFieldWithBrowseButton;
+import com.intellij.ui.components.JBPasswordField;
 import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.Nullable;
 
@@ -14,7 +15,7 @@ import java.util.Map;
 
 public class AISettingsConfigurable implements Configurable {
 
-    private JTextField apiKeyField;
+    private JPasswordField apiKeyField;
     private Component modelField;
     private JComboBox<String> modelCombo;
     private JPanel panel;
@@ -32,7 +33,7 @@ public class AISettingsConfigurable implements Configurable {
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
 
         // API Key input field
-        apiKeyField = new JTextField();
+        apiKeyField = new JBPasswordField();
         apiKeyField.setAlignmentX(Component.LEFT_ALIGNMENT);
         apiKeyField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
 
@@ -54,11 +55,11 @@ public class AISettingsConfigurable implements Configurable {
 
         // Add components to panel
         panel.add(Box.createVerticalStrut(8));
-        panel.add(new JLabel("Model API Key:"));
+        panel.add(new JLabel("Gemini Model API Key:"));
         panel.add(Box.createVerticalStrut(4));
         panel.add(apiKeyField);
         panel.add(Box.createVerticalStrut(12));
-        panel.add(new JLabel("Select Model:"));
+        panel.add(new JLabel("Select Gemini Model:"));
         panel.add(Box.createVerticalStrut(4));
         panel.add(modelCombo);
         panel.add(Box.createVerticalStrut(12));

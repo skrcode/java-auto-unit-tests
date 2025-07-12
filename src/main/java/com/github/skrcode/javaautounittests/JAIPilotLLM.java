@@ -10,6 +10,8 @@ import com.google.genai.types.GenerateContentConfig;
 import com.google.genai.types.GenerateContentResponse;
 import com.google.genai.types.Schema;
 import com.google.genai.types.Type;
+import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.ui.Messages;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -82,6 +84,10 @@ public final class JAIPilotLLM {
             output.setContextClasses(parsed.outputRequiredClassContextPaths);
             return output;
         } catch (Throwable t) {
+            ApplicationManager.getApplication().invokeLater(() ->
+                    Messages.showErrorDialog("Exception: " + t.getClass().getName() + "\n" + t.getMessage(), "Error")
+            );
+
             t.printStackTrace();
             PromptResponseOutput output = new PromptResponseOutput();
             output.setTestClassCode("ERROR: " + t.getMessage());

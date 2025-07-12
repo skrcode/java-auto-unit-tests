@@ -41,7 +41,7 @@ public final class TestGenerationWorker {
             for (int attempt = 1; ; attempt++) {
                 indicator.setText("Generating test : attempt" + attempt + "/" + MAX_ATTEMPTS);
 
-                Ref<PsiFile> testFile = Ref.create(packageDir.findFile(testFileName));
+                Ref<PsiFile> testFile = ReadAction.compute(() -> Ref.create(packageDir.findFile(testFileName)));
                 if (ReadAction.compute(() -> testFile.get()) != null) {
                     indicator.setText("Compiling #" + attempt + "/" + MAX_ATTEMPTS + " : " + testFileName);
                     existingIndividualTestClass = ReadAction.compute(() -> testFile.get().getText());
