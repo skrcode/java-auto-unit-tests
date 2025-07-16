@@ -21,7 +21,7 @@ You will receive:
    • For void methods, use verify(mock, times(n)) …
 5. Include only necessary test setup and mocks.
 6. Use test class name {{testclassname}}.
-7. Output: emit only a single valid Java test class inside one code block - no commentary, no markdown, no explanation, no annotations, no XML.
+7. Output: emit only a single valid Java test class inside one code block - no commentary, no markdown, no explanation, no annotations, no XML. Output in a compact format in a single line.
 8. Include the package at the top of the class as well
 9. Additionally, context classes are provided to generate better quality tests.
 10. If additional context classes are required to generate tests, apart from the test class, also return output list of class paths that are required. example [ "com.github.skrcode.javaautounittests.ContextModel", "com.x.y.z.SampleClass"]
