@@ -6,13 +6,13 @@ import com.github.skrcode.javaautounittests.DTOs.ResponseOutput;
 import com.github.skrcode.javaautounittests.settings.AISettings;
 import com.google.common.collect.ImmutableMap;
 import com.google.genai.Client;
-import com.google.genai.types.GenerateContentConfig;
-import com.google.genai.types.GenerateContentResponse;
-import com.google.genai.types.Schema;
-import com.google.genai.types.Type;
+import com.google.genai.ResponseStream;
+import com.google.genai.types.*;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.ui.Messages;
 
+import javax.swing.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -41,7 +41,7 @@ public final class JAIPilotLLM {
 //        }
 //    }
 
-    public static PromptResponseOutput getAllSingleTest(String promptPlaceholder, String testClassName, String inputClass, String existingTestClass, String errorOutput, List<String> contextClassesSources, int attempt) {
+    public static PromptResponseOutput getAllSingleTest(String promptPlaceholder, String testClassName, String inputClass, String existingTestClass, String errorOutput, List<String> contextClassesSources, int attempt, ProgressIndicator indicator) {
         Schema schema = Schema.builder()
                 .type(Type.Known.OBJECT)
                 .properties(ImmutableMap.of(
@@ -77,8 +77,42 @@ public final class JAIPilotLLM {
 
 //        writeToTempDirectory("/prompt-logs","Prompt"+testClassName+"-"+attempt+".txt",finalPrompt);
         try {
-            GenerateContentResponse response = invokeGeminiApi(finalPrompt, schema, client, generateContentConfig);
-            ResponseOutput parsed = mapper.readValue(response.text(), ResponseOutput.class);
+            ResponseStream<GenerateContentResponse> response = invokeGeminiApi(finalPrompt, schema, client, generateContentConfig);
+
+            StringBuilder fullText = new StringBuilder();
+            StringBuilder displayText = new StringBuilder();
+
+            for (GenerateContentResponse chunk : response) {
+                if (chunk == null) continue;
+
+                // Avoid .get() chaining, which buffers – access values safely
+                chunk.candidates().ifPresent(candidates -> {
+                    if (candidates.isEmpty()) return;
+
+                    candidates.get(0).content().ifPresent(content -> {
+                        content.parts().ifPresent(parts -> {
+                            for (Part part : parts) {
+                                part.text().ifPresent(text -> {
+                                    fullText.append(text);
+                                    for (char c : text.toCharArray()) {
+                                        displayText.append(c);
+                                        if (displayText.length() > 100) {
+                                            displayText.delete(0, displayText.length() - 100);
+                                        }
+
+                                        String visible = displayText.toString();
+                                        SwingUtilities.invokeLater(() -> {
+                                            indicator.setText(visible);
+                                        });
+                                    }
+                                });
+                            }
+                        });
+                    });
+                });
+            }
+
+            ResponseOutput parsed = mapper.readValue(fullText.toString(), ResponseOutput.class);
             PromptResponseOutput output = new PromptResponseOutput();
             output.setTestClassCode(parsed.outputTestClass);
             output.setContextClasses(parsed.outputRequiredClassContextPaths);
@@ -104,8 +138,8 @@ public final class JAIPilotLLM {
         return response;
     }
 
-    private static GenerateContentResponse invokeGeminiApi(String prompt, Schema schema, Client client, GenerateContentConfig generateContentConfig) {
-        GenerateContentResponse response = client.models.generateContent(AISettings.getInstance().getModel(), prompt, generateContentConfig);
+    private static ResponseStream<GenerateContentResponse> invokeGeminiApi(String prompt, Schema schema, Client client, GenerateContentConfig generateContentConfig) {
+        ResponseStream<GenerateContentResponse> response = client.models.generateContentStream(AISettings.getInstance().getModel(), prompt, generateContentConfig);
         return response;
     }
 }
