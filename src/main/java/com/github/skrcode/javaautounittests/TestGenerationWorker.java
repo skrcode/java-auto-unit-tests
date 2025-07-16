@@ -51,12 +51,12 @@ public final class TestGenerationWorker {
                 }
 
                 if (attempt > MAX_ATTEMPTS) break;
-                indicator.setText("Invoking LLM #" + attempt + "/" + MAX_ATTEMPTS);
+                indicator.setText("Invoking LLM Attempt #" + attempt + "/" + MAX_ATTEMPTS);
                 List<String> contextClassesSource = getSourceCodeOfContextClasses(project,contextClasses);
                 PromptResponseOutput promptResponseOutput = JAIPilotLLM.getAllSingleTest( getSingleTestPromptPlaceholder, testFileName, cutClass, existingIndividualTestClass, errorOutput, contextClassesSource, attempt, indicator);
                 contextClasses = promptResponseOutput.getContextClasses();
                 isLLMGeneratedAtleastOnce = true;
-                indicator.setText("Successfully invoked LLM #" + attempt + "/" + MAX_ATTEMPTS);
+                indicator.setText("Successfully invoked LLM Attempt #" + attempt + "/" + MAX_ATTEMPTS);
                 BuilderUtil.write(project, testFile, packageDir, testFileName, promptResponseOutput.getTestClassCode());
             }
             indicator.setText("Successfully generated Test Class " + testFileName);
