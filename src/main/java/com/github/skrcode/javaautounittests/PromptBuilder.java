@@ -44,7 +44,7 @@ public class PromptBuilder {
 
 
     public static Map<String, List<String>> getModels() {
-        String promptUrl = "https://raw.githubusercontent.com/skrcode/java-auto-unit-tests/refs/heads/feature/0.0.7/src/main/resources/models.json";
+        String promptUrl = "https://raw.githubusercontent.com/skrcode/java-auto-unit-tests/refs/heads/main/src/main/resources/models.json";
 
         HttpClient client = HttpClient.newHttpClient();
         HttpRequest request = HttpRequest.newBuilder()
