@@ -1,6 +1,6 @@
 package com.github.skrcode.javaautounittests;
 
-import com.github.skrcode.javaautounittests.settings.AISettings;
+import com.intellij.codeInsight.actions.ReformatCodeProcessor;
 import com.intellij.compiler.CompilerMessageImpl;
 import com.intellij.ide.highlighter.JavaFileType;
 import com.intellij.openapi.application.ApplicationManager;
@@ -18,12 +18,9 @@ import com.intellij.psi.PsiDirectory;
 import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiFileFactory;
+import com.intellij.psi.codeStyle.CodeStyleManager;
+import com.intellij.psi.codeStyle.JavaCodeStyleManager;
 
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -88,12 +85,13 @@ public class BuilderUtil {
 
 
     public static void write(Project project,
-                                      Ref<PsiFile> testFile,
+                             Ref<PsiFile> testFile,
                              PsiDirectory packageDir,
-                                      String testFileName,
-                                      String testSource) {
+                             String testFileName,
+                             String testSource) {
         WriteCommandAction.runWriteCommandAction(project, () -> {
             PsiFile existingFile = testFile.get();
+            PsiFile fileToProcess;
 
             if (existingFile != null && existingFile.isValid()) {
                 Document doc = PsiDocumentManager.getInstance(project).getDocument(existingFile);
@@ -101,71 +99,26 @@ public class BuilderUtil {
                     doc.setText(testSource);
                     PsiDocumentManager.getInstance(project).commitDocument(doc);
                 }
+                fileToProcess = existingFile;
             } else {
                 PsiFile newFile = PsiFileFactory.getInstance(project).createFileFromText(
                         testFileName, JavaFileType.INSTANCE, testSource);
                 PsiFile addedFile = (PsiFile) packageDir.add(newFile);
                 testFile.set(addedFile);
+                fileToProcess = addedFile;
             }
+
+            // ✅ Optimize imports
+            JavaCodeStyleManager.getInstance(project).optimizeImports(fileToProcess);
+
+            // ✅ Rearrange entries
+//            CodeStyleManager.getInstance(project).(fileToProcess);
+            new ReformatCodeProcessor(project, fileToProcess, null, false).run();
+
+            // ✅ Cleanup code (reformat)
+            CodeStyleManager.getInstance(project).reformat(fileToProcess);
         });
     }
-
-
-
-    public static void deleteFile(Project project, PsiFile fileToDelete) {
-        if (fileToDelete == null) return;
-
-        WriteCommandAction.runWriteCommandAction(project, () -> {
-            try {
-                fileToDelete.delete();
-            } catch (Exception e) {
-                // Optionally log or show notification
-                e.printStackTrace();
-            }
-        });
-    }
-
-    public static void deleteFiles(Project project, List<String> fileNamesToDelete, PsiDirectory packageDir) {
-        WriteCommandAction.runWriteCommandAction(project, () -> {
-            try {
-                for(String fileNameToDelete: fileNamesToDelete) {
-                    Ref<PsiFile> fileToDelete = Ref.create(packageDir.findFile(fileNameToDelete));
-                    if (fileToDelete.get() == null) continue;
-                    fileToDelete.get().delete();
-                }
-            } catch (Exception e) {
-                // Optionally log or show notification
-                e.printStackTrace();
-            }
-        });
-    }
-
-
-    private static PsiFile createAndAddFile(Project project,
-                                            PsiDirectory dir,
-                                            String name,
-                                            String source) {
-        PsiFile file = PsiFileFactory.getInstance(project)
-                .createFileFromText(name, JavaFileType.INSTANCE, source);
-        return (PsiFile) dir.add(file);
-    }
-
-    public static void writeToTempDirectory(String suffixPath, String fileName, String content) {
-        try {
-            Path dirPath = Paths.get(AISettings.getInstance().getTestDirectory()+suffixPath);
-            if (!Files.exists(dirPath)) {
-                Files.createDirectories(dirPath); // create parent dirs if not exist
-            }
-            Path filePath = dirPath.resolve(fileName);
-            Files.write(filePath, content.getBytes(StandardCharsets.UTF_8));
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-
-
-
 
 
 }
