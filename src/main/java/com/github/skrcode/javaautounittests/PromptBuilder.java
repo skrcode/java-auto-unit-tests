@@ -17,7 +17,7 @@ import java.util.Map;
 public class PromptBuilder {
 
     public static String getPromptPlaceholder(String fileName) {
-        String promptUrl = "https://raw.githubusercontent.com/skrcode/java-auto-unit-tests/refs/heads/main/src/feature/0.0.7/resources/" + fileName;
+        String promptUrl = "https://raw.githubusercontent.com/skrcode/java-auto-unit-tests/refs/heads/feature/0.0.7/src/main/resources/" + fileName;
 
         HttpClient client = HttpClient.newHttpClient();
         HttpRequest request = HttpRequest.newBuilder()
@@ -44,7 +44,7 @@ public class PromptBuilder {
 
 
     public static Map<String, List<String>> getModels() {
-        String promptUrl = "https://raw.githubusercontent.com/skrcode/java-auto-unit-tests/refs/heads/main/src/feature/0.0.7/resources/models.json";
+        String promptUrl = "https://raw.githubusercontent.com/skrcode/java-auto-unit-tests/refs/heads/feature/0.0.7/src/main/resources/models.json";
 
         HttpClient client = HttpClient.newHttpClient();
         HttpRequest request = HttpRequest.newBuilder()
