@@ -89,9 +89,8 @@ The below is a unified diff. Match the starting line based on where the original
 @@ -7,1 +7,1 @@
 -System.out.println(product);
 +System.out.println("Result: " + product);
-17. When emitting unified diff headers, always start the hunk at the method declaration line (e.g., the @Test or method signature line), not the surrounding whitespace.
-18. Ensure that you are fixing the errors based on the inputs provided. Do not incorrectly regenerate the test class and lead to more errors than already present.
-19. If your evaluation suggests that more tests are required to reach more coverage, generate more tests.
+17. Ensure that you are fixing the errors based on the inputs provided. Do not incorrectly regenerate the test class and lead to more errors than already present.
+18. If your evaluation suggests that more tests are required to reach more coverage, generate more tests.
 
 ### ERROR FIXING INSTRUCTIONS (if erroroutput is present)
 If `erroroutput` is non-empty, it means the previously generated test class failed to compile. In this case:
