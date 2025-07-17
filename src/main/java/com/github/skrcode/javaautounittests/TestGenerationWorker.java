@@ -30,7 +30,7 @@ public final class TestGenerationWorker {
 
             String cutName = ReadAction.compute(() -> cut.isValid() ? cut.getName() : "<invalid>");
             String cutClass = CUTUtil.cleanedSourceForLLM(project, cut);
-            String getSingleTestPromptPlaceholder = PromptBuilder.getPromptPlaceholder("get-single-test-prompt");
+            String getSingleTestPromptPlaceholder = PromptBuilder.getPromptPlaceholder("get-single-test-prompt-0.0.8");
 
             String errorOutput = "";
             String testFileName = cutName + "Test.java";
@@ -57,7 +57,7 @@ public final class TestGenerationWorker {
                 contextClasses = promptResponseOutput.getContextClasses();
                 isLLMGeneratedAtleastOnce = true;
                 indicator.setText("Successfully invoked LLM Attempt #" + attempt + "/" + MAX_ATTEMPTS);
-                BuilderUtil.write(project, testFile, packageDir, testFileName, promptResponseOutput.getTestClassCode());
+                BuilderUtil.write(project, testFile, packageDir, testFileName, promptResponseOutput.getTestClassCodeDiff());
             }
             indicator.setText("Successfully generated Test Class " + testFileName);
         }

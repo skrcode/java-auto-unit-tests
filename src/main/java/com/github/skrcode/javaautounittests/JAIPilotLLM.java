@@ -162,7 +162,7 @@ public final class JAIPilotLLM {
 
             ResponseOutput parsed = mapper.readValue(fullText.toString(), ResponseOutput.class);
             PromptResponseOutput output = new PromptResponseOutput();
-            output.setTestClassCode(parsed.outputTestClass);
+            output.setTestClassCodeDiff(parsed.outputTestClassUnifiedDiffFormat);
             output.setContextClasses(parsed.outputRequiredClassContextPaths);
             return output;
         }catch (Throwable t) {
@@ -172,7 +172,7 @@ public final class JAIPilotLLM {
 
             t.printStackTrace();
             PromptResponseOutput output = new PromptResponseOutput();
-            output.setTestClassCode("ERROR: " + t.getMessage());
+            output.setTestClassCodeDiff("ERROR: " + t.getMessage());
             output.setContextClasses(new ArrayList<>());
             return output;
         }

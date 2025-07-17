@@ -1,5 +1,10 @@
 package com.github.skrcode.javaautounittests;
 
+import com.github.difflib.DiffUtils;
+import com.github.difflib.patch.Patch;
+import com.github.difflib.unifieddiff.UnifiedDiff;
+import com.github.difflib.unifieddiff.UnifiedDiffFile;
+import com.github.difflib.unifieddiff.UnifiedDiffReader;
 import com.intellij.codeInsight.actions.ReformatCodeProcessor;
 import com.intellij.compiler.CompilerMessageImpl;
 import com.intellij.ide.highlighter.JavaFileType;
@@ -21,6 +26,12 @@ import com.intellij.psi.PsiFileFactory;
 import com.intellij.psi.codeStyle.CodeStyleManager;
 import com.intellij.psi.codeStyle.JavaCodeStyleManager;
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -83,40 +94,73 @@ public class BuilderUtil {
         return doc.getText(new TextRange(startOffset, endOffset)).trim();
     }
 
-
     public static void write(Project project,
                              Ref<PsiFile> testFile,
                              PsiDirectory packageDir,
                              String testFileName,
-                             String testSource) {
+                             String testSourceUnifiedDiff) {
+
         WriteCommandAction.runWriteCommandAction(project, () -> {
-            PsiFile existingFile = testFile.get();
-            PsiFile fileToProcess;
-
-            if (existingFile != null && existingFile.isValid()) {
-                Document doc = PsiDocumentManager.getInstance(project).getDocument(existingFile);
-                if (doc != null) {
-                    doc.setText(testSource);
-                    PsiDocumentManager.getInstance(project).commitDocument(doc);
+            try {
+                /* --------------------------------------------------
+                 * 1. Load current file content (or start with empty)
+                 * -------------------------------------------------- */
+                PsiFile existingFile = testFile.get();
+                List<String> originalLines;
+                if (existingFile != null && existingFile.isValid()) {
+                    Document doc = PsiDocumentManager.getInstance(project).getDocument(existingFile);
+                    if (doc == null) return;                       // cannot proceed
+                    originalLines = Arrays.asList(doc.getText().split("\n", -1));
+                } else {
+                    originalLines = Collections.emptyList();       // new file
                 }
-                fileToProcess = existingFile;
-            } else {
-                PsiFile newFile = PsiFileFactory.getInstance(project).createFileFromText(
-                        testFileName, JavaFileType.INSTANCE, testSource);
-                PsiFile addedFile = (PsiFile) packageDir.add(newFile);
-                testFile.set(addedFile);
-                fileToProcess = addedFile;
+
+                /* ------------------------------
+                 * 2. Parse unified‑diff string
+                 * ------------------------------ */
+                InputStream diffStream =
+                        new ByteArrayInputStream(testSourceUnifiedDiff.getBytes(StandardCharsets.UTF_8));
+                UnifiedDiff unifiedDiff = UnifiedDiffReader.parseUnifiedDiff(diffStream);
+
+                List<UnifiedDiffFile> diffFiles = unifiedDiff.getFiles();
+                if (diffFiles.isEmpty()) throw new IllegalStateException("No patch files found");
+
+// take the first (and only) file‑diff block
+                Patch<String> patch = diffFiles.get(0).getPatch();   // <-- this replaces getPatches()
+
+                /* --------------------------
+                 * 3. Apply patch in memory
+                 * -------------------------- */
+                List<String> patchedLines = DiffUtils.patch(originalLines, patch);
+                String updatedContent = String.join("\n", patchedLines);
+
+                /* -----------------------------------
+                 * 4. Persist patched content to disk
+                 * ----------------------------------- */
+                PsiFile fileToProcess;
+                if (existingFile != null && existingFile.isValid()) {
+                    Document doc = PsiDocumentManager.getInstance(project).getDocument(existingFile);
+                    if (doc == null) return;
+                    doc.setText(updatedContent);
+                    PsiDocumentManager.getInstance(project).commitDocument(doc);
+                    fileToProcess = existingFile;
+                } else {
+                    PsiFile newFile = PsiFileFactory.getInstance(project)
+                            .createFileFromText(testFileName, JavaFileType.INSTANCE, updatedContent);
+                    fileToProcess = (PsiFile) packageDir.add(newFile);
+                    testFile.set(fileToProcess);
+                }
+
+                /* -----------------------
+                 * 5. Post‑process (PSI)
+                 * ----------------------- */
+                JavaCodeStyleManager.getInstance(project).optimizeImports(fileToProcess);
+                new ReformatCodeProcessor(project, fileToProcess, null, false).run();
+                CodeStyleManager.getInstance(project).reformat(fileToProcess);
+
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to apply patch: " + e.getMessage(), e);
             }
-
-            // ✅ Optimize imports
-            JavaCodeStyleManager.getInstance(project).optimizeImports(fileToProcess);
-
-            // ✅ Rearrange entries
-//            CodeStyleManager.getInstance(project).(fileToProcess);
-            new ReformatCodeProcessor(project, fileToProcess, null, false).run();
-
-            // ✅ Cleanup code (reformat)
-            CodeStyleManager.getInstance(project).reformat(fileToProcess);
         });
     }
 
