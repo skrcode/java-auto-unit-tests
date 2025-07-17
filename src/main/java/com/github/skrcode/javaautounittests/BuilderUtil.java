@@ -100,68 +100,73 @@ public class BuilderUtil {
                              String testFileName,
                              String testSourceUnifiedDiff) {
 
-        WriteCommandAction.runWriteCommandAction(project, () -> {
-            try {
-                /* --------------------------------------------------
-                 * 1. Load current file content (or start with empty)
-                 * -------------------------------------------------- */
-                PsiFile existingFile = testFile.get();
-                List<String> originalLines;
-                if (existingFile != null && existingFile.isValid()) {
-                    Document doc = PsiDocumentManager.getInstance(project).getDocument(existingFile);
-                    if (doc == null) return;                       // cannot proceed
-                    originalLines = Arrays.asList(doc.getText().split("\n", -1));
-                } else {
-                    originalLines = Collections.emptyList();       // new file
-                }
+        try {
+            WriteCommandAction.runWriteCommandAction(project, () -> {
+                try {
+                    /* --------------------------------------------------
+                     * 1. Load current file content (or start with empty)
+                     * -------------------------------------------------- */
+                    PsiFile existingFile = testFile.get();
+                    List<String> originalLines;
+                    if (existingFile != null && existingFile.isValid()) {
+                        Document doc = PsiDocumentManager.getInstance(project).getDocument(existingFile);
+                        if (doc == null) return;                       // cannot proceed
+                        originalLines = Arrays.asList(doc.getText().split("\n", -1));
+                    } else {
+                        originalLines = Collections.emptyList();       // new file
+                    }
 
-                /* ------------------------------
-                 * 2. Parse unified‑diff string
-                 * ------------------------------ */
-                InputStream diffStream =
-                        new ByteArrayInputStream(testSourceUnifiedDiff.getBytes(StandardCharsets.UTF_8));
-                UnifiedDiff unifiedDiff = UnifiedDiffReader.parseUnifiedDiff(diffStream);
+                    /* ------------------------------
+                     * 2. Parse unified‑diff string
+                     * ------------------------------ */
+                    InputStream diffStream =
+                            new ByteArrayInputStream(testSourceUnifiedDiff.getBytes(StandardCharsets.UTF_8));
+                    UnifiedDiff unifiedDiff = UnifiedDiffReader.parseUnifiedDiff(diffStream);
 
-                List<UnifiedDiffFile> diffFiles = unifiedDiff.getFiles();
-                if (diffFiles.isEmpty()) throw new IllegalStateException("No patch files found");
+                    List<UnifiedDiffFile> diffFiles = unifiedDiff.getFiles();
+                    if (diffFiles.isEmpty()) throw new IllegalStateException("No patch files found");
 
 // take the first (and only) file‑diff block
-                Patch<String> patch = diffFiles.get(0).getPatch();   // <-- this replaces getPatches()
+                    Patch<String> patch = diffFiles.get(0).getPatch();   // <-- this replaces getPatches()
 
-                /* --------------------------
-                 * 3. Apply patch in memory
-                 * -------------------------- */
-                List<String> patchedLines = DiffUtils.patch(originalLines, patch);
-                String updatedContent = String.join("\n", patchedLines);
+                    /* --------------------------
+                     * 3. Apply patch in memory
+                     * -------------------------- */
+                    List<String> patchedLines = DiffUtils.patch(originalLines, patch);
+                    String updatedContent = String.join("\n", patchedLines);
 
-                /* -----------------------------------
-                 * 4. Persist patched content to disk
-                 * ----------------------------------- */
-                PsiFile fileToProcess;
-                if (existingFile != null && existingFile.isValid()) {
-                    Document doc = PsiDocumentManager.getInstance(project).getDocument(existingFile);
-                    if (doc == null) return;
-                    doc.setText(updatedContent);
-                    PsiDocumentManager.getInstance(project).commitDocument(doc);
-                    fileToProcess = existingFile;
-                } else {
-                    PsiFile newFile = PsiFileFactory.getInstance(project)
-                            .createFileFromText(testFileName, JavaFileType.INSTANCE, updatedContent);
-                    fileToProcess = (PsiFile) packageDir.add(newFile);
-                    testFile.set(fileToProcess);
+                    /* -----------------------------------
+                     * 4. Persist patched content to disk
+                     * ----------------------------------- */
+                    PsiFile fileToProcess;
+                    if (existingFile != null && existingFile.isValid()) {
+                        Document doc = PsiDocumentManager.getInstance(project).getDocument(existingFile);
+                        if (doc == null) return;
+                        doc.setText(updatedContent);
+                        PsiDocumentManager.getInstance(project).commitDocument(doc);
+                        fileToProcess = existingFile;
+                    } else {
+                        PsiFile newFile = PsiFileFactory.getInstance(project)
+                                .createFileFromText(testFileName, JavaFileType.INSTANCE, updatedContent);
+                        fileToProcess = (PsiFile) packageDir.add(newFile);
+                        testFile.set(fileToProcess);
+                    }
+
+                    /* -----------------------
+                     * 5. Post‑process (PSI)
+                     * ----------------------- */
+                    JavaCodeStyleManager.getInstance(project).optimizeImports(fileToProcess);
+                    new ReformatCodeProcessor(project, fileToProcess, null, false).run();
+                    CodeStyleManager.getInstance(project).reformat(fileToProcess);
+
+                } catch (Exception e) {
+                    throw new RuntimeException("Failed to apply patch: " + e.getMessage(), e);
                 }
+            });
+        }
+        catch (Exception e) {
 
-                /* -----------------------
-                 * 5. Post‑process (PSI)
-                 * ----------------------- */
-                JavaCodeStyleManager.getInstance(project).optimizeImports(fileToProcess);
-                new ReformatCodeProcessor(project, fileToProcess, null, false).run();
-                CodeStyleManager.getInstance(project).reformat(fileToProcess);
-
-            } catch (Exception e) {
-                throw new RuntimeException("Failed to apply patch: " + e.getMessage(), e);
-            }
-        });
+        }
     }
 
 

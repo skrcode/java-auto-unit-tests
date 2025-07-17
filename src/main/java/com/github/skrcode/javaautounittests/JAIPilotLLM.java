@@ -52,7 +52,7 @@ public final class JAIPilotLLM {
         Schema schema = Schema.builder()
                 .type(Type.Known.OBJECT)
                 .properties(ImmutableMap.of(
-                        "outputTestClass", Schema.builder()
+                        "outputTestClassUnifiedDiffFormat", Schema.builder()
                                 .type(Type.Known.STRING)
                                 .description("Output Test Class")
                                 .build(),
