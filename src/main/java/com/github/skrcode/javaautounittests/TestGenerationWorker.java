@@ -15,6 +15,8 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.github.skrcode.javaautounittests.BuilderUtil.addLineNumbers;
+
 public final class TestGenerationWorker {
 
     private static final int MAX_ATTEMPTS= 10;
@@ -44,7 +46,7 @@ public final class TestGenerationWorker {
                 Ref<PsiFile> testFile = ReadAction.compute(() -> Ref.create(packageDir.findFile(testFileName)));
                 if (ReadAction.compute(() -> testFile.get()) != null) {
                     indicator.setText("Compiling #" + attempt + "/" + MAX_ATTEMPTS + " : " + testFileName);
-                    existingIndividualTestClass = ReadAction.compute(() -> testFile.get().getText());
+                    existingIndividualTestClass = ReadAction.compute(() -> addLineNumbers(testFile.get().getText()));
                     errorOutput = BuilderUtil.compileJUnitClass(project, testFile);
                     if (errorOutput.isEmpty() && isLLMGeneratedAtleastOnce) break;
                     indicator.setText("Compiled #" + attempt + "/" + MAX_ATTEMPTS + ": " + testFileName);

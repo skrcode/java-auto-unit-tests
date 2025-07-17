@@ -94,6 +94,16 @@ public class BuilderUtil {
         return doc.getText(new TextRange(startOffset, endOffset)).trim();
     }
 
+    public static String addLineNumbers(String input) {
+        String[] lines = input.split("\n");
+        StringBuilder numbered = new StringBuilder();
+        for (int i = 0; i < lines.length; i++) {
+            numbered.append((i + 1)).append(": ").append(lines[i]).append("\n");
+        }
+        return numbered.toString();
+    }
+
+
     public static void write(Project project,
                              Ref<PsiFile> testFile,
                              PsiDirectory packageDir,
