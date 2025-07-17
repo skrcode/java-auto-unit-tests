@@ -34,6 +34,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * Compiles a JUnit test class, runs it with coverage, and returns:
@@ -111,6 +112,7 @@ public class BuilderUtil {
                              String testSourceUnifiedDiff) {
 
         try {
+
             WriteCommandAction.runWriteCommandAction(project, () -> {
                 try {
                     /* --------------------------------------------------
@@ -142,7 +144,17 @@ public class BuilderUtil {
                     /* --------------------------
                      * 3. Apply patch in memory
                      * -------------------------- */
-                    List<String> patchedLines = DiffUtils.patch(originalLines, patch);
+                    List<String> patchedLines;
+                    if (originalLines.isEmpty()) {
+                        // File does not exist — extract only added lines from patch
+                        patchedLines = patch.getDeltas().stream()
+                                .flatMap(delta -> delta.getTarget().getLines().stream())
+                                .collect(Collectors.toList());
+                    } else {
+                        // File exists — apply full patch
+                        patchedLines = DiffUtils.patch(originalLines, patch);
+                    }
+                    patchedLines.add(unifiedDiff.getHeader());
                     String updatedContent = String.join("\n", patchedLines);
 
                     /* -----------------------------------
