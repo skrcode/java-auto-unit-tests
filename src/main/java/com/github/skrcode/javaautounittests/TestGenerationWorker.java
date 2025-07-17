@@ -32,7 +32,7 @@ public final class TestGenerationWorker {
 
             String cutName = ReadAction.compute(() -> cut.isValid() ? cut.getName() : "<invalid>");
             String cutClass = CUTUtil.cleanedSourceForLLM(project, cut);
-            String getSingleTestPromptPlaceholder = PromptBuilder.getPromptPlaceholder("get-single-test-prompt-0.0.8");
+            String getSingleTestPromptPlaceholder = PromptBuilder.getPromptPlaceholder("get-single-test-prompt");
 
             String errorOutput = "";
             String testFileName = cutName + "Test.java";
