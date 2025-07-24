@@ -1,6 +1,8 @@
 package com.github.skrcode.javaautounittests;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.skrcode.javaautounittests.DTOs.InitialResponseOutput;
+import com.github.skrcode.javaautounittests.DTOs.PromptInitialResponseOutput;
 import com.github.skrcode.javaautounittests.DTOs.PromptResponseOutput;
 import com.github.skrcode.javaautounittests.DTOs.ResponseOutput;
 import com.github.skrcode.javaautounittests.settings.AISettings;
@@ -48,7 +50,7 @@ public final class JAIPilotLLM {
 //        }
 //    }
 
-    public static PromptResponseOutput getAllSingleTest(String promptPlaceholder, String testClassName, String inputClass, String existingTestClass, String errorOutput, List<String> contextClassesSources, int attempt, ProgressIndicator indicator) {
+    public static String getAllSingleTest(String promptPlaceholder, String testClassName, String inputClass, String existingTestClass, String errorOutput, List<String> contextClassesSources, ProgressIndicator indicator, String model) {
         Schema schema = Schema.builder()
                 .type(Type.Known.OBJECT)
                 .properties(ImmutableMap.of(
@@ -66,7 +68,6 @@ public final class JAIPilotLLM {
 
         Client client = Client.builder().apiKey(AISettings.getInstance().getOpenAiKey()).build();
         GenerateContentConfig generateContentConfig = GenerateContentConfig.builder().responseMimeType("application/json").candidateCount(1).responseSchema(schema).build();
-        ObjectMapper mapper = new ObjectMapper();
 
         Map<String, String> placeholders = Map.of(
                 "{{inputclass}}", inputClass,
@@ -119,7 +120,7 @@ public final class JAIPilotLLM {
 
         try {
             // 2. Now start LLM call (this might take a few seconds before it returns)
-            ResponseStream<GenerateContentResponse> response = invokeGeminiApi(finalPrompt, schema, client, generateContentConfig);
+            ResponseStream<GenerateContentResponse> response = invokeGeminiApiWithModel(finalPrompt, schema, client, generateContentConfig, model);
 
             StringBuilder fullText = new StringBuilder();
             List<String> generatedTests = new ArrayList<>();
@@ -159,13 +160,26 @@ public final class JAIPilotLLM {
 
             task.cancel(true); // 🧹 stop thinking animation
             scheduler.shutdownNow();
+            return fullText.toString();
+        }catch (Throwable t) {
+            ApplicationManager.getApplication().invokeLater(() ->
+                    Messages.showErrorDialog("Exception: " + t.getClass().getName() + "\n" + t.getMessage(), "Error")
+            );
+            return "";
+        }
 
-            ResponseOutput parsed = mapper.readValue(fullText.toString(), ResponseOutput.class);
+    }
+
+    public static PromptResponseOutput parsePromptOutputText(String fullText) {
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            ResponseOutput parsed = mapper.readValue(fullText, ResponseOutput.class);
             PromptResponseOutput output = new PromptResponseOutput();
             output.setTestClassCodeDiff(parsed.outputTestClassUnifiedDiffFormat);
             output.setContextClasses(parsed.outputRequiredClassContextPaths);
             return output;
-        }catch (Throwable t) {
+        }
+        catch (Throwable t) {
             ApplicationManager.getApplication().invokeLater(() ->
                     Messages.showErrorDialog("Exception: " + t.getClass().getName() + "\n" + t.getMessage(), "Error")
             );
@@ -176,7 +190,27 @@ public final class JAIPilotLLM {
             output.setContextClasses(new ArrayList<>());
             return output;
         }
+    }
 
+    public static PromptInitialResponseOutput parseInitialPromptOutputText(String fullText) {
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            InitialResponseOutput parsed = mapper.readValue(fullText, InitialResponseOutput.class);
+            PromptInitialResponseOutput output = new PromptInitialResponseOutput();
+            output.setTestClassCode(parsed.outputTestClass);
+            output.setContextClasses(parsed.outputRequiredClassContextPaths);
+            return output;
+        }
+        catch (Throwable t) {
+            ApplicationManager.getApplication().invokeLater(() ->
+                    Messages.showErrorDialog("Exception: " + t.getClass().getName() + "\n" + t.getMessage(), "Error")
+            );
+            t.printStackTrace();
+            PromptInitialResponseOutput output = new PromptInitialResponseOutput();
+            output.setTestClassCode("ERROR: " + t.getMessage());
+            output.setContextClasses(new ArrayList<>());
+            return output;
+        }
     }
 
     private static GenerateContentResponse invokeGemini(String prompt, Schema schema) {
@@ -188,6 +222,11 @@ public final class JAIPilotLLM {
 
     private static ResponseStream<GenerateContentResponse> invokeGeminiApi(String prompt, Schema schema, Client client, GenerateContentConfig generateContentConfig) {
         ResponseStream<GenerateContentResponse> response = client.models.generateContentStream(AISettings.getInstance().getModel(), prompt, generateContentConfig);
+        return response;
+    }
+
+    private static ResponseStream<GenerateContentResponse> invokeGeminiApiWithModel(String prompt, Schema schema, Client client, GenerateContentConfig generateContentConfig, String model) {
+        ResponseStream<GenerateContentResponse> response = client.models.generateContentStream(model, prompt, generateContentConfig);
         return response;
     }
 }

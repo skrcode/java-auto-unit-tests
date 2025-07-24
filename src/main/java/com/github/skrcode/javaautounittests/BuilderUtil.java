@@ -105,11 +105,11 @@ public class BuilderUtil {
     }
 
 
-    public static void write(Project project,
-                             Ref<PsiFile> testFile,
-                             PsiDirectory packageDir,
-                             String testFileName,
-                             String testSourceUnifiedDiff) {
+    public static void writeDiff(Project project,
+                                 Ref<PsiFile> testFile,
+                                 PsiDirectory packageDir,
+                                 String testFileName,
+                                 String testSourceUnifiedDiff) {
 
         try {
 
@@ -191,5 +191,39 @@ public class BuilderUtil {
         }
     }
 
+    public static void write(Project project,
+                             Ref<PsiFile> testFile,
+                             PsiDirectory packageDir,
+                             String testFileName,
+                             String testSource) {
+        WriteCommandAction.runWriteCommandAction(project, () -> {
+            PsiFile existingFile = testFile.get();
+            PsiFile fileToProcess;
 
+            if (existingFile != null && existingFile.isValid()) {
+                Document doc = PsiDocumentManager.getInstance(project).getDocument(existingFile);
+                if (doc != null) {
+                    doc.setText(testSource);
+                    PsiDocumentManager.getInstance(project).commitDocument(doc);
+                }
+                fileToProcess = existingFile;
+            } else {
+                PsiFile newFile = PsiFileFactory.getInstance(project).createFileFromText(
+                        testFileName, JavaFileType.INSTANCE, testSource);
+                PsiFile addedFile = (PsiFile) packageDir.add(newFile);
+                testFile.set(addedFile);
+                fileToProcess = addedFile;
+            }
+
+            // ✅ Optimize imports
+            JavaCodeStyleManager.getInstance(project).optimizeImports(fileToProcess);
+
+            // ✅ Rearrange entries
+//            CodeStyleManager.getInstance(project).(fileToProcess);
+            new ReformatCodeProcessor(project, fileToProcess, null, false).run();
+
+            // ✅ Cleanup code (reformat)
+            CodeStyleManager.getInstance(project).reformat(fileToProcess);
+        });
+    };
 }

@@ -1,5 +1,6 @@
 package com.github.skrcode.javaautounittests;
 
+import com.github.skrcode.javaautounittests.DTOs.PromptInitialResponseOutput;
 import com.github.skrcode.javaautounittests.DTOs.PromptResponseOutput;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
@@ -12,10 +13,9 @@ import com.intellij.psi.*;
 import com.intellij.psi.search.GlobalSearchScope;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+
 import java.util.ArrayList;
 import java.util.List;
-
-import static com.github.skrcode.javaautounittests.BuilderUtil.addLineNumbers;
 
 public final class TestGenerationWorker {
 
@@ -32,8 +32,8 @@ public final class TestGenerationWorker {
 
             String cutName = ReadAction.compute(() -> cut.isValid() ? cut.getName() : "<invalid>");
             String cutClass = CUTUtil.cleanedSourceForLLM(project, cut);
-            String getSingleTestPromptPlaceholder = PromptBuilder.getPromptPlaceholder("get-single-test-prompt");
-
+            String getSingleTestPromptPlaceholder = PromptBuilder.getPromptPlaceholder("get-single-test-prompt-0.0.8");
+            String getSingleTestInitialPromptPlaceholder = PromptBuilder.getPromptPlaceholder("get-single-test-prompt-initial-0.0.8");
             String errorOutput = "";
             String testFileName = cutName + "Test.java";
             List<String> contextClasses = new ArrayList<>();
@@ -46,7 +46,7 @@ public final class TestGenerationWorker {
                 Ref<PsiFile> testFile = ReadAction.compute(() -> Ref.create(packageDir.findFile(testFileName)));
                 if (ReadAction.compute(() -> testFile.get()) != null) {
                     indicator.setText("Compiling #" + attempt + "/" + MAX_ATTEMPTS + " : " + testFileName);
-                    existingIndividualTestClass = ReadAction.compute(() -> addLineNumbers(testFile.get().getText()));
+                    existingIndividualTestClass = testFile.get().getText();
                     errorOutput = BuilderUtil.compileJUnitClass(project, testFile);
                     if (errorOutput.isEmpty() && isLLMGeneratedAtleastOnce) break;
                     indicator.setText("Compiled #" + attempt + "/" + MAX_ATTEMPTS + ": " + testFileName);
@@ -55,11 +55,21 @@ public final class TestGenerationWorker {
                 if (attempt > MAX_ATTEMPTS) break;
                 indicator.setText("Invoking LLM Attempt #" + attempt + "/" + MAX_ATTEMPTS);
                 List<String> contextClassesSource = getSourceCodeOfContextClasses(project,contextClasses);
-                PromptResponseOutput promptResponseOutput = JAIPilotLLM.getAllSingleTest( getSingleTestPromptPlaceholder, testFileName, cutClass, existingIndividualTestClass, errorOutput, contextClassesSource, attempt, indicator);
-                contextClasses = promptResponseOutput.getContextClasses();
+                // if attempt is 1
+                if(attempt == 1) {
+                    String fullText = JAIPilotLLM.getAllSingleTest(getSingleTestPromptPlaceholder, testFileName, cutClass, existingIndividualTestClass, errorOutput, contextClassesSource, indicator, "gemini-2.5-flash");
+                    PromptInitialResponseOutput promptInitialResponseOutput = JAIPilotLLM.parseInitialPromptOutputText(fullText);
+                    contextClasses = promptInitialResponseOutput.getContextClasses();
+                    BuilderUtil.write(project, testFile, packageDir, testFileName, promptInitialResponseOutput.getTestClassCode());
+                } else {
+                    String fullText = JAIPilotLLM.getAllSingleTest(getSingleTestPromptPlaceholder, testFileName, cutClass, existingIndividualTestClass, errorOutput, contextClassesSource, indicator, "gemini-2.5-pro");
+                    PromptResponseOutput promptResponseOutput = JAIPilotLLM.parsePromptOutputText(fullText);
+                    contextClasses = promptResponseOutput.getContextClasses();
+                    BuilderUtil.writeDiff(project, testFile, packageDir, testFileName, promptResponseOutput.getTestClassCodeDiff());
+                }
                 isLLMGeneratedAtleastOnce = true;
                 indicator.setText("Successfully invoked LLM Attempt #" + attempt + "/" + MAX_ATTEMPTS);
-                BuilderUtil.write(project, testFile, packageDir, testFileName, promptResponseOutput.getTestClassCodeDiff());
+
             }
             indicator.setText("Successfully generated Test Class " + testFileName);
         }
