@@ -191,6 +191,77 @@ public class BuilderUtil {
         }
     }
 
+    public static void writeV4ADiff(Project project,
+                                 Ref<PsiFile> testFile,
+                                 PsiDirectory packageDir,
+                                 String testFileName,
+                                 String testSourceUnifiedDiff) {
+        try {
+            WriteCommandAction.runWriteCommandAction(project, () -> {
+                try {
+                    // 1. Load current file content (or start with empty)
+                    PsiFile existingFile = testFile.get();
+                    List<String> originalLines;
+                    if (existingFile != null && existingFile.isValid()) {
+                        Document doc = PsiDocumentManager.getInstance(project).getDocument(existingFile);
+                        if (doc == null) return; // cannot proceed
+                        originalLines = Arrays.asList(doc.getText().split("\n", -1));
+                    } else {
+                        originalLines = Collections.emptyList(); // new file
+                    }
+
+                    // 2. Parse unified-diff string (java-diff-utils)
+                    InputStream diffStream = new ByteArrayInputStream(testSourceUnifiedDiff.getBytes(StandardCharsets.UTF_8));
+                    UnifiedDiff unifiedDiff = UnifiedDiffReader.parseUnifiedDiff(diffStream);
+
+                    List<UnifiedDiffFile> diffFiles = unifiedDiff.getFiles();
+                    if (diffFiles.isEmpty()) throw new IllegalStateException("No patch files found");
+                    Patch<String> patch = diffFiles.get(0).getPatch();
+
+                    // 3. Apply patch in memory
+                    List<String> patchedLines;
+                    if (originalLines.isEmpty()) {
+                        // File does not exist — extract target from the patch
+                        patchedLines = patch.getDeltas().stream()
+                                .flatMap(delta -> delta.getTarget().getLines().stream())
+                                .collect(Collectors.toList());
+                    } else {
+                        patchedLines = DiffUtils.patch(originalLines, patch);
+                    }
+                    String updatedContent = String.join("\n", patchedLines);
+
+                    // 4. Persist patched content to disk
+                    PsiFile fileToProcess;
+                    if (existingFile != null && existingFile.isValid()) {
+                        Document doc = PsiDocumentManager.getInstance(project).getDocument(existingFile);
+                        if (doc == null) return;
+                        doc.setText(updatedContent);
+                        PsiDocumentManager.getInstance(project).commitDocument(doc);
+                        fileToProcess = existingFile;
+                    } else {
+                        PsiFile newFile = PsiFileFactory.getInstance(project)
+                                .createFileFromText(testFileName, JavaFileType.INSTANCE, updatedContent);
+                        fileToProcess = (PsiFile) packageDir.add(newFile);
+                        testFile.set(fileToProcess);
+                    }
+
+                    // 5. Post-process (PSI)
+                    JavaCodeStyleManager.getInstance(project).optimizeImports(fileToProcess);
+                    new ReformatCodeProcessor(project, fileToProcess, null, false).run();
+                    CodeStyleManager.getInstance(project).reformat(fileToProcess);
+
+                } catch (Exception e) {
+                    // Always report the error somewhere!
+                    throw new RuntimeException("Failed to apply patch: " + e.getMessage(), e);
+                }
+            });
+        } catch (Exception e) {
+            // Log the error
+            e.printStackTrace();
+        }
+    }
+
+
     public static void write(Project project,
                              Ref<PsiFile> testFile,
                              PsiDirectory packageDir,
