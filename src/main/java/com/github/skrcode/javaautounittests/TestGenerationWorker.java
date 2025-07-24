@@ -2,6 +2,7 @@ package com.github.skrcode.javaautounittests;
 
 import com.github.skrcode.javaautounittests.DTOs.PromptInitialResponseOutput;
 import com.github.skrcode.javaautounittests.DTOs.PromptResponseOutput;
+import com.google.genai.types.Schema;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.command.WriteCommandAction;
@@ -55,14 +56,16 @@ public final class TestGenerationWorker {
                 if (attempt > MAX_ATTEMPTS) break;
                 indicator.setText("Invoking LLM Attempt #" + attempt + "/" + MAX_ATTEMPTS);
                 List<String> contextClassesSource = getSourceCodeOfContextClasses(project,contextClasses);
-                // if attempt is 1
-                if(attempt == 1) {
-                    String fullText = JAIPilotLLM.getAllSingleTest(getSingleTestPromptPlaceholder, testFileName, cutClass, existingIndividualTestClass, errorOutput, contextClassesSource, indicator, "gemini-2.5-flash");
+
+                if(existingIndividualTestClass.isEmpty()) {
+                    Schema schema = JAIPilotLLM.getInitialSchema();
+                    String fullText = JAIPilotLLM.getAllSingleTest(getSingleTestInitialPromptPlaceholder, testFileName, cutClass, existingIndividualTestClass, errorOutput, contextClassesSource, indicator, "gemini-2.5-flash-lite-preview-06-17", schema);
                     PromptInitialResponseOutput promptInitialResponseOutput = JAIPilotLLM.parseInitialPromptOutputText(fullText);
                     contextClasses = promptInitialResponseOutput.getContextClasses();
                     BuilderUtil.write(project, testFile, packageDir, testFileName, promptInitialResponseOutput.getTestClassCode());
                 } else {
-                    String fullText = JAIPilotLLM.getAllSingleTest(getSingleTestPromptPlaceholder, testFileName, cutClass, existingIndividualTestClass, errorOutput, contextClassesSource, indicator, "gemini-2.5-pro");
+                    Schema schema = JAIPilotLLM.getSchema();
+                    String fullText = JAIPilotLLM.getAllSingleTest(getSingleTestPromptPlaceholder, testFileName, cutClass, existingIndividualTestClass, errorOutput, contextClassesSource, indicator, "gemini-2.5-pro", schema);
                     PromptResponseOutput promptResponseOutput = JAIPilotLLM.parsePromptOutputText(fullText);
                     contextClasses = promptResponseOutput.getContextClasses();
                     BuilderUtil.writeDiff(project, testFile, packageDir, testFileName, promptResponseOutput.getTestClassCodeDiff());

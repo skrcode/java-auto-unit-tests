@@ -50,7 +50,7 @@ public final class JAIPilotLLM {
 //        }
 //    }
 
-    public static String getAllSingleTest(String promptPlaceholder, String testClassName, String inputClass, String existingTestClass, String errorOutput, List<String> contextClassesSources, ProgressIndicator indicator, String model) {
+    public static Schema getSchema() {
         Schema schema = Schema.builder()
                 .type(Type.Known.OBJECT)
                 .properties(ImmutableMap.of(
@@ -65,6 +65,28 @@ public final class JAIPilotLLM {
                                 .build()
                 ))
                 .build();
+        return schema;
+    }
+
+    public static Schema getInitialSchema() {
+        Schema schema = Schema.builder()
+                .type(Type.Known.OBJECT)
+                .properties(ImmutableMap.of(
+                        "outputTestClass", Schema.builder()
+                                .type(Type.Known.STRING)
+                                .description("Output Test Class")
+                                .build(),
+                        "outputRequiredClassContextPaths", Schema.builder()
+                                .type(Type.Known.ARRAY)
+                                .items(Schema.builder().type(Type.Known.STRING).build())
+                                .description("Output Required Classes Paths for Additional Context")
+                                .build()
+                ))
+                .build();
+        return schema;
+    }
+
+    public static String getAllSingleTest(String promptPlaceholder, String testClassName, String inputClass, String existingTestClass, String errorOutput, List<String> contextClassesSources, ProgressIndicator indicator, String model ,Schema schema) {
 
         Client client = Client.builder().apiKey(AISettings.getInstance().getOpenAiKey()).build();
         GenerateContentConfig generateContentConfig = GenerateContentConfig.builder().responseMimeType("application/json").candidateCount(1).responseSchema(schema).build();
