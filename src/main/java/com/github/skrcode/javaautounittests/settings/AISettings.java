@@ -9,17 +9,24 @@ import org.jetbrains.annotations.Nullable;
 @State(name = "AISettings", storages = @Storage("AISettings.xml"))
 public class AISettings implements PersistentStateComponent<AISettings.State> {
 
-    public static class State {
-        public String openAiKey = "";
-        public String model = "";
-        public String testDirectory = "";
 
+
+
+    public static class State {
+        public String openAiKey = "";       // Free API Key
+        public String proKey = "";          // Pro API Key
+        public String model = "";           // Gemini Model (Free mode)
+        public String testDirectory = "";   // Test directory path
+        public String mode = "free";        // Current mode: "free" or "pro"
+        public Boolean proKeyValidated = null;
     }
 
     private State state = new State();
 
     public static AISettings getInstance() {
-        return com.intellij.openapi.application.ApplicationManager.getApplication().getService(AISettings.class);
+        return com.intellij.openapi.application.ApplicationManager
+                .getApplication()
+                .getService(AISettings.class);
     }
 
     @Nullable
@@ -41,6 +48,14 @@ public class AISettings implements PersistentStateComponent<AISettings.State> {
         state.openAiKey = key;
     }
 
+    public String getProKey() {
+        return state.proKey;
+    }
+
+    public void setProKey(String key) {
+        state.proKey = key;
+    }
+
     public String getModel() {
         return state.model;
     }
@@ -49,12 +64,28 @@ public class AISettings implements PersistentStateComponent<AISettings.State> {
         state.model = model;
     }
 
+    public String getTestDirectory() {
+        return state.testDirectory;
+    }
+
     public void setTestDirectory(String dir) {
         state.testDirectory = dir;
     }
 
-    public String getTestDirectory() {
-        return state.testDirectory;
+    public String getMode() {
+        return state.mode;
+    }
+
+    public void setMode(String mode) {
+        state.mode = mode;
+    }
+
+    public void setProKeyValidated(Boolean isProKeyValidated) {
+        state.proKeyValidated = isProKeyValidated;
+    }
+
+    public Boolean isProKeyValidated() {
+        return state.proKeyValidated;
     }
 
 }
