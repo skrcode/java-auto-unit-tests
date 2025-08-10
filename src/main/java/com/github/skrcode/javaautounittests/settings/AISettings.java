@@ -16,9 +16,9 @@ public class AISettings implements PersistentStateComponent<AISettings.State> {
         public String openAiKey = "";       // Free API Key
         public String proKey = "";          // Pro API Key
         public String model = "";           // Gemini Model (Free mode)
-        public String testDirectory = "";   // Test directory path
-        public String mode = "free";        // Current mode: "free" or "pro"
-        public Boolean proKeyValidated = null;
+//        public String testDirectory = "";   // Test directory path
+        public String mode = "Free";        // Current mode: "free" or "pro"
+//        public Boolean proKeyValidated = null;
     }
 
     private State state = new State();
@@ -64,13 +64,13 @@ public class AISettings implements PersistentStateComponent<AISettings.State> {
         state.model = model;
     }
 
-    public String getTestDirectory() {
-        return state.testDirectory;
-    }
-
-    public void setTestDirectory(String dir) {
-        state.testDirectory = dir;
-    }
+//    public String getTestDirectory() {
+//        return state.testDirectory;
+//    }
+//
+//    public void setTestDirectory(String dir) {
+//        state.testDirectory = dir;
+//    }
 
     public String getMode() {
         return state.mode;
@@ -80,12 +80,12 @@ public class AISettings implements PersistentStateComponent<AISettings.State> {
         state.mode = mode;
     }
 
-    public void setProKeyValidated(Boolean isProKeyValidated) {
-        state.proKeyValidated = isProKeyValidated;
-    }
-
-    public Boolean isProKeyValidated() {
-        return state.proKeyValidated;
-    }
+//    public void setProKeyValidated(Boolean isProKeyValidated) {
+//        state.proKeyValidated = isProKeyValidated;
+//    }
+//
+//    public Boolean isProKeyValidated() {
+//        return state.proKeyValidated;
+//    }
 
 }

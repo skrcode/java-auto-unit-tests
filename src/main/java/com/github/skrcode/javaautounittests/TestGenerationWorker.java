@@ -1,6 +1,7 @@
 package com.github.skrcode.javaautounittests;
 
 import com.github.skrcode.javaautounittests.DTOs.PromptResponseOutput;
+import com.github.skrcode.javaautounittests.settings.AISettings;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.command.WriteCommandAction;
@@ -14,6 +15,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 public final class TestGenerationWorker {
 
@@ -53,18 +55,23 @@ public final class TestGenerationWorker {
                 if (attempt > MAX_ATTEMPTS) break;
                 indicator.setText("Invoking LLM Attempt #" + attempt + "/" + MAX_ATTEMPTS);
                 List<String> contextClassesSource = getSourceCodeOfContextClasses(project,contextClasses);
-                PromptResponseOutput promptResponseOutput = JAIPilotLLM.getAllSingleTest( getSingleTestPromptPlaceholder, testFileName, cutClass, existingIndividualTestClass, errorOutput, contextClassesSource, attempt, indicator);
-                contextClasses = promptResponseOutput.getContextClasses();
-                isLLMGeneratedAtleastOnce = true;
-                indicator.setText("Successfully invoked LLM Attempt #" + attempt + "/" + MAX_ATTEMPTS);
-                BuilderUtil.write(project, testFile, packageDir, testFileName, promptResponseOutput.getTestClassCode());
+                PromptResponseOutput promptResponseOutput;
+                if(AISettings.getInstance().getMode().equals("Pro"))
+                    promptResponseOutput  = JAIPilotLLM.getAllSingleTestPro(testFileName, cutClass, existingIndividualTestClass, errorOutput, contextClassesSource, indicator, attempt);
+                else promptResponseOutput = JAIPilotLLM.getAllSingleTest( getSingleTestPromptPlaceholder, testFileName, cutClass, existingIndividualTestClass, errorOutput, contextClassesSource, attempt, indicator);
+                if(!Objects.isNull(promptResponseOutput.getTestClassCode())) {
+                    contextClasses = promptResponseOutput.getContextClasses();
+                    isLLMGeneratedAtleastOnce = true;
+                    indicator.setText("Successfully invoked LLM Attempt #" + attempt + "/" + MAX_ATTEMPTS);
+                    BuilderUtil.write(project, testFile, packageDir, testFileName, promptResponseOutput.getTestClassCode());
+                }
             }
             indicator.setText("Successfully generated Test Class " + testFileName);
         }
         catch (Throwable t) {
             t.printStackTrace();
             ApplicationManager.getApplication().invokeLater(() ->
-                    Messages.showErrorDialog("Exception: " + t.getClass().getName() + "\n" + t.getMessage(), "Error")
+                    Messages.showErrorDialog(t.getMessage(), "Error")
             );
         }
     }

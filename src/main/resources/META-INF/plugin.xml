@@ -50,7 +50,7 @@
 
             <action id="ModelDisplayAction"
                     class="com.github.skrcode.javaautounittests.ModelDisplayAction"
-                    text="Model"/>
+                    text="Plan"/>
         </group>
     </actions>
 

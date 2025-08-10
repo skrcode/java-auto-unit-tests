@@ -23,7 +23,7 @@ public class ModelDisplayAction extends AnAction {
     public void update(@NotNull AnActionEvent e) {
         e.getPresentation().setEnabled(false);
         e.getPresentation().setVisible(true);
-        e.getPresentation().setText("Model: " + AISettings.getInstance().getModel());
+        e.getPresentation().setText("Plan: " + AISettings.getInstance().getMode());
     }
 
     @Override

@@ -1,7 +1,7 @@
 package com.github.skrcode.javaautounittests;
 
+import com.github.skrcode.javaautounittests.settings.AIProjectSettings;
 import com.github.skrcode.javaautounittests.settings.AISettings;
-import com.github.skrcode.javaautounittests.settings.AISettingsDialog;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.LangDataKeys;
@@ -41,16 +41,24 @@ public class GenerateTestAction extends AnAction implements DumbAware {
             Messages.showErrorDialog(project, "Please select only single java class.", "JAIPilot");
             return;
         }
-//        if (AISettings.getInstance().getModel().isEmpty()|| AISettings.getInstance().getTestDirectory().isEmpty() || AISettings.getInstance().getOpenAiKey().isEmpty()) {
-//            Messages.showErrorDialog(project, "Please configure details in settings.", "JAIPilot");
-//            return;
-//        }
+        if(AISettings.getInstance().getMode().equals("Free")) {
+            if (AISettings.getInstance().getModel().isEmpty() || AIProjectSettings.getInstance(project).getTestDirectory().isEmpty() || AISettings.getInstance().getOpenAiKey().isEmpty()) {
+                Messages.showErrorDialog(project, "Please configure details in settings.", "JAIPilot");
+                return;
+            }
+        }
+        if(AISettings.getInstance().getMode().equals("Pro")) {
+            if (AISettings.getInstance().getProKey().isEmpty() || AIProjectSettings.getInstance(project).getTestDirectory().isEmpty()) {
+                Messages.showErrorDialog(project, "Please configure details in settings.", "JAIPilot");
+                return;
+            }
+        }
         // Show settings dialog
-        AISettingsDialog dialog = new AISettingsDialog();
-        boolean okPressed = dialog.showAndGet(); // returns true if OK, false if Cancel
+//        AISettingsDialog dialog = new AISettingsDialog();
+//        boolean okPressed = dialog.showAndGet(); // returns true if OK, false if Cancel
 
-        if (!okPressed) return;
-        BulkGeneratorService.enqueue(project, classes, stringPathToPsiDirectory(project,AISettings.getInstance().getTestDirectory()));
+//        if (!okPressed) return;
+        BulkGeneratorService.enqueue(project, classes, stringPathToPsiDirectory(project,AIProjectSettings.getInstance(project).getTestDirectory()));
     }
 
     private static @Nullable PsiDirectory stringPathToPsiDirectory(Project project, String path) {
