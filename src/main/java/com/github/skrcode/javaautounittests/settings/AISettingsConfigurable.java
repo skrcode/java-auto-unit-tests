@@ -50,12 +50,12 @@ public class AISettingsConfigurable implements Configurable {
     private static final int GAP_BETWEEN_BLOCKS = 8;
     private static final int GAP_LABEL_TO_CONTROL = 4;
 
-    private static final String PRICING_URL = "https://jaipilot.vercel.app/pricing";
-    private static final String ACCOUNT_URL = "https://jaipilot.vercel.app/account";
+    private static final String PRICING_URL = "https://jaipilot.com/pricing";
+    private static final String ACCOUNT_URL = "https://jaipilot.com/account";
 
     @Override
     public @Nls(capitalization = Nls.Capitalization.Title) String getDisplayName() {
-        return "JAIPilot - AI Unit Test Generator";
+        return "JAIPilot - One-Click Automatic JUnit Test Generator";
     }
 
     @Override

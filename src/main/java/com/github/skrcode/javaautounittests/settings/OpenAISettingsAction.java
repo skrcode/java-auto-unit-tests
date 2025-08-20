@@ -14,6 +14,6 @@ public class OpenAISettingsAction extends AnAction {
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
         Project project = e.getProject();
-        ShowSettingsUtil.getInstance().showSettingsDialog(project, "JAIPilot - AI Unit Test Generator");
+        ShowSettingsUtil.getInstance().showSettingsDialog(project, "JAIPilot - One-Click Automatic JUnit Test Generator");
     }
 }

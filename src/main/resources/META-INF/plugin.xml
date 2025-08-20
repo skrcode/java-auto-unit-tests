@@ -1,7 +1,7 @@
 <!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
     <id>com.github.skrcode.javaautounittests</id>
-    <name>JAIPilot - AI Unit Test Generator</name>
+    <name>JAIPilot - One-Click Automatic JUnit Test Generator</name>
     <vendor>skrcode</vendor>
     <vendor email="surajkrajan95@gmail.com" url="skrcode.github.io">Suraj Krishnan Rajan</vendor>
 
@@ -9,9 +9,9 @@
     <depends>com.intellij.modules.java</depends>
     <depends>JUnit</depends>
     <description><![CDATA[
-        <p><strong>Auto Generate Robust Unit Tests for Java - Instantly with AI</strong></p>
+        <p><strong>Auto Generate Robust Unit Tests for Java. Powered by an AI agent that writes, runs, and fixes tests for you.</strong></p>
 
-        <p><em>JAIPilot - AI Unit Test Generator</em> helps you write complete JUnit test cases using OpenAI - right from your IntelliJ editor.</p>
+        <p><em>JAIPilot - One-Click Automatic JUnit Test Generator</em> helps you write complete JUnit test cases using OpenAI - right from your IntelliJ editor.</p>
 
         <ul>
           <li>🧠 <strong>AI-Generated Tests:</strong></li>
@@ -33,7 +33,7 @@
         <!-- Popup group shown in Editor + Project View -->
         <group id="AIAutoUnitTestGroup"
                popup="true"
-               text="JAIPilot – AI Unit Test Generator">
+               text="JAIPilot – One-Click Automatic JUnit Test Generator">
 
             <!-- where to show the group -->
             <add-to-group group-id="EditorPopupMenu"   anchor="first"/>
@@ -63,7 +63,7 @@
         <projectConfigurable instance="com.github.skrcode.javaautounittests.settings.AISettingsConfigurable"/>
         <statusBarWidgetFactory id="AIStatusWidget" implementation="com.github.skrcode.javaautounittests.settings.AIStatusWidgetFactory"/>
         <notificationGroup
-                id="JAIPilot - AI Unit Test Generator Feedback"
+                id="JAIPilot - One-Click Automatic JUnit Test Generator Feedback"
                 displayType="BALLOON"
                 isLogByDefault="false"/>
     </extensions>

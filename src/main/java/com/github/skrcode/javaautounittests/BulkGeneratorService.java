@@ -52,7 +52,7 @@ public final class BulkGeneratorService {
             public void onSuccess() {
                 ApplicationManager.getApplication().invokeLater(() -> {
                     NotificationGroupManager.getInstance()
-                            .getNotificationGroup("JAIPilot - AI Unit Test Generator Feedback")
+                            .getNotificationGroup("JAIPilot - One-Click Automatic JUnit Test Generator Feedback")
                             .createNotification(
                                     "All tests generated!",
                                     "If JAIPilot helped you, please <a href=\"https://plugins.jetbrains.com/plugin/27706-jaipilot--ai-unit-test-generator/edit/reviews/new\">leave a review</a> and ⭐️ rate it - it helps a lot!",
