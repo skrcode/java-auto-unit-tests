@@ -46,12 +46,14 @@ public class AISettingsConfigurable implements Configurable {
     private TextFieldWithBrowseButton testDirField;
 
     private JPanel proInstructionsPanel;
+    private JPanel freeCreditsCard; // <-- shown only in "Free" mode
 
     private static final int GAP_BETWEEN_BLOCKS = 8;
     private static final int GAP_LABEL_TO_CONTROL = 4;
 
-    private static final String PRICING_URL = "https://jaipilot.com/pricing";
-    private static final String ACCOUNT_URL = "https://jaipilot.com/account";
+    // Use exact link as requested
+    private static final String PRICING_URL = "https://www.jaipilot.com/pricing";
+    private static final String ACCOUNT_URL = "https://www.jaipilot.com/account";
 
     @Override
     public @Nls(capitalization = Nls.Capitalization.Title) String getDisplayName() {
@@ -93,6 +95,34 @@ public class AISettingsConfigurable implements Configurable {
 
         freeRadio.addActionListener(e -> updateModeFields());
         proRadio.addActionListener(e -> updateModeFields());
+
+        // 🔔 Free credits card — placed UNDER the radio buttons; only visible in "Free" mode
+        freeCreditsCard = new JPanel();
+        freeCreditsCard.setLayout(new BoxLayout(freeCreditsCard, BoxLayout.Y_AXIS));
+        freeCreditsCard.setAlignmentX(Component.LEFT_ALIGNMENT);
+        freeCreditsCard.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(90, 90, 90)),
+                BorderFactory.createEmptyBorder(10, 10, 10, 10)
+        ));
+        JLabel freeCreditsText = new JLabel(
+                "<html><div style='width:520px; text-align:left;'>"
+                        + "If you don’t have a Gemini key and want to try out JAIPilot — you have <b>Pro free credits</b> available. "
+                        + "Once you sign up, go to the <i>Account</i> page to find your <b>license key</b>, then paste this key under Pro settings. "
+                        + "You are eligible for a <b>Pro free trial</b> (no card required)."
+                        + "</div></html>"
+        );
+
+        freeCreditsText.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JPanel freeCreditsCtas = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        JButton getFreeBtn = new JButton("Get Free Credits");
+        getFreeBtn.addActionListener(e -> open(PRICING_URL)); // open pricing
+        freeCreditsCtas.add(getFreeBtn);
+        freeCreditsCtas.setAlignmentX(Component.LEFT_ALIGNMENT);
+        freeCreditsCard.add(freeCreditsText);
+        freeCreditsCard.add(Box.createVerticalStrut(6));
+        freeCreditsCard.add(freeCreditsCtas);
+        contentPanel.add(freeCreditsCard); // <-- under radio buttons
+        contentPanel.add(Box.createVerticalStrut(8));
 
         // Test dir chooser — shared for BOTH Free & Pro
         Dimension fieldSize = new Dimension(520, 30);
@@ -151,7 +181,7 @@ public class AISettingsConfigurable implements Configurable {
                 BorderFactory.createEmptyBorder(10, 10, 10, 10)
         ));
         JLabel proPitch = new JLabel(
-                "<html><div style='width:520px'>"
+                "<html><div style='width:520px; text-align:left;'>"
                         + "<b>Pro</b> — Managed, usage-based test generation. No API setup. Faster, smarter tests.<br>"
                         + "<a href='" + PRICING_URL + "'>See benefits & pricing</a>."
                         + "</div></html>"
@@ -187,7 +217,7 @@ public class AISettingsConfigurable implements Configurable {
         }
 
         // Models populate
-        updateModeFields();
+        updateModeFields(); // sets card + toggles freeCreditsCard visibility
         new Thread(this::loadModelsInBackground, "JAIPilot-LoadModels").start();
         return rootPanel;
     }
@@ -197,11 +227,10 @@ public class AISettingsConfigurable implements Configurable {
         proInstructionsPanel.setLayout(new BoxLayout(proInstructionsPanel, BoxLayout.Y_AXIS));
         proInstructionsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        JLabel instructions = new JLabel("<html><div style='width:520px;text-align:left'>"
+        JLabel instructions = new JLabel("<html><div style='width:520px; text-align:left;'>"
                 + "<b>Get your JAIPilot Pro Key:</b><br>"
-                + "1) Visit <a href='" + PRICING_URL + "'>" + PRICING_URL + "</a><br>"
-                + "2) Complete payment<br>"
-                + "3) Open <a href='" + ACCOUNT_URL + "'>Account</a> and copy your License Key"
+                + "1) Visit <a href='" + PRICING_URL + "'>" + PRICING_URL + "</a> (Sign up to activate free credits — no card required)<br>"
+                + "2) After signup, open <a href='" + ACCOUNT_URL + "'>Account</a> — your License Key will be shown there<br>"
                 + "</div></html>");
         instructions.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         instructions.addMouseListener(new java.awt.event.MouseAdapter() {
@@ -231,6 +260,7 @@ public class AISettingsConfigurable implements Configurable {
         boolean isFree = freeRadio.isSelected();
         cardLayout.show(modeCards, isFree ? "Free" : "Pro");
         modelCombo.setEnabled(isFree);
+        if (freeCreditsCard != null) freeCreditsCard.setVisible(isFree); // <-- only show in Free mode
         rootPanel.revalidate(); rootPanel.repaint();
     }
 

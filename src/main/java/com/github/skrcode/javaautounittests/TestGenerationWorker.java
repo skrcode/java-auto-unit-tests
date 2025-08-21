@@ -57,7 +57,7 @@ public final class TestGenerationWorker {
                 List<String> contextClassesSource = getSourceCodeOfContextClasses(project,contextClasses);
                 PromptResponseOutput promptResponseOutput;
                 if(AISettings.getInstance().getMode().equals("Pro"))
-                    promptResponseOutput  = JAIPilotLLM.getAllSingleTestPro(testFileName, cutClass, existingIndividualTestClass, errorOutput, contextClassesSource, indicator, attempt);
+                    promptResponseOutput  = JAIPilotLLM.getAllSingleTestPro(testFileName, cutClass, existingIndividualTestClass, errorOutput, contextClassesSource, attempt, indicator);
                 else promptResponseOutput = JAIPilotLLM.getAllSingleTest( getSingleTestPromptPlaceholder, testFileName, cutClass, existingIndividualTestClass, errorOutput, contextClassesSource, attempt, indicator);
                 if(!Objects.isNull(promptResponseOutput.getTestClassCode())) {
                     contextClasses = promptResponseOutput.getContextClasses();
