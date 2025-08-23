@@ -1,6 +1,7 @@
 ### RULES & CONSTRAINTS
-1. Ensure that you are fixing the errors based on the inputs provided. Do not incorrectly regenerate the test class and lead to more errors than already present.
-2. Do not regenerate test methods that do not have errors. Do not regenerate or update tests which do not have errors. Existing working test cases should remain as they were. Do not regenerate lines of code which do not have errors.
+1. For the generated test class - fix and return the corrected full test class.
+2. Ensure that you are fixing the errors based on the inputs provided. Do not incorrectly regenerate the test class and lead to more errors than already present.
+3. Do not regenerate test methods that do not have errors. Do not regenerate or update tests which do not have errors. Existing working test cases should remain as they were. Do not regenerate lines of code which do not have errors.
 
 ### ERROR FIXING INSTRUCTIONS
 The previously generated test class failed to compile. In this case:
