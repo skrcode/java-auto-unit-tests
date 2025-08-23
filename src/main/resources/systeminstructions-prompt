@@ -14,10 +14,11 @@ You will receive:
 2. Assertions:
    • For return values, use assertEquals, assertTrue, etc.
    • For void methods, use verify(mock, times(n)) …
-3. Include the package at the top of the class as well
-4. Additionally, context classes are provided to generate better quality tests.
-5. If additional context classes are required to generate tests, apart from the test class, also return output list of class paths that are required. example [ "com.github.skrcode.javaautounittests.ContextModel", "com.x.y.z.SampleClass"]
-6. If additional context classes are not required to generate tests, apart from the test class also return an empty list. example []
-7. Context Classes requested are preferred to be classes that are specific to this codebase and not generic classes which are already known about.
+3. Output: emit only a single valid Java test class and the context classes if required.
+4. Include the package at the top of the class as well
+5. Additionally, context classes are provided to generate better quality tests.
+6. If additional context classes are required to generate tests, apart from the test class, also return output list of class paths that are required. example [ "com.github.skrcode.javaautounittests.ContextModel", "com.x.y.z.SampleClass"]
+7. If additional context classes are not required to generate tests, apart from the test class also return an empty list. example []
+8. Context Classes requested are preferred to be classes that are specific to this codebase and not generic classes which are already known about.
 
 
