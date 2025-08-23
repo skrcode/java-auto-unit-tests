@@ -2,6 +2,7 @@ package com.github.skrcode.javaautounittests;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.skrcode.javaautounittests.DTOs.Prompt;
 import com.github.skrcode.javaautounittests.DTOs.PromptResponseOutput;
 import com.github.skrcode.javaautounittests.DTOs.ResponseOutput;
 import com.github.skrcode.javaautounittests.settings.AISettings;
@@ -17,10 +18,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -40,7 +38,7 @@ public final class JAIPilotLLM {
      * Shows elapsed time in the ProgressIndicator while the request runs.
      */
     public static PromptResponseOutput getAllSingleTest(
-            String promptPlaceholder,
+            Prompt promptPlaceholder,
             String testClassName,              // kept for signature compatibility (unused)
             String inputClass,
             String existingTestClass,
@@ -52,18 +50,20 @@ public final class JAIPilotLLM {
         ElapsedTicker ticker = new ElapsedTicker(indicator, "Attempt #"+attempt+": Running model…");
         ticker.start();
         try {
-            // Build prompt
-            Map<String, String> placeholders = Map.of(
-                    "{{inputclass}}", inputClass == null ? "" : inputClass,
-                    "{{testclass}}", existingTestClass == null ? "" : existingTestClass,
-                    "{{erroroutput}}", errorOutput == null ? "" : errorOutput,
-                    "{{testclassname}}", testClassName == null ? "" : testClassName,
-                    "{{contextclasses}}", joinLines(contextClassesSources)
-            );
-            String prompt = promptPlaceholder;
-            for (Map.Entry<String, String> e : placeholders.entrySet()) {
-                prompt = prompt.replace(e.getKey(), e.getValue());
-            }
+            // System instructions - user
+            String systemInstructionPrompt = promptPlaceholder.getSystemInstructionsPlaceholder();
+            Content systemInstructionContent = Content.builder().role("user").parts(Part.builder().text(systemInstructionPrompt).build()).build();
+            // Input class - user - 1
+            // Context Classes - user - 2
+            // Test classname - user - 3
+            String inputPrompt = promptPlaceholder.getInputPlaceholder().replace("{{inputclass}}",inputClass == null ? "" : inputClass).replace("{{contextclasses}}",joinLines(contextClassesSources)).replace("{{testclassname}}",testClassName == null ? "" : testClassName);
+            Content inputContent = Content.builder().role("user").parts(Part.builder().text(inputPrompt).build()).build();
+            // Existing Test class - model
+            String existingTestClassPrompt = promptPlaceholder.getExistingTestClassPlaceholder().replace("{{testclass}}",existingTestClass == null ? "" : existingTestClass);
+            Content existingTestClassContent = Content.builder().role("model").parts(Part.builder().text(existingTestClassPrompt).build()).build();
+            // Error output - user - 1
+            String errorOutputPrompt = promptPlaceholder.getErrorOutputPlaceholder().replace("{{erroroutput}}", errorOutput == null ? "" : errorOutput);
+            Content errorOutputContent = Content.builder().role("user").parts(Part.builder().text(errorOutputPrompt).build()).build();
 
             // Gemini client (blocking)
             String apiKey = AISettings.getInstance().getOpenAiKey();
@@ -84,14 +84,19 @@ public final class JAIPilotLLM {
             GenerateContentConfig cfg = GenerateContentConfig.builder()
                     .responseMimeType("application/json")
                     .candidateCount(1)
-                    .temperature(0.15f)
-                    .topP(0.9f)
-                    .thinkingConfig(ThinkingConfig.builder().includeThoughts(false).thinkingBudget(0).build())
+                    .maxOutputTokens(1000000)
+                    .temperature(0.0f)
+                    .topP(1.0f)
+                    .topK(0f)
+                    .systemInstruction(systemInstructionContent)
+                    .thinkingConfig(ThinkingConfig.builder().includeThoughts(false).thinkingBudget(-1).build())
                     .responseSchema(schema)
                     .build();
 
+            List<Content> contents = Arrays.asList(inputContent,existingTestClassContent,errorOutputContent);
+
             GenerateContentResponse resp =
-                    client.models.generateContent(AISettings.getInstance().getModel(), prompt, cfg);
+                    client.models.generateContent(AISettings.getInstance().getModel(), contents, cfg);
 
             // Collect JSON text
             StringBuilder json = new StringBuilder();

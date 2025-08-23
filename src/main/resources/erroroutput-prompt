@@ -1,0 +1,25 @@
+### RULES & CONSTRAINTS
+1. Ensure that you are fixing the errors based on the inputs provided. Do not incorrectly regenerate the test class and lead to more errors than already present.
+2. Do not regenerate test methods that do not have errors. Do not regenerate or update tests which do not have errors. Existing working test cases should remain as they were. Do not regenerate lines of code which do not have errors.
+
+### ERROR FIXING INSTRUCTIONS
+The previously generated test class failed to compile. In this case:
+- **Fully replace the existing test class** in `testclass` with a corrected version.
+- Use the provided `erroroutput` to identify all invalid method calls, missing imports, missing types, or mock misuses.
+- Fix all issues so the class compiles cleanly.
+- Use only method/field names from the actual CUT. Do not guess types or methods that do not exist.
+- If you are mocking a return type, ensure it is a concrete POJO - not a class or method that does not exist in the CUT.
+- Fully simulate compilation in your head before returning the code.
+- Use the context classes as well if needed to fix the errors
+- Request the user to provide context classes when you get errors such as "cannot find symbol". Return output list of class paths that are required. example [ "com.github.skrcode.javaautounittests.ContextModel", "com.x.y.z.SampleClass"]
+- Do not regenerate test methods that do not have errors.
+- If there are errors such as "cannot find symbol", you can simply remove the import statement as well.
+
+### INTERNAL REASONING STEPS (do NOT output)
+1. If compilation errors are passed in, use them to guide patching of the testclass.
+2. Identify required classes that additionally need to be provided for context in order to generate the test case. There may be multiple such classes that could be required. For example
+If there is an error that says "Cannot find symbol" for com.github.skrcode.javaautounittests.ContextModel location, send "com.github.skrcode.javaautounittests.ContextModel" in the context classes list.
+3. Do not regenerate test methods that do not have errors.
+
+### Output error message - contains compiler error log if testclass failed to compile.
+{{erroroutput}}
