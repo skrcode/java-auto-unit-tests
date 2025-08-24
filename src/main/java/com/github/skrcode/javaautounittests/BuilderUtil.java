@@ -1,6 +1,7 @@
 package com.github.skrcode.javaautounittests;
 
 import com.intellij.codeInsight.actions.ReformatCodeProcessor;
+import com.intellij.codeInsight.daemon.impl.HighlightInfo;
 import com.intellij.compiler.CompilerMessageImpl;
 import com.intellij.ide.highlighter.JavaFileType;
 import com.intellij.openapi.application.ApplicationManager;
@@ -21,8 +22,10 @@ import com.intellij.psi.PsiFileFactory;
 import com.intellij.psi.codeStyle.CodeStyleManager;
 import com.intellij.psi.codeStyle.JavaCodeStyleManager;
 
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * Compiles a JUnit test class, runs it with coverage, and returns:
@@ -35,6 +38,9 @@ public class BuilderUtil {
     private BuilderUtil() {}
 
     public static String compileJUnitClass(Project project, Ref<PsiFile> testFile)  {
+
+        String staticErrors = getAllErrorMessages(project, testFile.get());
+        if(!staticErrors.isEmpty()) return staticErrors;
 
         CountDownLatch latch = new CountDownLatch(1);
         StringBuilder result = new StringBuilder();
@@ -66,6 +72,23 @@ public class BuilderUtil {
         }
 
         return result.toString().trim();
+    }
+
+    public static String getAllErrorMessages(Project project, PsiFile psiFile) {
+        Document doc = psiFile.getViewProvider().getDocument();
+
+        // Collect all highlights
+        List<HighlightInfo> infos = com.intellij.codeInsight.daemon.impl.DaemonCodeAnalyzerImpl
+                .getHighlights(doc, null, project);
+
+        // Filter and join as a string
+        return infos.stream()
+                .filter(info -> info.getSeverity().equals(com.intellij.lang.annotation.HighlightSeverity.ERROR))
+                .map(info -> {
+                    int line = doc.getLineNumber(info.getStartOffset()) + 1;
+                    return "Line " + line + ": " + info.getDescription();
+                })
+                .collect(Collectors.joining("\n"));
     }
 
     private static String getLineFromVirtualFile(Project project, VirtualFile file, int lineNumber) {
