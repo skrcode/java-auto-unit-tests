@@ -102,13 +102,11 @@ public class BuilderUtil {
                             public void onTextAvailable(ProcessEvent event, Key outputType) {
                                 String line = event.getText().trim();
                                 if (line.startsWith("##teamcity[testFailed")) {
-                                    String testName = extractAttr(line, "name");
-                                    String message = extractAttr(line, "message");
-                                    String details = extractAttr(line, "details");
+//                                    String testName = extractAttr(line, "name");
+//                                    String message = extractAttr(line, "message");
+//                                    String details = extractAttr(line, "details");
 
-                                    failures.append("Test: ").append(testName).append("\n")
-                                            .append("Error: ").append(message).append("\n")
-                                            .append(details.replace("|n", "\n"))
+                                    failures.append(line)
                                             .append("\n\n");
                                 }
                             }
