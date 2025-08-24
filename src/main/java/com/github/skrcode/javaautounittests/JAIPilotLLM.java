@@ -30,6 +30,7 @@ import java.util.concurrent.TimeUnit;
 public final class JAIPilotLLM {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    final static int MAX_RETRIES = 5;
 
     /**
      * FREE: Blocking call to Gemini with JSON schema; expects:
@@ -111,14 +112,50 @@ public final class JAIPilotLLM {
         }
     }
 
+    private static JsonNode callProWithRetries(
+            HttpClient http , HttpRequest req) throws Exception {
+        int retries = 0;
+        while (retries < MAX_RETRIES) {
+            try {
+                HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+                if (resp.statusCode() / 100 == 4) {
+                    String errorBody = new String(resp.body().getBytes(), StandardCharsets.UTF_8);
+                    throw new IllegalArgumentException(errorBody);
+                }
+                if (resp.statusCode() / 100 != 2) {
+                    String errorBody = new String(resp.body().getBytes(), StandardCharsets.UTF_8);
+                    throw new IOException(errorBody);
+                }
+
+                JsonNode node = MAPPER.readTree(resp.body());
+                String outputTestClass = node.get("outputTestClass").asText("");
+                JavaParser parser = new JavaParser();
+                if (!parser.parse(outputTestClass).isSuccessful()) {
+                    throw new Exception("Parser failed");
+                }
+                return node;
+            }
+            catch (IllegalArgumentException e) {
+                throw e;
+            }
+            catch (Exception e) {
+                retries++;
+                if (retries >= MAX_RETRIES) {
+                    throw e; // rethrow after last attempt
+                }
+                System.err.println("Retry " + retries + " failed: " + e.getMessage());
+                Thread.sleep(500L * retries); // backoff
+            }
+        }
+        throw new IllegalStateException("Unexpected: reached end of retry loop");
+    }
+
     private static ResponseOutput callWithRetries(
             Client client,
             java.util.List<Content> contents,
             GenerateContentConfig cfg) throws Exception {
 
         int retries = 0;
-        final int MAX_RETRIES = 5;
-
         while (retries < MAX_RETRIES) {
             try {
                 // Call Gemini
@@ -206,15 +243,7 @@ public final class JAIPilotLLM {
                     .POST(HttpRequest.BodyPublishers.ofString(requestJson, StandardCharsets.UTF_8))
                     .build();
 
-            HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-            if (resp.statusCode() / 100 != 2) {
-                ticker.stopWithMessage("Failed");
-                String errorBody = new String(resp.body().getBytes(), StandardCharsets.UTF_8);
-                throw new IOException(errorBody);
-            }
-
-            JsonNode node = MAPPER.readTree(resp.body());
-
+            JsonNode node = callProWithRetries(http, req);
             String testClass = node.has("outputTestClass") ? node.get("outputTestClass").asText("") : "";
             List<String> ctx = new ArrayList<>();
             if (node.has("outputRequiredClassContextPaths") && node.get("outputRequiredClassContextPaths").isArray()) {
