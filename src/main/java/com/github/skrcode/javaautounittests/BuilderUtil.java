@@ -81,15 +81,28 @@ public class BuilderUtil {
         List<HighlightInfo> infos = com.intellij.codeInsight.daemon.impl.DaemonCodeAnalyzerImpl
                 .getHighlights(doc, null, project);
 
-        // Filter and join as a string
         return infos.stream()
                 .filter(info -> info.getSeverity().equals(com.intellij.lang.annotation.HighlightSeverity.ERROR))
                 .map(info -> {
-                    int line = doc.getLineNumber(info.getStartOffset()) + 1;
-                    return "Line " + line + ": " + info.getDescription();
+                    int errorLine = doc.getLineNumber(info.getStartOffset());
+
+                    // Define range (clamped to file boundaries)
+                    int startLine = Math.max(0, errorLine - 2);
+                    int endLine = Math.min(doc.getLineCount() - 1, errorLine + 2);
+
+                    StringBuilder context = new StringBuilder();
+                    for (int line = startLine; line <= endLine; line++) {
+                        int lineStartOffset = doc.getLineStartOffset(line);
+                        int lineEndOffset = doc.getLineEndOffset(line);
+                        String text = doc.getText(new TextRange(lineStartOffset, lineEndOffset));
+                        context.append(line + 1).append(": ").append(text).append("\n");
+                    }
+
+                    return "Error: " + info.getDescription() + "\nContext:\n" + context;
                 })
-                .collect(Collectors.joining("\n"));
+                .collect(Collectors.joining("\n---\n"));
     }
+
 
     private static String getLineFromVirtualFile(Project project, VirtualFile file, int lineNumber) {
         if (lineNumber < 1) return "<invalid line number>";
