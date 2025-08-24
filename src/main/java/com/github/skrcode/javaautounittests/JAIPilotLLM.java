@@ -2,11 +2,13 @@ package com.github.skrcode.javaautounittests;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.javaparser.JavaParser;
 import com.github.skrcode.javaautounittests.DTOs.Prompt;
 import com.github.skrcode.javaautounittests.DTOs.PromptResponseOutput;
 import com.github.skrcode.javaautounittests.DTOs.ResponseOutput;
 import com.github.skrcode.javaautounittests.settings.AISettings;
 import com.google.genai.Client;
+import com.google.genai.errors.ClientException;
 import com.google.genai.types.*;
 import com.intellij.openapi.progress.ProgressIndicator;
 
@@ -80,7 +82,6 @@ public final class JAIPilotLLM {
                                     .build()
                     ))
                     .build();
-
             GenerateContentConfig cfg = GenerateContentConfig.builder()
                     .responseMimeType("application/json")
                     .candidateCount(1)
@@ -90,27 +91,7 @@ public final class JAIPilotLLM {
 
             List<Content> contents = Arrays.asList(inputContent,existingTestClassContent,errorOutputContent);
 
-            GenerateContentResponse resp =
-                    client.models.generateContent(AISettings.getInstance().getModel(), contents, cfg);
-
-            // Collect JSON text
-            StringBuilder json = new StringBuilder();
-            resp.candidates().ifPresent(cands -> {
-                if (!cands.isEmpty()) {
-                    cands.get(0).content().ifPresent(content ->
-                            content.parts().ifPresent(parts -> {
-                                for (Part p : parts) p.text().ifPresent(json::append);
-                            })
-                    );
-                }
-            });
-
-            String sanitized = json.toString()
-                    .replaceAll("```json\\s*", "")
-                    .replaceAll("```\\s*$", "");
-
-            // Parse to DTO
-            ResponseOutput parsed = MAPPER.readValue(sanitized, ResponseOutput.class);
+            ResponseOutput parsed = callWithRetries(client, contents, cfg);
 
             String testClass = parsed.outputTestClass == null ? "" : parsed.outputTestClass;
             List<String> ctx = parsed.outputRequiredClassContextPaths != null
@@ -128,6 +109,59 @@ public final class JAIPilotLLM {
             ticker.stopWithMessage("Failed");
             throw new Exception(t.getMessage());
         }
+    }
+
+    private static ResponseOutput callWithRetries(
+            Client client,
+            java.util.List<Content> contents,
+            GenerateContentConfig cfg) throws Exception {
+
+        int retries = 0;
+        final int MAX_RETRIES = 5;
+
+        while (retries < MAX_RETRIES) {
+            try {
+                // Call Gemini
+                GenerateContentResponse resp = client.models.generateContent(AISettings.getInstance().getModel(), contents, cfg);
+
+                // Collect JSON text
+                StringBuilder json = new StringBuilder();
+                resp.candidates().ifPresent(cands -> {
+                    if (!cands.isEmpty()) {
+                        cands.get(0).content().ifPresent(content ->
+                                content.parts().ifPresent(parts -> {
+                                    for (Part p : parts) p.text().ifPresent(json::append);
+                                })
+                        );
+                    }
+                });
+
+                String sanitized = json.toString()
+                        .replaceAll("```json\\s*", "")
+                        .replaceAll("```\\s*$", "");
+
+                JavaParser parser = new JavaParser();
+                ResponseOutput responseOutput = MAPPER.readValue(sanitized, ResponseOutput.class);
+                if(!parser.parse(responseOutput.outputTestClass).isSuccessful()) {
+                    throw new Exception("Parser failed");
+                }
+                // Parse JSON to DTO
+                return responseOutput;
+            }
+            catch (ClientException ce) {
+                // Invalid key / bad request — no point retrying
+                throw ce;
+            }
+            catch (Exception e) {
+                retries++;
+                if (retries >= MAX_RETRIES) {
+                    throw e; // rethrow after last attempt
+                }
+                System.err.println("Retry " + retries + " failed: " + e.getMessage());
+                Thread.sleep(500L * retries); // backoff
+            }
+        }
+        throw new IllegalStateException("Unexpected: reached end of retry loop");
     }
 
     /**
