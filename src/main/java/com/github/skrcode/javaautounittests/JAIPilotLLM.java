@@ -30,7 +30,7 @@ import java.util.concurrent.TimeUnit;
 public final class JAIPilotLLM {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    final static int MAX_RETRIES = 5;
+    final static int MAX_RETRIES = 3;
 
     /**
      * FREE: Blocking call to Gemini with JSON schema; expects:
@@ -86,7 +86,6 @@ public final class JAIPilotLLM {
             GenerateContentConfig cfg = GenerateContentConfig.builder()
                     .responseMimeType("application/json")
                     .candidateCount(1)
-                    .temperature(0f)
                     .thinkingConfig(ThinkingConfig.builder().thinkingBudget(0).build())
                     .systemInstruction(systemInstructionContent)
                     .responseSchema(schema)

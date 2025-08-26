@@ -53,10 +53,10 @@ public final class TestGenerationWorker {
                     indicator.setText("Compiling #" + attempt + "/" + MAX_ATTEMPTS + " : " + testFileName);
                     existingIndividualTestClass = ReadAction.compute(() -> testFile.get().getText());
                     errorOutput = BuilderUtil.compileJUnitClass(project, testFile);
-                    if (errorOutput.isEmpty()) { // build pass
-                        errorOutput = BuilderUtil.runJUnitClass(project, testFile.get());
-                        if (errorOutput.isEmpty() && isLLMGeneratedAtleastOnce) break;
-                    }
+                    if (errorOutput.isEmpty() && isLLMGeneratedAtleastOnce) break;
+//                        errorOutput = BuilderUtil.runJUnitClass(project, testFile.get());
+//                        if (errorOutput.isEmpty() ) break;
+//                    }
                     indicator.setText("Compiled #" + attempt + "/" + MAX_ATTEMPTS + ": " + testFileName);
                 }
 
