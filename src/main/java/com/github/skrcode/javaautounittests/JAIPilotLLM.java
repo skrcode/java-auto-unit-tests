@@ -65,7 +65,7 @@ public final class JAIPilotLLM {
             String existingTestClassPrompt = promptPlaceholder.getExistingTestClassPlaceholder().replace("{{testclass}}",existingTestClass == null ? "" : existingTestClass);
             Content existingTestClassContent = Content.builder().role("model").parts(Part.builder().text(existingTestClassPrompt).build()).build();
             // Error output - user - 1
-            String errorOutputPrompt = promptPlaceholder.getErrorOutputPlaceholder().replace("{{erroroutput}}", errorOutput == null ? "" : errorOutput);
+            String errorOutputPrompt = promptPlaceholder.getErrorOutputPlaceholder().replace("{{erroroutput}}", errorOutput == null ? "" : errorOutput).replace("{{attempt}}",String.valueOf(attempt));
             Content errorOutputContent = Content.builder().role("user").parts(Part.builder().text(errorOutputPrompt).build()).build();
 
             // Gemini client (blocking)
