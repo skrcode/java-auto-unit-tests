@@ -13,6 +13,7 @@ public class OpenAISettingsAction extends AnAction {
 
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
+        Telemetry.uiClick("settings");
         Project project = e.getProject();
         ShowSettingsUtil.getInstance().showSettingsDialog(project, "JAIPilot - One-Click Automatic JUnit Test Generator");
     }

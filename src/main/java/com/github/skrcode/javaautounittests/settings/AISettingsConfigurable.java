@@ -48,6 +48,9 @@ public class AISettingsConfigurable implements Configurable {
     private JPanel proInstructionsPanel;
     private JPanel freeCreditsCard; // <-- shown only in "Free" mode
 
+    private JCheckBox telemetryCheck;      // common (Free & Pro)
+//    private JCheckBox thinkingModeCheck;   // Free only
+
     private static final int GAP_BETWEEN_BLOCKS = 8;
     private static final int GAP_LABEL_TO_CONTROL = 4;
 
@@ -114,7 +117,7 @@ public class AISettingsConfigurable implements Configurable {
 
         freeCreditsText.setAlignmentX(Component.LEFT_ALIGNMENT);
         JPanel freeCreditsCtas = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-        JButton getFreeBtn = new JButton("Get Free Credits");
+        JButton getFreeBtn = new JButton("Start Free Trial (instant, no card required)");
         getFreeBtn.addActionListener(e -> open(PRICING_URL)); // open pricing
         freeCreditsCtas.add(getFreeBtn);
         freeCreditsCtas.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -122,6 +125,30 @@ public class AISettingsConfigurable implements Configurable {
         freeCreditsCard.add(Box.createVerticalStrut(6));
         freeCreditsCard.add(freeCreditsCtas);
         contentPanel.add(freeCreditsCard); // <-- under radio buttons
+        contentPanel.add(Box.createVerticalStrut(8));
+
+        // ===== COMMON SETTINGS (apply to both Free & Pro) =====
+        JPanel commonPanel = new JPanel();
+        commonPanel.setLayout(new BoxLayout(commonPanel, BoxLayout.Y_AXIS));
+        commonPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JCheckBox telemetryCheck = new JCheckBox(
+                "Help improve JAIPilot with anonymous usage statistics"
+        );
+        telemetryCheck.setToolTipText(
+                "Sends only anonymized feature usage (no source code or personal data). " +
+                        "This helps us improve performance, fix issues faster, and keep free credits available."
+        );
+        telemetryCheck.setAlignmentX(Component.LEFT_ALIGNMENT);
+        addFormBlock(commonPanel, "General:", telemetryCheck);
+
+        // Thinking mode (Free-only) — visibility toggled by updateModeFields()
+//        thinkingModeCheck = new JCheckBox("Thinking mode (slower, better, more tokens usage)");
+//        thinkingModeCheck.setToolTipText("Extra reasoning steps for higher-quality tests. Only available in Free mode.");
+//        thinkingModeCheck.setAlignmentX(Component.LEFT_ALIGNMENT);
+//        addFormBlock(commonPanel, null, thinkingModeCheck);
+
+        contentPanel.add(commonPanel);
         contentPanel.add(Box.createVerticalStrut(8));
 
         // Test dir chooser — shared for BOTH Free & Pro
@@ -205,6 +232,9 @@ public class AISettingsConfigurable implements Configurable {
         freeApiKeyField.setText(app.getOpenAiKey());
         proKeyField.setText(app.getProKey());
 
+        telemetryCheck.setSelected(app.isTelemetryEnabled());
+//        thinkingModeCheck.setSelected(app.isThinkingMode());
+
         // Detect project-level test root
         String projectTestDir = AIProjectSettings.getInstance(project).getTestDirectory();
         if (StringUtil.isEmptyOrSpaces(projectTestDir)) {
@@ -261,6 +291,7 @@ public class AISettingsConfigurable implements Configurable {
         cardLayout.show(modeCards, isFree ? "Free" : "Pro");
         modelCombo.setEnabled(isFree);
         if (freeCreditsCard != null) freeCreditsCard.setVisible(isFree); // <-- only show in Free mode
+//        if (thinkingModeCheck != null) thinkingModeCheck.setVisible(isFree); // <-- only Free
         rootPanel.revalidate(); rootPanel.repaint();
     }
 
@@ -304,7 +335,9 @@ public class AISettingsConfigurable implements Configurable {
                 || !StringUtil.equals(freeApiKeyField.getText(), StringUtil.notNullize(app.openAiKey))
                 || !StringUtil.equals(proKeyField.getText(), StringUtil.notNullize(app.proKey))
                 || !StringUtil.equals(StringUtil.notNullize(selModel), StringUtil.notNullize(app.model))
-                || !StringUtil.equals(StringUtil.notNullize(testDirField.getText()), StringUtil.notNullize(projTestDir));
+                || !StringUtil.equals(StringUtil.notNullize(testDirField.getText()), StringUtil.notNullize(projTestDir))
+                || telemetryCheck.isSelected() != AISettings.getInstance().isTelemetryEnabled();
+//                || thinkingModeCheck.isSelected() != AISettings.getInstance().isThinkingMode();
     }
 
     @Override
@@ -315,6 +348,8 @@ public class AISettingsConfigurable implements Configurable {
         app.setProKey(proKeyField.getText());
         Object sel = modelCombo.getSelectedItem();
         app.setModel(sel == null ? "" : sel.toString());
+        app.setTelemetryEnabled(telemetryCheck.isSelected());
+//        app.setThinkingMode(thinkingModeCheck.isSelected());
 
         AIProjectSettings proj = AIProjectSettings.getInstance(project);
         proj.setTestDirectory(StringUtil.notNullize(testDirField.getText()));
@@ -330,6 +365,8 @@ public class AISettingsConfigurable implements Configurable {
 
         String projTestDir = AIProjectSettings.getInstance(project).getTestDirectory();
         testDirField.setText(StringUtil.notNullize(projTestDir));
+        telemetryCheck.setSelected(AISettings.getInstance().isTelemetryEnabled());
+//        thinkingModeCheck.setSelected(AISettings.getInstance().isThinkingMode());
         updateModeFields();
     }
 

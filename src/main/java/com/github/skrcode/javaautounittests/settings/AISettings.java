@@ -19,6 +19,8 @@ public class AISettings implements PersistentStateComponent<AISettings.State> {
 //        public String testDirectory = "";   // Test directory path
         public String mode = "Free";        // Current mode: "free" or "pro"
 //        public Boolean proKeyValidated = null;
+        public boolean telemetryEnabled = true;
+//        public boolean thinkingMode = false;
     }
 
     private State state = new State();
@@ -87,5 +89,11 @@ public class AISettings implements PersistentStateComponent<AISettings.State> {
 //    public Boolean isProKeyValidated() {
 //        return state.proKeyValidated;
 //    }
+
+    public boolean isTelemetryEnabled() { return state.telemetryEnabled; }
+    public void setTelemetryEnabled(boolean v) { state.telemetryEnabled = v; }
+
+//    public boolean isThinkingMode() { return getState().thinkingMode; }
+//    public void setThinkingMode(boolean v) { getState().thinkingMode = v; }
 
 }

@@ -7,6 +7,7 @@ import com.github.skrcode.javaautounittests.DTOs.Prompt;
 import com.github.skrcode.javaautounittests.DTOs.PromptResponseOutput;
 import com.github.skrcode.javaautounittests.DTOs.ResponseOutput;
 import com.github.skrcode.javaautounittests.settings.AISettings;
+import com.github.skrcode.javaautounittests.settings.Telemetry;
 import com.google.genai.Client;
 import com.google.genai.errors.ClientException;
 import com.google.genai.types.*;
@@ -52,6 +53,7 @@ public final class JAIPilotLLM {
     ) throws Exception {
         ElapsedTicker ticker = new ElapsedTicker(indicator, "Attempt #"+attempt+": Running model…");
         ticker.start();
+        long start = System.nanoTime();
         try {
             // System instructions - user
             String systemInstructionPrompt = promptPlaceholder.getSystemInstructionsPlaceholder();
@@ -85,9 +87,8 @@ public final class JAIPilotLLM {
                     .build();
             GenerateContentConfig cfg = GenerateContentConfig.builder()
                     .responseMimeType("application/json")
-                    .candidateCount(1)
-                    .temperature(0f)
-                    .thinkingConfig(ThinkingConfig.builder().thinkingBudget(0).build())
+//                    .candidateCount(1)
+//                    .thinkingConfig(ThinkingConfig.builder().thinkingBudget(0).build())
                     .systemInstruction(systemInstructionContent)
                     .responseSchema(schema)
                     .build();
@@ -106,9 +107,12 @@ public final class JAIPilotLLM {
             out.setContextClasses(ctx);
 
             ticker.stopWithMessage("Done");
+            long end = System.nanoTime();
+            Telemetry.genCompleted(testClassName,String.valueOf(attempt),(end - start) / 1_000_000);
             return out;
 
         } catch (Throwable t) {
+            Telemetry.genFailed(testClassName,String.valueOf(attempt),t.getMessage());
             ticker.stopWithMessage("Failed");
             throw new Exception(t.getMessage());
         }
@@ -219,6 +223,7 @@ public final class JAIPilotLLM {
     ) throws Exception {
         ElapsedTicker ticker = new ElapsedTicker(indicator, "Attempt #"+attempt+": Running model…");
         ticker.start();
+        long start = System.nanoTime();
         try {
             final String url = "https://otxfylhjrlaesjagfhfi.supabase.co/functions/v1/invoke-junit-llm";
 
@@ -257,9 +262,12 @@ public final class JAIPilotLLM {
             out.setContextClasses(ctx);
 
             ticker.stopWithMessage("Done");
+            long end = System.nanoTime();
+            Telemetry.genCompleted(testFileName,String.valueOf(attempt),(end - start) / 1_000_000);
             return out;
 
         } catch (Throwable t) {
+            Telemetry.genFailed(testFileName,String.valueOf(attempt),t.getMessage());
             ticker.stopWithMessage("Failed");
             throw new Exception(t.getMessage());
         }

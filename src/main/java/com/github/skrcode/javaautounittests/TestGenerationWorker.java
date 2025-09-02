@@ -3,6 +3,7 @@ package com.github.skrcode.javaautounittests;
 import com.github.skrcode.javaautounittests.DTOs.Prompt;
 import com.github.skrcode.javaautounittests.DTOs.PromptResponseOutput;
 import com.github.skrcode.javaautounittests.settings.AISettings;
+import com.github.skrcode.javaautounittests.settings.Telemetry;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.command.WriteCommandAction;
@@ -26,6 +27,7 @@ public final class TestGenerationWorker {
     public static void process(Project project, PsiClass cut, @NotNull ProgressIndicator indicator, PsiDirectory testRoot) {
 
         try {
+
             PsiDirectory packageDir = resolveTestPackageDir(project, testRoot, cut);
             if (packageDir == null) {
                 indicator.setText("Cannot determine package for CUT");
@@ -41,6 +43,7 @@ public final class TestGenerationWorker {
             prompt.setExistingTestClassPlaceholder(PromptBuilder.getPromptPlaceholder("testclass-prompt"));
             String errorOutput = "";
             String testFileName = cutName + "Test.java";
+            Telemetry.genStarted(testFileName);
             List<String> contextClasses = new ArrayList<>();
             // Attempts
             boolean isLLMGeneratedAtleastOnce = false;
@@ -77,6 +80,7 @@ public final class TestGenerationWorker {
             indicator.setText("Successfully generated Test Class " + testFileName);
         }
         catch (Throwable t) {
+
             t.printStackTrace();
             ApplicationManager.getApplication().invokeLater(() ->
                     Messages.showErrorDialog(t.getMessage(), "Error")
