@@ -132,7 +132,7 @@ public class AISettingsConfigurable implements Configurable {
         commonPanel.setLayout(new BoxLayout(commonPanel, BoxLayout.Y_AXIS));
         commonPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        JCheckBox telemetryCheck = new JCheckBox(
+        telemetryCheck = new JCheckBox(
                 "Help improve JAIPilot with anonymous usage statistics"
         );
         telemetryCheck.setToolTipText(
