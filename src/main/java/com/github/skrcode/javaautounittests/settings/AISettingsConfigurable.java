@@ -1,4 +1,4 @@
-// Compact AISettingsConfigurable.java (per-project Test Root) — MINIMAL & EVERGREEN — KEY ABOVE INFO
+// Compact AISettingsConfigurable.java (per-project Test Root) — JAIPilot-first UX with simple “get key” flow
 package com.github.skrcode.javaautounittests.settings;
 
 import com.github.skrcode.javaautounittests.PromptBuilder;
@@ -17,6 +17,8 @@ import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.datatransfer.Clipboard;
+import java.awt.datatransfer.DataFlavor;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
@@ -31,31 +33,28 @@ public class AISettingsConfigurable implements Configurable {
     }
 
     private JPanel rootPanel;
-    private JPanel freePanel;
-    private JPanel proPanel;
+    private JPanel customPanel;
+    private JPanel jaipilotPanel;
     private JPanel modeCards;
     private CardLayout cardLayout;
 
-    private JRadioButton freeRadio;
-    private JRadioButton proRadio;
+    // Modes (JAIPilot first priority, BYOK second)
+    private JRadioButton jaipilotRadio;
+    private JRadioButton customRadio;
 
-    private JBPasswordField freeApiKeyField;
-    private JBPasswordField proKeyField;
+    // Inputs
+    private JBPasswordField geminiApiKeyField;   // BYOK
+    private JBPasswordField jaipilotKeyField;    // JAIPilot
 
-    private JComboBox<String> modelCombo;
+    private JComboBox<String> modelCombo;        // BYOK only
     private TextFieldWithBrowseButton testDirField;
 
-    private JPanel proInstructionsPanel;
-    private JPanel freeCreditsCard; // <-- shown only in "Free" mode
-
-    private JCheckBox telemetryCheck;      // common (Free & Pro)
-//    private JCheckBox thinkingModeCheck;   // Free only
+    // Common
+    private JCheckBox telemetryCheck;
 
     private static final int GAP_BETWEEN_BLOCKS = 8;
     private static final int GAP_LABEL_TO_CONTROL = 4;
 
-    // Use exact link as requested
-    private static final String PRICING_URL = "https://www.jaipilot.com/pricing";
     private static final String ACCOUNT_URL = "https://www.jaipilot.com/account";
 
     @Override
@@ -72,93 +71,50 @@ public class AISettingsConfigurable implements Configurable {
         contentPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         rootPanel.add(contentPanel, BorderLayout.NORTH);
 
-        // Header + direct link to pricing
+        // Header
         JPanel header = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         header.setAlignmentX(Component.LEFT_ALIGNMENT);
-        JLabel title = new JLabel("Select Plan:");
-        JButton whatsInPro = new JButton("What’s in Pro?");
-        whatsInPro.addActionListener(e -> open(PRICING_URL));
+        JLabel title = new JLabel("Choose setup:");
         header.add(title);
-        header.add(whatsInPro);
         contentPanel.add(header);
         contentPanel.add(Box.createVerticalStrut(6));
 
-        // Plan toggle
+        // Mode toggle — JAIPilot first (primary), BYOK second
         JPanel togglePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         togglePanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-        freeRadio = new JRadioButton("Free");
-        proRadio = new JRadioButton("Pro");
+        jaipilotRadio = new JRadioButton("JAIPilot Key (recommended)");
+        customRadio   = new JRadioButton("BYOK – Google Gemini");
         ButtonGroup group = new ButtonGroup();
-        group.add(freeRadio);
-        group.add(proRadio);
-        togglePanel.add(freeRadio);
-        togglePanel.add(proRadio);
+        group.add(jaipilotRadio);
+        group.add(customRadio);
+        togglePanel.add(jaipilotRadio);
+        togglePanel.add(customRadio);
         contentPanel.add(togglePanel);
         contentPanel.add(Box.createVerticalStrut(8));
 
-        freeRadio.addActionListener(e -> updateModeFields());
-        proRadio.addActionListener(e -> updateModeFields());
+        jaipilotRadio.addActionListener(e -> updateModeFields());
+        customRadio.addActionListener(e -> updateModeFields());
 
-        // 🔔 Free credits card — placed UNDER the radio buttons; only visible in "Free" mode
-        freeCreditsCard = new JPanel();
-        freeCreditsCard.setLayout(new BoxLayout(freeCreditsCard, BoxLayout.Y_AXIS));
-        freeCreditsCard.setAlignmentX(Component.LEFT_ALIGNMENT);
-        freeCreditsCard.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(new Color(90, 90, 90)),
-                BorderFactory.createEmptyBorder(10, 10, 10, 10)
-        ));
-        JLabel freeCreditsText = new JLabel(
-                "<html><div style='width:520px; text-align:left;'>"
-                        + "If you don’t have a Gemini key and want to try out JAIPilot — you have <b>Pro free credits</b> available. "
-                        + "Once you sign up, go to the <i>Account</i> page to find your <b>license key</b>, then paste this key under Pro settings. "
-                        + "You are eligible for a <b>Pro free trial</b> (no card required)."
-                        + "</div></html>"
-        );
-
-        freeCreditsText.setAlignmentX(Component.LEFT_ALIGNMENT);
-        JPanel freeCreditsCtas = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-        JButton getFreeBtn = new JButton("Start Free Trial (instant, no card required)");
-        getFreeBtn.addActionListener(e -> open(PRICING_URL)); // open pricing
-        freeCreditsCtas.add(getFreeBtn);
-        freeCreditsCtas.setAlignmentX(Component.LEFT_ALIGNMENT);
-        freeCreditsCard.add(freeCreditsText);
-        freeCreditsCard.add(Box.createVerticalStrut(6));
-        freeCreditsCard.add(freeCreditsCtas);
-        contentPanel.add(freeCreditsCard); // <-- under radio buttons
-        contentPanel.add(Box.createVerticalStrut(8));
-
-        // ===== COMMON SETTINGS (apply to both Free & Pro) =====
+        // ===== COMMON SETTINGS (apply to both modes) =====
         JPanel commonPanel = new JPanel();
         commonPanel.setLayout(new BoxLayout(commonPanel, BoxLayout.Y_AXIS));
         commonPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        telemetryCheck = new JCheckBox(
-                "Help improve JAIPilot with anonymous usage statistics"
-        );
-        telemetryCheck.setToolTipText(
-                "Sends only anonymized feature usage (no source code or personal data). " +
-                        "This helps us improve performance, fix issues faster, and keep free credits available."
-        );
+        telemetryCheck = new JCheckBox("Help improve JAIPilot with anonymous usage statistics");
+        telemetryCheck.setToolTipText("Sends only anonymized feature usage (no source code or personal data).");
         telemetryCheck.setAlignmentX(Component.LEFT_ALIGNMENT);
         addFormBlock(commonPanel, "General:", telemetryCheck);
-
-        // Thinking mode (Free-only) — visibility toggled by updateModeFields()
-//        thinkingModeCheck = new JCheckBox("Thinking mode (slower, better, more tokens usage)");
-//        thinkingModeCheck.setToolTipText("Extra reasoning steps for higher-quality tests. Only available in Free mode.");
-//        thinkingModeCheck.setAlignmentX(Component.LEFT_ALIGNMENT);
-//        addFormBlock(commonPanel, null, thinkingModeCheck);
-
         contentPanel.add(commonPanel);
         contentPanel.add(Box.createVerticalStrut(8));
 
-        // Test dir chooser — shared for BOTH Free & Pro
+        // Test dir chooser — shared for BOTH modes
         Dimension fieldSize = new Dimension(520, 30);
         testDirField = new TextFieldWithBrowseButton();
         sizeBrowse(testDirField, fieldSize);
         testDirField.addBrowseFolderListener(
                 new TextBrowseFolderListener(FileChooserDescriptorFactory.createSingleFolderDescriptor())
         );
-        addFormBlock(contentPanel, "Select Test Root (applies to Free & Pro, e.g., src/test/java):", testDirField);
+        addFormBlock(contentPanel, "Select Test Root (applies to all modes, e.g., src/test/java):", testDirField);
         contentPanel.add(Box.createVerticalStrut(8));
 
         // Cards
@@ -166,108 +122,117 @@ public class AISettingsConfigurable implements Configurable {
         modeCards = new JPanel(cardLayout);
         modeCards.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        // Free panel
-        freePanel = new JPanel();
-        freePanel.setLayout(new BoxLayout(freePanel, BoxLayout.Y_AXIS));
-        freeApiKeyField = new JBPasswordField();
-        sizeField(freeApiKeyField, fieldSize);
+        // === JAIPilot panel (simple 3-step + field + CTA) ===
+        jaipilotPanel = new JPanel();
+        jaipilotPanel.setLayout(new BoxLayout(jaipilotPanel, BoxLayout.Y_AXIS));
+
+        JLabel jaipilotSteps = new JLabel(
+                "<html><div style='width:520px; text-align:left;'>"
+                        + "<b>Quick steps</b>"
+                        + "<ol style='margin-top:4px;'>"
+                        + "<li>Click <i>Open Account</i> to sign in or sign up</li>"
+                        + "<li>Copy your <b>License Key</b> from the Account page</li>"
+                        + "<li>Paste it below and click <i>Save</i></li>"
+                        + "</ol>"
+                        + "</div></html>"
+        );
+        jaipilotSteps.setAlignmentX(Component.LEFT_ALIGNMENT);
+        addFormBlock(jaipilotPanel, null, jaipilotSteps);
+
+        // Open Account CTA (large, primary)
+        JButton openAccountBtn = new JButton("Open Account");
+        openAccountBtn.setFocusable(false);
+        openAccountBtn.addActionListener(e -> open(ACCOUNT_URL));
+        JPanel accountCtaRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        accountCtaRow.add(openAccountBtn);
+        addFormBlock(jaipilotPanel, null, accountCtaRow);
+
+        // Key row: field + Show + Paste from clipboard
+        jaipilotKeyField = new JBPasswordField();
+        sizeField(jaipilotKeyField, fieldSize);
+        JPanel keyRow = new JPanel();
+        keyRow.setLayout(new BoxLayout(keyRow, BoxLayout.X_AXIS));
+        keyRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+        keyRow.add(jaipilotKeyField);
+
+        keyRow.add(Box.createHorizontalStrut(6));
+        JCheckBox showKey = new JCheckBox("Show");
+        showKey.setFocusable(false);
+        showKey.addActionListener(ev -> setReveal(jaipilotKeyField, showKey.isSelected()));
+        keyRow.add(showKey);
+
+        keyRow.add(Box.createHorizontalStrut(6));
+//        JButton pasteBtn = new JButton("Paste");
+//        pasteBtn.setFocusable(false);
+//        pasteBtn.addActionListener(ev -> pasteFromClipboard(jaipilotKeyField));
+//        keyRow.add(pasteBtn);
+
+        addFormBlock(jaipilotPanel, "JAIPilot License Key:", keyRow);
+
+        JLabel tip = new JLabel(
+                "<html><div style='width:520px; color:#888;'>Tip: You can always reopen <a href='" + ACCOUNT_URL + "'>jaipilot.com/account</a> to manage your key.</div></html>"
+        );
+        tip.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        tip.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override public void mouseClicked(java.awt.event.MouseEvent e) { open(ACCOUNT_URL); }
+        });
+        addFormBlock(jaipilotPanel, null, tip);
+
+        // === BYOK / Custom Gemini panel (API key + model) ===
+        customPanel = new JPanel();
+        customPanel.setLayout(new BoxLayout(customPanel, BoxLayout.Y_AXIS));
+        geminiApiKeyField = new JBPasswordField();
+        sizeField(geminiApiKeyField, fieldSize);
+        JPanel geminiRow = new JPanel();
+        geminiRow.setLayout(new BoxLayout(geminiRow, BoxLayout.X_AXIS));
+        geminiRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+        geminiRow.add(geminiApiKeyField);
+        JCheckBox showGemini = new JCheckBox("Show");
+        showGemini.setFocusable(false);
+        showGemini.addActionListener(ev -> setReveal(geminiApiKeyField, showGemini.isSelected()));
+        geminiRow.add(showGemini);
+
         modelCombo = new JComboBox<>(new String[]{"Loading models..."});
         sizeCombo(modelCombo, fieldSize);
         modelCombo.setEnabled(false);
-        addFormBlock(freePanel, "Gemini API Key:", freeApiKeyField);
-        addFormBlock(freePanel, "Select Gemini Model:", modelCombo);
 
-        // Pro panel
-        proPanel = new JPanel();
-        proPanel.setLayout(new BoxLayout(proPanel, BoxLayout.Y_AXIS));
+        addFormBlock(customPanel, "Gemini API Key:", geminiRow);
+        addFormBlock(customPanel, "Select Gemini Model:", modelCombo);
 
-        // Pro key input at the top
-        proKeyField = new JBPasswordField();
-        sizeField(proKeyField, fieldSize);
-        JPanel proInput = new JPanel();
-        proInput.setLayout(new BoxLayout(proInput, BoxLayout.X_AXIS));
-        proInput.setAlignmentX(Component.LEFT_ALIGNMENT);
-        proInput.add(proKeyField);
-        addFormBlock(proPanel, "JAIPilot Pro Key:", proInput);
-
-        // Upgrade / Account buttons
-        JPanel ctas = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-        JButton upgradeBtn = new JButton("Upgrade to Pro");
-        upgradeBtn.addActionListener(e -> open(PRICING_URL));
-        JButton accountBtn = new JButton("Open Account");
-        accountBtn.addActionListener(e -> open(ACCOUNT_URL));
-        ctas.add(upgradeBtn);
-        ctas.add(accountBtn);
-        addFormBlock(proPanel, null, ctas);
-
-        // Evergreen Pro pitch (now at bottom)
-        JPanel proCard = new JPanel();
-        proCard.setLayout(new BoxLayout(proCard, BoxLayout.Y_AXIS));
-        proCard.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(new Color(90, 90, 90)),
-                BorderFactory.createEmptyBorder(10, 10, 10, 10)
-        ));
-        JLabel proPitch = new JLabel(
-                "<html><div style='width:520px; text-align:left;'>"
-                        + "<b>Pro</b> — Managed, usage-based test generation. No API setup. Faster, smarter tests.<br>"
-                        + "<a href='" + PRICING_URL + "'>See benefits & pricing</a>."
-                        + "</div></html>"
-        );
-        proPitch.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        proPitch.addMouseListener(new java.awt.event.MouseAdapter() {
-            @Override public void mouseClicked(java.awt.event.MouseEvent e) { open(PRICING_URL); }
-        });
-        addFormBlock(proPanel, null, proPitch);
-
-        // How to get key
-        addFormBlock(proPanel, null, getProInstructions());
-
-        modeCards.add(freePanel, "Free");
-        modeCards.add(proPanel, "Pro");
+        modeCards.add(jaipilotPanel, "JAIPilot");
+        modeCards.add(customPanel,   "Custom");
         contentPanel.add(modeCards);
 
-        // Load state
+        // Load state from persistent settings
         AISettings app = AISettings.getInstance();
-        if ("pro".equalsIgnoreCase(app.getMode())) proRadio.setSelected(true); else freeRadio.setSelected(true);
-        freeApiKeyField.setText(app.getOpenAiKey());
-        proKeyField.setText(app.getProKey());
+        // Map old values to new UI (keep underlying storage compatible):
+        // "pro" -> JAIPilot, "free" -> Custom
+        String savedMode = StringUtil.notNullize(app.getMode());
+        if ("pro".equalsIgnoreCase(savedMode)) {
+            jaipilotRadio.setSelected(true);
+        } else if ("free".equalsIgnoreCase(savedMode)) {
+            customRadio.setSelected(true);
+        } else {
+            jaipilotRadio.setSelected(true); // default priority
+        }
 
+        geminiApiKeyField.setText(app.getOpenAiKey());  // reusing existing field
+        jaipilotKeyField.setText(app.getProKey());      // reusing existing field
         telemetryCheck.setSelected(app.isTelemetryEnabled());
-//        thinkingModeCheck.setSelected(app.isThinkingMode());
 
         // Detect project-level test root
         String projectTestDir = AIProjectSettings.getInstance(project).getTestDirectory();
         if (StringUtil.isEmptyOrSpaces(projectTestDir)) {
             String auto = detectTestRoot(project);
-            if (!StringUtil.isEmptyOrSpaces(auto)) {
-                testDirField.setText(auto);
-            }
+            if (!StringUtil.isEmptyOrSpaces(auto)) testDirField.setText(auto);
         } else {
             testDirField.setText(projectTestDir);
         }
 
-        // Models populate
-        updateModeFields(); // sets card + toggles freeCreditsCard visibility
+        // Populate models for Custom/Gemini flow
+        updateModeFields();
         new Thread(this::loadModelsInBackground, "JAIPilot-LoadModels").start();
         return rootPanel;
-    }
-
-    private JPanel getProInstructions() {
-        proInstructionsPanel = new JPanel();
-        proInstructionsPanel.setLayout(new BoxLayout(proInstructionsPanel, BoxLayout.Y_AXIS));
-        proInstructionsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-        JLabel instructions = new JLabel("<html><div style='width:520px; text-align:left;'>"
-                + "<b>Get your JAIPilot Pro Key:</b><br>"
-                + "1) Visit <a href='" + PRICING_URL + "'>" + PRICING_URL + "</a> (Sign up to activate free credits — no card required)<br>"
-                + "2) After signup, open <a href='" + ACCOUNT_URL + "'>Account</a> — your License Key will be shown there<br>"
-                + "</div></html>");
-        instructions.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        instructions.addMouseListener(new java.awt.event.MouseAdapter() {
-            @Override public void mouseClicked(java.awt.event.MouseEvent e) { open(PRICING_URL); }
-        });
-        proInstructionsPanel.add(instructions);
-        return proInstructionsPanel;
     }
 
     private void addFormBlock(JPanel panel, String label, JComponent control) {
@@ -287,12 +252,11 @@ public class AISettingsConfigurable implements Configurable {
     private void sizeBrowse(TextFieldWithBrowseButton b, Dimension d) { b.setPreferredSize(d); b.setMaximumSize(d); }
 
     private void updateModeFields() {
-        boolean isFree = freeRadio.isSelected();
-        cardLayout.show(modeCards, isFree ? "Free" : "Pro");
-        modelCombo.setEnabled(isFree);
-        if (freeCreditsCard != null) freeCreditsCard.setVisible(isFree); // <-- only show in Free mode
-//        if (thinkingModeCheck != null) thinkingModeCheck.setVisible(isFree); // <-- only Free
-        rootPanel.revalidate(); rootPanel.repaint();
+        boolean isCustom = customRadio.isSelected();
+        cardLayout.show(modeCards, isCustom ? "Custom" : "JAIPilot");
+        modelCombo.setEnabled(isCustom);
+        rootPanel.revalidate();
+        rootPanel.repaint();
     }
 
     private void loadModelsInBackground() {
@@ -305,7 +269,7 @@ public class AISettingsConfigurable implements Configurable {
                 for (String model : allModels) modelCombo.addItem(model);
                 String saved = StringUtil.notNullize(AISettings.getInstance().getModel());
                 if (!saved.isEmpty()) modelCombo.setSelectedItem(saved);
-                modelCombo.setEnabled(freeRadio.isSelected());
+                modelCombo.setEnabled(customRadio.isSelected());
             });
         } catch (Exception ex) {
             SwingUtilities.invokeLater(() -> {
@@ -332,24 +296,22 @@ public class AISettingsConfigurable implements Configurable {
         String selModel = (String) modelCombo.getSelectedItem();
 
         return !getMode().equals(StringUtil.notNullize(app.mode))
-                || !StringUtil.equals(freeApiKeyField.getText(), StringUtil.notNullize(app.openAiKey))
-                || !StringUtil.equals(proKeyField.getText(), StringUtil.notNullize(app.proKey))
+                || !StringUtil.equals(geminiApiKeyField.getText(), StringUtil.notNullize(app.openAiKey))
+                || !StringUtil.equals(jaipilotKeyField.getText(), StringUtil.notNullize(app.proKey))
                 || !StringUtil.equals(StringUtil.notNullize(selModel), StringUtil.notNullize(app.model))
                 || !StringUtil.equals(StringUtil.notNullize(testDirField.getText()), StringUtil.notNullize(projTestDir))
                 || telemetryCheck.isSelected() != AISettings.getInstance().isTelemetryEnabled();
-//                || thinkingModeCheck.isSelected() != AISettings.getInstance().isThinkingMode();
     }
 
     @Override
     public void apply() {
         AISettings app = AISettings.getInstance();
-        app.setMode(getMode());
-        app.setOpenAiKey(freeApiKeyField.getText());
-        app.setProKey(proKeyField.getText());
+        app.setMode(getMode()); // keep underlying values "Pro"/"Free" for backward-compat
+        app.setOpenAiKey(geminiApiKeyField.getText());
+        app.setProKey(jaipilotKeyField.getText());
         Object sel = modelCombo.getSelectedItem();
         app.setModel(sel == null ? "" : sel.toString());
         app.setTelemetryEnabled(telemetryCheck.isSelected());
-//        app.setThinkingMode(thinkingModeCheck.isSelected());
 
         AIProjectSettings proj = AIProjectSettings.getInstance(project);
         proj.setTestDirectory(StringUtil.notNullize(testDirField.getText()));
@@ -358,21 +320,42 @@ public class AISettingsConfigurable implements Configurable {
     @Override
     public void reset() {
         AISettings.State app = AISettings.getInstance().getState();
-        if ("pro".equalsIgnoreCase(app.mode)) proRadio.setSelected(true); else freeRadio.setSelected(true);
-        freeApiKeyField.setText(StringUtil.notNullize(app.openAiKey));
-        proKeyField.setText(StringUtil.notNullize(app.proKey));
+        if ("pro".equalsIgnoreCase(app.mode)) jaipilotRadio.setSelected(true);
+        else if ("free".equalsIgnoreCase(app.mode)) customRadio.setSelected(true);
+        else jaipilotRadio.setSelected(true); // default priority
+
+        geminiApiKeyField.setText(StringUtil.notNullize(app.openAiKey));
+        jaipilotKeyField.setText(StringUtil.notNullize(app.proKey));
         modelCombo.setSelectedItem(StringUtil.notNullize(app.model));
 
         String projTestDir = AIProjectSettings.getInstance(project).getTestDirectory();
         testDirField.setText(StringUtil.notNullize(projTestDir));
         telemetryCheck.setSelected(AISettings.getInstance().isTelemetryEnabled());
-//        thinkingModeCheck.setSelected(AISettings.getInstance().isThinkingMode());
         updateModeFields();
     }
 
-    private String getMode() { return proRadio.isSelected() ? "Pro" : "Free"; }
+    // Map UI -> existing persisted values for compatibility:
+    // JAIPilot -> "Pro", Custom/Gemini -> "Free"
+    private String getMode() { return jaipilotRadio.isSelected() ? "Pro" : "Free"; }
 
+    // --- tiny helpers (UX niceties) ---
     private void open(String url) {
         try { Desktop.getDesktop().browse(new URI(url)); } catch (Exception ignored) {}
+    }
+    private void setReveal(JPasswordField f, boolean reveal) {
+        if (reveal) {
+            if (f.getClientProperty("echoBackup") == null) f.putClientProperty("echoBackup", f.getEchoChar());
+            f.setEchoChar((char)0);
+        } else {
+            Object b = f.getClientProperty("echoBackup");
+            if (b instanceof Character) f.setEchoChar((Character) b);
+        }
+    }
+    private void pasteFromClipboard(JTextField field) {
+        try {
+            Clipboard cb = Toolkit.getDefaultToolkit().getSystemClipboard();
+            String s = (String) cb.getData(DataFlavor.stringFlavor);
+            if (s != null) field.setText(s.trim());
+        } catch (Exception ignored) {}
     }
 }
