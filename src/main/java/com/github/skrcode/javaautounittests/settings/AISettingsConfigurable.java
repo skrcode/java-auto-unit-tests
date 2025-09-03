@@ -132,7 +132,7 @@ public class AISettingsConfigurable implements Configurable {
                         + "<ol style='margin-top:4px;'>"
                         + "<li>Click <i>Open Account</i> to sign in or sign up</li>"
                         + "<li>Copy your <b>License Key</b> from the Account page</li>"
-                        + "<li>Paste it below and click <i>Save</i></li>"
+                        + "<li>Paste it below</li>"
                         + "</ol>"
                         + "</div></html>"
         );
@@ -336,7 +336,7 @@ public class AISettingsConfigurable implements Configurable {
 
     // Map UI -> existing persisted values for compatibility:
     // JAIPilot -> "Pro", Custom/Gemini -> "Free"
-    private String getMode() { return jaipilotRadio.isSelected() ? "Pro" : "Free"; }
+    private String getMode() { return jaipilotRadio.isSelected() ? "Pro" : "BYOK"; }
 
     // --- tiny helpers (UX niceties) ---
     private void open(String url) {

@@ -17,7 +17,7 @@ public class AISettings implements PersistentStateComponent<AISettings.State> {
         public String proKey = "";          // Pro API Key
         public String model = "";           // Gemini Model (Free mode)
 //        public String testDirectory = "";   // Test directory path
-        public String mode = "Free";        // Current mode: "free" or "pro"
+        public String mode = "BYOK";        // Current mode: "free" or "pro"
 //        public Boolean proKeyValidated = null;
         public boolean telemetryEnabled = true;
 //        public boolean thinkingMode = false;
