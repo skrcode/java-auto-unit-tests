@@ -87,7 +87,7 @@ public final class JAIPilotLLM {
                     .build();
             GenerateContentConfig cfg = GenerateContentConfig.builder()
                     .responseMimeType("application/json")
-//                    .candidateCount(1)
+                    .candidateCount(1)
 //                    .thinkingConfig(ThinkingConfig.builder().thinkingBudget(0).build())
                     .systemInstruction(systemInstructionContent)
                     .responseSchema(schema)

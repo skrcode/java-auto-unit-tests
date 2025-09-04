@@ -9,25 +9,27 @@
     <depends>com.intellij.modules.java</depends>
     <depends>JUnit</depends>
     <description><![CDATA[
-        <p><strong>Auto Generate Robust Unit Tests for Java. Powered by an AI agent that writes, runs, and fixes tests for you.</strong></p>
+    <p><strong>Generate High-Coverage Unit Tests for Java — automatically written, run, and fixed by AI.</strong></p>
 
-        <p><em>JAIPilot - One-Click Automatic JUnit Test Generator</em> helps you write complete JUnit test cases using OpenAI - right from your IntelliJ editor.</p>
+    <p><em>JAIPilot – One-Click Automatic JUnit Test Generator</em> creates context-aware JUnit tests directly inside IntelliJ.</p>
 
+    <ul>
+      <li>🧠 <strong>Understands your code:</strong>
         <ul>
-          <li>🧠 <strong>AI-Generated Tests:</strong></li>
-          <ul>
-            <li>Generates robust meaningful JUnit tests with assertions</li>
-            <li>Understands method context, parameters, and edge cases</li>
-            <li>Uses OpenAI’s API to create high-quality test cases</li>
-          </ul>
-          <li>⚡ <strong>Instant Productivity:</strong> Just right-click on any class or method</li>
-          <li>🔌 <strong>Bring Your Own OpenAI Key:</strong> No extra backend or setup needed</li>
-          <li>🧪 <strong>Supports modern Java:</strong> Works with standard JUnit setup</li>
+          <li>Generates complete JUnit tests with assertions</li>
+          <li>Captures method logic, parameters, and edge cases</li>
         </ul>
+      </li>
+      <li>⚡ <strong>One-click test generation:</strong> Right-click any class or method to create tests instantly</li>
+      <li>🔑 <strong>Flexible setup:</strong> Use a <em>JAIPilot License Key</em> (recommended) or <em>Bring Your Own Gemini Key</em></li>
+      <li>📂 <strong>Custom test root:</strong> Choose where generated tests are stored (e.g., <code>src/test/java</code>)</li>
+      <li>🧪 <strong>Works with Java & JUnit:</strong> No custom frameworks needed</li>
+      <li>🚀 <strong>JAIPilot Pro:</strong> Faster, more robust test generation with automatic best-model selection</li>
+    </ul>
 
-        <p>Ideal for developers who want high-coverage, boilerplate-free tests without the effort. Designed for speed, accuracy, and practical use.</p>
-        ]]>
-    </description>
+    <p>Perfect for developers who want fast, reliable tests without writing boilerplate. Built for speed, simplicity, and real-world use.</p>
+]]></description>
+
 
     <actions>
         <!-- Popup group shown in Editor + Project View -->

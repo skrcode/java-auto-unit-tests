@@ -17,19 +17,21 @@
 - [ ] Click the <kbd>Watch</kbd> button on the top of the [IntelliJ Platform Plugin Template][template] to be notified about releases containing new features and fixes.
 
 <!-- Plugin description -->
-**Generate Robust Unit Tests for Java. Powered by an AI agent that writes, runs, and fixes tests for you.**
+**AI-Powered Unit Tests for Java. Generate, run, and fix tests automatically inside IntelliJ.**
 
-*JAIPilot - One-Click Automatic JUnit Test Generator* helps you automatically generate complete, context-aware JUnit tests — directly inside IntelliJ.
+*JAIPilot – One-Click Automatic JUnit Test Generator* creates complete, context-aware tests with just a right-click.
 
-- 🧠 **Understands your code** — generates tests based on method logic, inputs, and edge cases
-- ⚡ **One-click test generation** — right-click on any class or method to generate tests instantly
-- 🔌 **Works with your Gemini key** — no external setup or backend required. Gemini provides sufficient free credits to get started.
-- 🧪 **Supports standard Java & JUnit** — no custom test framework needed
-- 🚀 **JAIPilot Pro** — unlimited, faster test generation with automatic best-model selection and pay-only-for-what-you-use pricing
+- 🧠 **Understands your code** — generates tests from method logic, inputs, and edge cases
+- ⚡ **One-click generation** — right-click on any class or method to generate tests instantly
+- 🔑 **Flexible setup** — use a JAIPilot License Key (recommended) or bring your own Google Gemini key
+- 📂 **Custom test root** — choose where generated tests go (e.g., `src/test/java`)
+- 🧪 **JUnit support** — works with your existing Java projects, no custom framework required
+- 🚀 **JAIPilot Pro** — faster, more robust test generation with automatic best-model selection and pay-as-you-go pricing
 
-Perfect for developers who want fast, high-coverage tests without writing boilerplate. Built for speed, simplicity, and real-world use.
+Skip the boilerplate. Get reliable, high-coverage tests in seconds. Built for developers who value speed, simplicity, and real-world use.
 
 <!-- Plugin description end -->
+
 
 
 
