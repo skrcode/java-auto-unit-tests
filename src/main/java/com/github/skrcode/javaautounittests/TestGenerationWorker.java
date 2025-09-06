@@ -26,8 +26,10 @@ public final class TestGenerationWorker {
 
     public static void process(Project project, PsiClass cut, @NotNull ProgressIndicator indicator, PsiDirectory testRoot) {
 
+        int attempt = 1;
+        String errorOutput = "";
         try {
-
+            long start = System.nanoTime();
             PsiDirectory packageDir = resolveTestPackageDir(project, testRoot, cut);
             if (packageDir == null) {
                 indicator.setText("Cannot determine package for CUT");
@@ -37,18 +39,19 @@ public final class TestGenerationWorker {
             String cutName = ReadAction.compute(() -> cut.isValid() ? cut.getName() : "<invalid>");
             String cutClass = CUTUtil.cleanedSourceForLLM(project, cut);
             Prompt prompt = new Prompt();
+            prompt.setGenerateMorePlaceholder(PromptBuilder.getPromptPlaceholder("generate-more-prompt"));
             prompt.setSystemInstructionsPlaceholder(PromptBuilder.getPromptPlaceholder("systeminstructions-prompt"));
             prompt.setErrorOutputPlaceholder(PromptBuilder.getPromptPlaceholder("erroroutput-prompt"));
             prompt.setInputPlaceholder(PromptBuilder.getPromptPlaceholder("input-prompt"));
             prompt.setExistingTestClassPlaceholder(PromptBuilder.getPromptPlaceholder("testclass-prompt"));
-            String errorOutput = "";
+            errorOutput = "";
             String testFileName = cutName + "Test.java";
-            Telemetry.genStarted(testFileName);
+            Telemetry.allGenBegin(testFileName);
             List<String> contextClasses = new ArrayList<>();
             // Attempts
             boolean isLLMGeneratedAtleastOnce = false;
             String existingIndividualTestClass = "";
-            for (int attempt = 1; ; attempt++) {
+            for (; ; attempt++) {
                 indicator.setText("Generating test : attempt" + attempt + "/" + MAX_ATTEMPTS);
 
                 Ref<PsiFile> testFile = ReadAction.compute(() -> Ref.create(packageDir.findFile(testFileName)));
@@ -77,10 +80,12 @@ public final class TestGenerationWorker {
                     BuilderUtil.write(project, testFile, packageDir, testFileName, promptResponseOutput.getTestClassCode());
                 }
             }
+            long end = System.nanoTime();
+            Telemetry.allGenDone(testFileName, String.valueOf(attempt), (end - start) / 1_000_000);
             indicator.setText("Successfully generated Test Class " + testFileName);
         }
         catch (Throwable t) {
-
+            Telemetry.allGenError(String.valueOf(attempt), t.getMessage());
             t.printStackTrace();
             ApplicationManager.getApplication().invokeLater(() ->
                     Messages.showErrorDialog(t.getMessage(), "Error")

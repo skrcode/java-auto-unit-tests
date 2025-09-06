@@ -4,6 +4,7 @@ public class Prompt {
     private String inputPlaceholder;
     private String errorOutputPlaceholder;
     private String systemInstructionsPlaceholder;
+    private String generateMorePlaceholder;
 
     public String getExistingTestClassPlaceholder() {
         return existingTestClassPlaceholder;
@@ -37,5 +38,12 @@ public class Prompt {
 
     public void setErrorOutputPlaceholder(String errorOutputPlaceholder) {
         this.errorOutputPlaceholder = errorOutputPlaceholder;
+    }
+    public String getGenerateMorePlaceholder() {
+        return generateMorePlaceholder;
+    }
+
+    public void setGenerateMorePlaceholder(String generateMorePlaceholder) {
+        this.generateMorePlaceholder = generateMorePlaceholder;
     }
 }

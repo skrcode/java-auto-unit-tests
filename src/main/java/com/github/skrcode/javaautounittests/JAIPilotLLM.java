@@ -54,6 +54,7 @@ public final class JAIPilotLLM {
         ElapsedTicker ticker = new ElapsedTicker(indicator, "Attempt #"+attempt+": Running model…");
         ticker.start();
         long start = System.nanoTime();
+        Telemetry.genStarted(testClassName, String.valueOf(attempt));
         try {
             // System instructions - user
             String systemInstructionPrompt = promptPlaceholder.getSystemInstructionsPlaceholder();
@@ -69,6 +70,10 @@ public final class JAIPilotLLM {
             // Error output - user - 1
             String errorOutputPrompt = promptPlaceholder.getErrorOutputPlaceholder().replace("{{erroroutput}}", errorOutput == null ? "" : errorOutput);
             Content errorOutputContent = Content.builder().role("user").parts(Part.builder().text(errorOutputPrompt).build()).build();
+
+            // Generate more - user - 1
+            String generateMorePrompt = promptPlaceholder.getGenerateMorePlaceholder();
+            Content generateMoreContent = Content.builder().role("user").parts(Part.builder().text(generateMorePrompt).build()).build();
 
             // Gemini client (blocking)
             String apiKey = AISettings.getInstance().getOpenAiKey();
@@ -93,7 +98,11 @@ public final class JAIPilotLLM {
                     .responseSchema(schema)
                     .build();
 
-            List<Content> contents = Arrays.asList(inputContent,existingTestClassContent,errorOutputContent);
+            List<Content> contents = Arrays.asList(inputContent,existingTestClassContent);
+            if(errorOutput.isEmpty()) {
+                if(!existingTestClass.isEmpty()) contents.add(generateMoreContent);
+            }
+            else contents.add(errorOutputContent);
 
             ResponseOutput parsed = callWithRetries(client, contents, cfg);
 
@@ -223,6 +232,7 @@ public final class JAIPilotLLM {
     ) throws Exception {
         ElapsedTicker ticker = new ElapsedTicker(indicator, "Attempt #"+attempt+": Running model…");
         ticker.start();
+        Telemetry.genStarted(testFileName, String.valueOf(attempt));
         long start = System.nanoTime();
         try {
             final String url = "https://otxfylhjrlaesjagfhfi.supabase.co/functions/v1/invoke-junit-llm";

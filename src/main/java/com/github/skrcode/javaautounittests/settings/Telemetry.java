@@ -9,8 +9,17 @@ public final class Telemetry {
     public static void uiClick(String trigger) {
         svc().log("ui_generate_clicked", trigger, null); // a=toolbar|context_menu
     }
-    public static void genStarted(String className) {
+    public static void allGenBegin(String className) {
         svc().log("generation_started", className, null);
+    }
+    public static void allGenDone(String className, String totalAttempts, long ms) {
+        svc().log3("generation_completed", className, totalAttempts, "ms="+ms);
+    }
+    public static void allGenError(String totalAttempts, String reasonShort) {
+        svc().log("generation_failed", totalAttempts, reasonShort);
+    }
+    public static void genStarted(String className, String attempt) {
+        svc().log("generation_started", className, attempt);
     }
     public static void genCompleted(String className, String attempt, long ms) {
         svc().log3("generation_completed", className, attempt, "ms="+ms);

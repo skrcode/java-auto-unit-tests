@@ -114,7 +114,7 @@ public class AISettingsConfigurable implements Configurable {
         testDirField.addBrowseFolderListener(
                 new TextBrowseFolderListener(FileChooserDescriptorFactory.createSingleFolderDescriptor())
         );
-        addFormBlock(contentPanel, "Select Test Root (applies to all modes, e.g., src/test/java):", testDirField);
+        addFormBlock(contentPanel, "Select Test Root (e.g., src/test/java):", testDirField);
         contentPanel.add(Box.createVerticalStrut(8));
 
         // Cards
