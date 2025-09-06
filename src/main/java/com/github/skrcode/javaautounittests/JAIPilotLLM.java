@@ -98,7 +98,9 @@ public final class JAIPilotLLM {
                     .responseSchema(schema)
                     .build();
 
-            List<Content> contents = Arrays.asList(inputContent,existingTestClassContent);
+            List<Content> contents = new ArrayList<>();
+            contents.add(inputContent);
+            contents.add(existingTestClassContent);
             if(errorOutput.isEmpty()) {
                 if(!existingTestClass.isEmpty()) contents.add(generateMoreContent);
             }
