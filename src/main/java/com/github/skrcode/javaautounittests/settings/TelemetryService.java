@@ -1,7 +1,9 @@
 package com.github.skrcode.javaautounittests.settings;
 
+import com.intellij.ide.plugins.PluginManagerCore;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.extensions.PluginId;
 
 import java.net.URI;
 import java.net.URLEncoder;
@@ -17,33 +19,40 @@ public final class TelemetryService {
     private final HttpClient http = HttpClient.newHttpClient();
     private final String sessionId = UUID.randomUUID().toString();
 
-    public void log(String event, String a, String b) {
-        TelemetrySettings s = TelemetrySettings.getInstance();
-        if (!s.enabled) return;
-        try {
-            String url = s.endpoint
-                    + "?e=" + enc(event)
-                    + "&s=" + enc(sessionId)
-                    + (a != null ? "&a=" + enc(a) : "")
-                    + (b != null ? "&b=" + enc(b) : "")
-                    + (s.sharedKey != null && !s.sharedKey.isEmpty() ? "&k=" + enc(s.sharedKey) : "");
+    // resolve once and cache
+    private final String appVersion;
 
-            HttpRequest req = HttpRequest.newBuilder(URI.create(url)).GET().build();
-            // fire-and-forget (don’t block EDT)
-            http.sendAsync(req, java.net.http.HttpResponse.BodyHandlers.discarding())
-                    .exceptionally(ex -> { LOG.debug("telemetry beacon failed: " + ex.getMessage()); return null; });
-        } catch (Exception ex) {
-            LOG.debug("telemetry log error", ex);
+    public TelemetryService() {
+        String ver = "unknown";
+        try {
+            var plugin = PluginManagerCore.getPlugin(
+                    PluginId.getId("com.github.skrcode.javaautounittests") // must match <id> in plugin.xml
+            );
+            if (plugin != null) {
+                ver = plugin.getVersion();
+            }
+        } catch (Exception e) {
+            LOG.warn("Unable to resolve plugin version", e);
         }
+        this.appVersion = ver;
+    }
+
+    public void log(String event, String a, String b) {
+        send(event, a, b, null);
     }
 
     public void log3(String event, String a, String b, String c) {
+        send(event, a, b, c);
+    }
+
+    private void send(String event, String a, String b, String c) {
         TelemetrySettings s = TelemetrySettings.getInstance();
         if (!s.enabled) return;
         try {
             String url = s.endpoint
                     + "?e=" + enc(event)
                     + "&s=" + enc(sessionId)
+                    + "&v=" + enc(appVersion)   // include app_version
                     + (a != null ? "&a=" + enc(a) : "")
                     + (b != null ? "&b=" + enc(b) : "")
                     + (c != null ? "&c=" + enc(c) : "")
@@ -57,5 +66,7 @@ public final class TelemetryService {
         }
     }
 
-    private static String enc(String s) { return URLEncoder.encode(s, StandardCharsets.UTF_8); }
+    private static String enc(String s) {
+        return URLEncoder.encode(s, StandardCharsets.UTF_8);
+    }
 }

@@ -10,13 +10,13 @@ public final class Telemetry {
         svc().log("ui_generate_clicked", trigger, null); // a=toolbar|context_menu
     }
     public static void allGenBegin(String className) {
-        svc().log("generation_started", className, null);
+        svc().log("all_generation_started", className, null);
     }
     public static void allGenDone(String className, String totalAttempts, long ms) {
-        svc().log3("generation_completed", className, totalAttempts, "ms="+ms);
+        svc().log3("all_generation_completed", className, totalAttempts, "ms="+ms);
     }
     public static void allGenError(String totalAttempts, String reasonShort) {
-        svc().log("generation_failed", totalAttempts, reasonShort);
+        svc().log("all_generation_failed", totalAttempts, reasonShort);
     }
     public static void genStarted(String className, String attempt) {
         svc().log("generation_started", className, attempt);
