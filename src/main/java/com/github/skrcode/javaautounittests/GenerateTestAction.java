@@ -53,11 +53,7 @@ public class GenerateTestAction extends AnAction implements DumbAware {
                 return;
             }
         }
-        // Show settings dialog
-//        AISettingsDialog dialog = new AISettingsDialog();
-//        boolean okPressed = dialog.showAndGet(); // returns true if OK, false if Cancel
 
-//        if (!okPressed) return;
         BulkGeneratorService.enqueue(project, classes, stringPathToPsiDirectory(project,AIProjectSettings.getInstance(project).getTestDirectory()));
     }
 

@@ -1,4 +1,4 @@
-// Compact AISettingsConfigurable.java (per-project Test Root) — JAIPilot-first UX with simple “get key” flow
+// JAIPilot Settings — with “How to use” box at top
 package com.github.skrcode.javaautounittests.settings;
 
 import com.github.skrcode.javaautounittests.PromptBuilder;
@@ -16,6 +16,8 @@ import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
+import javax.swing.border.EmptyBorder;
+import javax.swing.border.LineBorder;
 import java.awt.*;
 import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.DataFlavor;
@@ -32,21 +34,21 @@ public class AISettingsConfigurable implements Configurable {
         this.project = project;
     }
 
+    // Root + main sections
     private JPanel rootPanel;
     private JPanel customPanel;
     private JPanel jaipilotPanel;
     private JPanel modeCards;
     private CardLayout cardLayout;
 
-    // Modes (JAIPilot first priority, BYOK second)
+    // Modes
     private JRadioButton jaipilotRadio;
     private JRadioButton customRadio;
 
     // Inputs
-    private JBPasswordField geminiApiKeyField;   // BYOK
-    private JBPasswordField jaipilotKeyField;    // JAIPilot
-
-    private JComboBox<String> modelCombo;        // BYOK only
+    private JBPasswordField geminiApiKeyField;
+    private JBPasswordField jaipilotKeyField;
+    private JComboBox<String> modelCombo;
     private TextFieldWithBrowseButton testDirField;
 
     // Common
@@ -54,7 +56,6 @@ public class AISettingsConfigurable implements Configurable {
 
     private static final int GAP_BETWEEN_BLOCKS = 8;
     private static final int GAP_LABEL_TO_CONTROL = 4;
-
     private static final String ACCOUNT_URL = "https://www.jaipilot.com/account";
 
     @Override
@@ -71,7 +72,24 @@ public class AISettingsConfigurable implements Configurable {
         contentPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         rootPanel.add(contentPanel, BorderLayout.NORTH);
 
-        // Header
+        // ===== How to use JAIPilot box =====
+        JPanel howToBox = new JPanel();
+        howToBox.setLayout(new BoxLayout(howToBox, BoxLayout.Y_AXIS));
+        howToBox.setAlignmentX(Component.LEFT_ALIGNMENT);
+        howToBox.setBorder(BorderFactory.createCompoundBorder(
+                new LineBorder(new Color(200, 200, 200)), new EmptyBorder(10, 10, 10, 10)
+        ));
+
+        JLabel howToTitle = new JLabel("After setup, you can right-click any Java class and auto-generate Tests with JAIPilot.");
+        howToTitle.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        howToBox.add(howToTitle);
+        howToBox.add(Box.createVerticalStrut(4));
+
+        contentPanel.add(howToBox);
+        contentPanel.add(Box.createVerticalStrut(12));
+
+        // ===== Header =====
         JPanel header = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         header.setAlignmentX(Component.LEFT_ALIGNMENT);
         JLabel title = new JLabel("Choose setup:");
@@ -79,7 +97,7 @@ public class AISettingsConfigurable implements Configurable {
         contentPanel.add(header);
         contentPanel.add(Box.createVerticalStrut(6));
 
-        // Mode toggle — JAIPilot first (primary), BYOK second
+        // ===== Mode toggle =====
         JPanel togglePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         togglePanel.setAlignmentX(Component.LEFT_ALIGNMENT);
         jaipilotRadio = new JRadioButton("JAIPilot Key (recommended)");
@@ -95,7 +113,7 @@ public class AISettingsConfigurable implements Configurable {
         jaipilotRadio.addActionListener(e -> updateModeFields());
         customRadio.addActionListener(e -> updateModeFields());
 
-        // ===== COMMON SETTINGS (apply to both modes) =====
+        // ===== Common Settings =====
         JPanel commonPanel = new JPanel();
         commonPanel.setLayout(new BoxLayout(commonPanel, BoxLayout.Y_AXIS));
         commonPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -107,7 +125,7 @@ public class AISettingsConfigurable implements Configurable {
         contentPanel.add(commonPanel);
         contentPanel.add(Box.createVerticalStrut(8));
 
-        // Test dir chooser — shared for BOTH modes
+        // Test dir chooser
         Dimension fieldSize = new Dimension(520, 30);
         testDirField = new TextFieldWithBrowseButton();
         sizeBrowse(testDirField, fieldSize);
@@ -117,12 +135,12 @@ public class AISettingsConfigurable implements Configurable {
         addFormBlock(contentPanel, "Select Test Root (e.g., src/test/java):", testDirField);
         contentPanel.add(Box.createVerticalStrut(8));
 
-        // Cards
+        // ===== Cards =====
         cardLayout = new CardLayout();
         modeCards = new JPanel(cardLayout);
         modeCards.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        // === JAIPilot panel (simple 3-step + field + CTA) ===
+        // JAIPilot panel
         jaipilotPanel = new JPanel();
         jaipilotPanel.setLayout(new BoxLayout(jaipilotPanel, BoxLayout.Y_AXIS));
 
@@ -136,10 +154,8 @@ public class AISettingsConfigurable implements Configurable {
                         + "</ol>"
                         + "</div></html>"
         );
-        jaipilotSteps.setAlignmentX(Component.LEFT_ALIGNMENT);
         addFormBlock(jaipilotPanel, null, jaipilotSteps);
 
-        // Open Account CTA (large, primary)
         JButton openAccountBtn = new JButton("Open Account");
         openAccountBtn.setFocusable(false);
         openAccountBtn.addActionListener(e -> open(ACCOUNT_URL));
@@ -147,12 +163,10 @@ public class AISettingsConfigurable implements Configurable {
         accountCtaRow.add(openAccountBtn);
         addFormBlock(jaipilotPanel, null, accountCtaRow);
 
-        // Key row: field + Show + Paste from clipboard
         jaipilotKeyField = new JBPasswordField();
         sizeField(jaipilotKeyField, fieldSize);
         JPanel keyRow = new JPanel();
         keyRow.setLayout(new BoxLayout(keyRow, BoxLayout.X_AXIS));
-        keyRow.setAlignmentX(Component.LEFT_ALIGNMENT);
         keyRow.add(jaipilotKeyField);
 
         keyRow.add(Box.createHorizontalStrut(6));
@@ -160,12 +174,6 @@ public class AISettingsConfigurable implements Configurable {
         showKey.setFocusable(false);
         showKey.addActionListener(ev -> setReveal(jaipilotKeyField, showKey.isSelected()));
         keyRow.add(showKey);
-
-        keyRow.add(Box.createHorizontalStrut(6));
-//        JButton pasteBtn = new JButton("Paste");
-//        pasteBtn.setFocusable(false);
-//        pasteBtn.addActionListener(ev -> pasteFromClipboard(jaipilotKeyField));
-//        keyRow.add(pasteBtn);
 
         addFormBlock(jaipilotPanel, "JAIPilot License Key:", keyRow);
 
@@ -178,14 +186,13 @@ public class AISettingsConfigurable implements Configurable {
         });
         addFormBlock(jaipilotPanel, null, tip);
 
-        // === BYOK / Custom Gemini panel (API key + model) ===
+        // Custom (BYOK) panel
         customPanel = new JPanel();
         customPanel.setLayout(new BoxLayout(customPanel, BoxLayout.Y_AXIS));
         geminiApiKeyField = new JBPasswordField();
         sizeField(geminiApiKeyField, fieldSize);
         JPanel geminiRow = new JPanel();
         geminiRow.setLayout(new BoxLayout(geminiRow, BoxLayout.X_AXIS));
-        geminiRow.setAlignmentX(Component.LEFT_ALIGNMENT);
         geminiRow.add(geminiApiKeyField);
         JCheckBox showGemini = new JCheckBox("Show");
         showGemini.setFocusable(false);
@@ -203,24 +210,17 @@ public class AISettingsConfigurable implements Configurable {
         modeCards.add(customPanel,   "Custom");
         contentPanel.add(modeCards);
 
-        // Load state from persistent settings
+        // Load persisted state
         AISettings app = AISettings.getInstance();
-        // Map old values to new UI (keep underlying storage compatible):
-        // "pro" -> JAIPilot, "free" -> Custom
         String savedMode = StringUtil.notNullize(app.getMode());
-        if ("pro".equalsIgnoreCase(savedMode)) {
-            jaipilotRadio.setSelected(true);
-        } else if ("free".equalsIgnoreCase(savedMode)) {
-            customRadio.setSelected(true);
-        } else {
-            jaipilotRadio.setSelected(true); // default priority
-        }
+        if ("Pro".equalsIgnoreCase(savedMode)) jaipilotRadio.setSelected(true);
+        else if ("BYOK".equalsIgnoreCase(savedMode)) customRadio.setSelected(true);
+        else jaipilotRadio.setSelected(true);
 
-        geminiApiKeyField.setText(app.getOpenAiKey());  // reusing existing field
-        jaipilotKeyField.setText(app.getProKey());      // reusing existing field
+        geminiApiKeyField.setText(app.getOpenAiKey());
+        jaipilotKeyField.setText(app.getProKey());
         telemetryCheck.setSelected(app.isTelemetryEnabled());
 
-        // Detect project-level test root
         String projectTestDir = AIProjectSettings.getInstance(project).getTestDirectory();
         if (StringUtil.isEmptyOrSpaces(projectTestDir)) {
             String auto = detectTestRoot(project);
@@ -229,7 +229,6 @@ public class AISettingsConfigurable implements Configurable {
             testDirField.setText(projectTestDir);
         }
 
-        // Populate models for Custom/Gemini flow
         updateModeFields();
         new Thread(this::loadModelsInBackground, "JAIPilot-LoadModels").start();
         return rootPanel;
@@ -306,7 +305,7 @@ public class AISettingsConfigurable implements Configurable {
     @Override
     public void apply() {
         AISettings app = AISettings.getInstance();
-        app.setMode(getMode()); // keep underlying values "Pro"/"Free" for backward-compat
+        app.setMode(getMode());
         app.setOpenAiKey(geminiApiKeyField.getText());
         app.setProKey(jaipilotKeyField.getText());
         Object sel = modelCombo.getSelectedItem();
@@ -320,9 +319,9 @@ public class AISettingsConfigurable implements Configurable {
     @Override
     public void reset() {
         AISettings.State app = AISettings.getInstance().getState();
-        if ("pro".equalsIgnoreCase(app.mode)) jaipilotRadio.setSelected(true);
-        else if ("free".equalsIgnoreCase(app.mode)) customRadio.setSelected(true);
-        else jaipilotRadio.setSelected(true); // default priority
+        if ("Pro".equalsIgnoreCase(app.mode)) jaipilotRadio.setSelected(true);
+        else if ("BYOK".equalsIgnoreCase(app.mode)) customRadio.setSelected(true);
+        else jaipilotRadio.setSelected(true);
 
         geminiApiKeyField.setText(StringUtil.notNullize(app.openAiKey));
         jaipilotKeyField.setText(StringUtil.notNullize(app.proKey));
@@ -334,11 +333,8 @@ public class AISettingsConfigurable implements Configurable {
         updateModeFields();
     }
 
-    // Map UI -> existing persisted values for compatibility:
-    // JAIPilot -> "Pro", Custom/Gemini -> "Free"
     private String getMode() { return jaipilotRadio.isSelected() ? "Pro" : "BYOK"; }
 
-    // --- tiny helpers (UX niceties) ---
     private void open(String url) {
         try { Desktop.getDesktop().browse(new URI(url)); } catch (Exception ignored) {}
     }
