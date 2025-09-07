@@ -27,7 +27,6 @@ public final class TestGenerationWorker {
     public static void process(Project project, PsiClass cut, @NotNull ProgressIndicator indicator, PsiDirectory testRoot) {
 
         int attempt = 1;
-        String errorOutput = "";
         try {
             long start = System.nanoTime();
             PsiDirectory packageDir = resolveTestPackageDir(project, testRoot, cut);
@@ -44,7 +43,7 @@ public final class TestGenerationWorker {
             prompt.setErrorOutputPlaceholder(PromptBuilder.getPromptPlaceholder("erroroutput-prompt"));
             prompt.setInputPlaceholder(PromptBuilder.getPromptPlaceholder("input-prompt"));
             prompt.setExistingTestClassPlaceholder(PromptBuilder.getPromptPlaceholder("testclass-prompt"));
-            errorOutput = "";
+            String errorOutput = "";
             String testFileName = cutName + "Test.java";
             Telemetry.allGenBegin(testFileName);
             List<String> contextClasses = new ArrayList<>();
