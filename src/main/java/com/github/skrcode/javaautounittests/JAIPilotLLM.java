@@ -3,6 +3,7 @@ package com.github.skrcode.javaautounittests;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.javaparser.JavaParser;
+import com.github.skrcode.javaautounittests.DTOs.ContextClassesResponseOutput;
 import com.github.skrcode.javaautounittests.DTOs.Prompt;
 import com.github.skrcode.javaautounittests.DTOs.PromptResponseOutput;
 import com.github.skrcode.javaautounittests.DTOs.ResponseOutput;
@@ -33,6 +34,81 @@ public final class JAIPilotLLM {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     final static int MAX_RETRIES = 3;
 
+    public static PromptResponseOutput getAllSingleTestContext(
+            Prompt promptPlaceholder,
+            String testClassName,              // kept for signature compatibility (unused)
+            String inputClass,
+            String existingTestClass,
+            String errorOutput,
+            List<String> contextClassesSources,
+            int attempt,                       // kept for signature compatibility (unused)
+            ProgressIndicator indicator
+    ) throws Exception {
+        ElapsedTicker ticker = new ElapsedTicker(indicator, "Attempt #"+attempt+": Getting context…");
+        ticker.start();
+        long start = System.nanoTime();
+        Telemetry.genStarted(testClassName, String.valueOf(attempt));
+        try {
+            // System instructions - user
+            String systemInstructionContextPrompt = promptPlaceholder.getSystemInstructionsContextPlaceholder();
+            Content systemInstructionContextContent = Content.builder().role("user").parts(Part.builder().text(systemInstructionContextPrompt).build()).build();
+            // Input class - user - 1
+            // Context Classes - user - 2
+            // Test classname - user - 3
+            String inputPrompt = promptPlaceholder.getInputPlaceholder().replace("{{inputclass}}",inputClass == null ? "" : inputClass).replace("{{contextclasses}}",joinLines(contextClassesSources)).replace("{{testclassname}}",testClassName == null ? "" : testClassName);
+            Content inputContent = Content.builder().role("user").parts(Part.builder().text(inputPrompt).build()).build();
+            // Existing Test class - model
+            String existingTestClassPrompt = promptPlaceholder.getExistingTestClassPlaceholder().replace("{{testclass}}",existingTestClass == null ? "" : existingTestClass);
+            Content existingTestClassContent = Content.builder().role("model").parts(Part.builder().text(existingTestClassPrompt).build()).build();
+            // Error output - user - 1
+            String errorOutputPrompt = promptPlaceholder.getErrorOutputPlaceholder().replace("{{erroroutput}}", errorOutput == null ? "" : errorOutput);
+            Content errorOutputContent = Content.builder().role("user").parts(Part.builder().text(errorOutputPrompt).build()).build();
+
+            // Gemini client (blocking)
+            String apiKey = AISettings.getInstance().getOpenAiKey();
+            Client client = Client.builder().apiKey(apiKey).build();
+
+            // JSON schema
+            Schema schema = Schema.builder()
+                    .type(Type.Known.OBJECT)
+                    .properties(Map.of(
+                            "outputRequiredClassContextPaths", Schema.builder()
+                                    .type(Type.Known.ARRAY)
+                                    .items(Schema.builder().type(Type.Known.STRING).build())
+                                    .build()
+                    ))
+                    .build();
+            GenerateContentConfig cfg = GenerateContentConfig.builder()
+                    .responseMimeType("application/json")
+                    .candidateCount(1)
+//                    .thinkingConfig(ThinkingConfig.builder().thinkingBudget(0).build())
+                    .systemInstruction(systemInstructionContextContent)
+                    .responseSchema(schema)
+                    .build();
+
+            List<Content> contents = new ArrayList<>();
+            contents.add(inputContent);
+            contents.add(existingTestClassContent);
+            if(!errorOutput.isEmpty()) contents.add(errorOutputContent);
+            ContextClassesResponseOutput parsed = callWithRetries(client, contents, cfg, ContextClassesResponseOutput.class);
+            List<String> ctx = parsed.outputRequiredClassContextPaths != null
+                    ? parsed.outputRequiredClassContextPaths
+                    : new ArrayList<>();
+
+            PromptResponseOutput out = new PromptResponseOutput();
+            out.setContextClasses(ctx);
+
+            ticker.stopWithMessage("Done");
+            long end = System.nanoTime();
+            Telemetry.genCompleted(testClassName,String.valueOf(attempt),(end - start) / 1_000_000);
+            return out;
+
+        } catch (Throwable t) {
+            Telemetry.genFailed(testClassName,String.valueOf(attempt),t.getMessage());
+            ticker.stopWithMessage("Failed");
+            throw new Exception(t.getMessage());
+        }
+    }
     /**
      * FREE: Blocking call to Gemini with JSON schema; expects:
      * {
@@ -106,7 +182,7 @@ public final class JAIPilotLLM {
             }
             else contents.add(errorOutputContent);
 
-            ResponseOutput parsed = callWithRetries(client, contents, cfg);
+            ResponseOutput parsed = callWithRetries(client, contents, cfg, ResponseOutput.class);
 
             String testClass = parsed.outputTestClass == null ? "" : parsed.outputTestClass;
             List<String> ctx = parsed.outputRequiredClassContextPaths != null
@@ -167,10 +243,10 @@ public final class JAIPilotLLM {
         throw new IllegalStateException("Unexpected: reached end of retry loop");
     }
 
-    private static ResponseOutput callWithRetries(
+    private static <T> T callWithRetries(
             Client client,
             java.util.List<Content> contents,
-            GenerateContentConfig cfg) throws Exception {
+            GenerateContentConfig cfg, Class<T> type) throws Exception {
 
         int retries = 0;
         while (retries < MAX_RETRIES) {
@@ -194,11 +270,11 @@ public final class JAIPilotLLM {
                         .replaceAll("```json\\s*", "")
                         .replaceAll("```\\s*$", "");
 
-                JavaParser parser = new JavaParser();
-                ResponseOutput responseOutput = MAPPER.readValue(sanitized, ResponseOutput.class);
-                if(!parser.parse(responseOutput.outputTestClass).isSuccessful()) {
-                    throw new Exception("Parser failed");
-                }
+//                JavaParser parser = new JavaParser();
+                T responseOutput = MAPPER.readValue(sanitized, type);
+//                if(!parser.parse(responseOutput.outputTestClass).isSuccessful()) {
+//                    throw new Exception("Parser failed");
+//                }
                 // Parse JSON to DTO
                 return responseOutput;
             }

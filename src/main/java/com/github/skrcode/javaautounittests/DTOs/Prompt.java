@@ -5,6 +5,16 @@ public class Prompt {
     private String errorOutputPlaceholder;
     private String systemInstructionsPlaceholder;
     private String generateMorePlaceholder;
+    private String systemInstructionsContextPlaceholder;
+
+
+    public String getSystemInstructionsContextPlaceholder() {
+        return systemInstructionsContextPlaceholder;
+    }
+
+    public void setSystemInstructionsContextPlaceholder(String systemInstructionsContextPlaceholder) {
+        this.systemInstructionsContextPlaceholder = systemInstructionsContextPlaceholder;
+    }
 
     public String getExistingTestClassPlaceholder() {
         return existingTestClassPlaceholder;

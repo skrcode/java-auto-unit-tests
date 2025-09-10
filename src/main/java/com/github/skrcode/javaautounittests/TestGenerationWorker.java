@@ -16,9 +16,7 @@ import com.intellij.psi.search.GlobalSearchScope;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 
 public final class TestGenerationWorker {
 
@@ -46,7 +44,7 @@ public final class TestGenerationWorker {
             String errorOutput = "";
             String testFileName = cutName + "Test.java";
             Telemetry.allGenBegin(testFileName);
-            List<String> contextClasses = new ArrayList<>();
+            Set<String> contextClasses = new HashSet<>();
             // Attempts
             boolean isLLMGeneratedAtleastOnce = false;
             String existingIndividualTestClass = "";
@@ -66,6 +64,14 @@ public final class TestGenerationWorker {
                 }
 
                 if (attempt > MAX_ATTEMPTS) break;
+                if(attempt == 1) {
+                    for(int contextClassAttempt = 1;contextClassAttempt<=MAX_ATTEMPTS;contextClassAttempt++) {
+                        List<String> contextClassesSourceForGettingContextClass = getSourceCodeOfContextClasses(project,contextClasses);
+                        PromptResponseOutput allSingleTestContext = JAIPilotLLM.getAllSingleTestContext(prompt, testFileName, cutClass, existingIndividualTestClass, errorOutput, contextClassesSourceForGettingContextClass, attempt, indicator);
+                        if(allSingleTestContext.getContextClasses().size() == 0) break;
+                        contextClasses.addAll(allSingleTestContext.getContextClasses());
+                    }
+                }
                 indicator.setText("Invoking LLM Attempt #" + attempt + "/" + MAX_ATTEMPTS);
                 List<String> contextClassesSource = getSourceCodeOfContextClasses(project,contextClasses);
                 PromptResponseOutput promptResponseOutput;
@@ -73,7 +79,7 @@ public final class TestGenerationWorker {
                     promptResponseOutput  = JAIPilotLLM.getAllSingleTestPro(testFileName, cutClass, existingIndividualTestClass, errorOutput, contextClassesSource, attempt, indicator);
                 else promptResponseOutput = JAIPilotLLM.getAllSingleTest( prompt, testFileName, cutClass, existingIndividualTestClass, errorOutput, contextClassesSource, attempt, indicator);
                 if(!Objects.isNull(promptResponseOutput.getTestClassCode())) {
-                    contextClasses = promptResponseOutput.getContextClasses();
+                    contextClasses.addAll(promptResponseOutput.getContextClasses());
                     isLLMGeneratedAtleastOnce = true;
                     indicator.setText("Successfully invoked LLM Attempt #" + attempt + "/" + MAX_ATTEMPTS);
                     BuilderUtil.write(project, testFile, packageDir, testFileName, promptResponseOutput.getTestClassCode());
@@ -94,7 +100,7 @@ public final class TestGenerationWorker {
 
     private static @Nullable PsiDirectory resolveTestPackageDir(Project project,
                                                                 PsiDirectory testRoot,
-                                                                PsiClass cut) {
+                                                                PsiClass cut) throws Exception {
 
         PsiPackage cutPkg = ReadAction.compute(() ->
                 JavaDirectoryService.getInstance().getPackage(cut.getContainingFile().getContainingDirectory())
@@ -105,7 +111,7 @@ public final class TestGenerationWorker {
         return getOrCreateSubdirectoryPath(project, testRoot, relPath);
     }
 
-    private static List<String> getSourceCodeOfContextClasses(Project project, List<String> contextClassesPath) {
+    private static List<String> getSourceCodeOfContextClasses(Project project, Set<String> contextClassesPath) {
         JavaPsiFacade psiFacade = JavaPsiFacade.getInstance(project);
         GlobalSearchScope scope = GlobalSearchScope.allScope(project);
 
@@ -135,17 +141,24 @@ public final class TestGenerationWorker {
     /** Recursively find or create nested sub-directories like {@code org/example/service}. */
     private static @Nullable PsiDirectory getOrCreateSubdirectoryPath(Project project,
                                                                       PsiDirectory root,
-                                                                      String relativePath) {
-        return WriteCommandAction.writeCommandAction(project).compute(() -> {
-            PsiDirectory current = root;
-            for (String part : relativePath.split("/")) {
-                PsiDirectory next = current.findSubdirectory(part);
-                if (next == null) next = current.createSubdirectory(part);
-                current = next;
-            }
-            return current;
-        });
+                                                                      String relativePath) throws Exception {
+        try {
+            return WriteCommandAction.writeCommandAction(project).compute(() -> {
+                PsiDirectory current = root;
+                for (String part : relativePath.split("/")) {
+                    PsiDirectory next = current.findSubdirectory(part);
+                    if (next == null) {
+                        next = current.createSubdirectory(part);
+                    }
+                    current = next;
+                }
+                return current;
+            });
+        } catch (Exception e) {
+            throw new Exception("Incorrect tests source directory");
+        }
     }
+
 
     private TestGenerationWorker() {} // no-instantiation
 }
