@@ -1,9 +1,9 @@
 package com.github.skrcode.javaautounittests;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.javaparser.JavaParser;
-import com.github.skrcode.javaautounittests.DTOs.ContextClassesResponseOutput;
 import com.github.skrcode.javaautounittests.DTOs.Prompt;
 import com.github.skrcode.javaautounittests.DTOs.PromptResponseOutput;
 import com.github.skrcode.javaautounittests.settings.AISettings;
@@ -26,6 +26,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /** Simple blocking (non-streaming) façade with elapsed-time indicator. */
 public final class JAIPilotLLM {
@@ -42,72 +43,115 @@ public final class JAIPilotLLM {
             List<String> contextClassesSources,
             int attempt,                       // kept for signature compatibility (unused)
             ProgressIndicator indicator
-    ) throws Exception {
-        ElapsedTicker ticker = new ElapsedTicker(indicator, "Attempt #"+attempt+": Getting context…");
+    ) {
+        ElapsedTicker ticker = new ElapsedTicker(indicator, "Getting Context.. Attempt #" + attempt);
         ticker.start();
         long start = System.nanoTime();
         Telemetry.genStarted(testClassName, String.valueOf(attempt));
+
         try {
-            // System instructions - user
+            // ==== Build prompt ====
             String systemInstructionContextPrompt = promptPlaceholder.getSystemInstructionsContextPlaceholder();
-            Content systemInstructionContextContent = Content.builder().role("user").parts(Part.builder().text(systemInstructionContextPrompt).build()).build();
-            // Input class - user - 1
-            // Context Classes - user - 2
-            // Test classname - user - 3
-            String inputPrompt = promptPlaceholder.getInputPlaceholder().replace("{{inputclass}}",inputClass == null ? "" : inputClass).replace("{{contextclasses}}",joinLines(contextClassesSources)).replace("{{testclassname}}",testClassName == null ? "" : testClassName);
-            Content inputContent = Content.builder().role("user").parts(Part.builder().text(inputPrompt).build()).build();
-            // Existing Test class - model
-            String existingTestClassPrompt = promptPlaceholder.getExistingTestClassPlaceholder().replace("{{testclass}}",existingTestClass == null ? "" : existingTestClass);
-            Content existingTestClassContent = Content.builder().role("model").parts(Part.builder().text(existingTestClassPrompt).build()).build();
-            // Error output - user - 1
-            String errorOutputPrompt = promptPlaceholder.getErrorOutputPlaceholder().replace("{{erroroutput}}", errorOutput == null ? "" : errorOutput);
-            Content errorOutputContent = Content.builder().role("user").parts(Part.builder().text(errorOutputPrompt).build()).build();
-
-            // Gemini client (blocking)
-            String apiKey = AISettings.getInstance().getOpenAiKey();
-            Client client = Client.builder().apiKey(apiKey).build();
-
-            // JSON schema
-            Schema schema = Schema.builder()
-                    .type(Type.Known.OBJECT)
-                    .properties(Map.of(
-                            "outputRequiredClassContextPaths", Schema.builder()
-                                    .type(Type.Known.ARRAY)
-                                    .items(Schema.builder().type(Type.Known.STRING).build())
-                                    .build()
-                    ))
+            Content systemInstructionContextContent = Content.builder()
+                    .role("user")
+                    .parts(Part.builder().text(systemInstructionContextPrompt).build())
                     .build();
-            GenerateContentConfig cfg = GenerateContentConfig.builder()
-                    .responseMimeType("application/json")
-                    .candidateCount(1)
-//                    .thinkingConfig(ThinkingConfig.builder().thinkingBudget(0).build())
-                    .systemInstruction(systemInstructionContextContent)
-                    .responseSchema(schema)
-                    .build();
+
+            String inputPrompt = promptPlaceholder.getInputPlaceholder()
+                    .replace("{{inputclass}}", inputClass == null ? "" : inputClass)
+                    .replace("{{contextclasses}}", joinLines(contextClassesSources))
+                    .replace("{{testclassname}}", testClassName == null ? "" : testClassName);
+            Content inputContent = Content.builder().role("user")
+                    .parts(Part.builder().text(inputPrompt).build()).build();
+
+            String existingTestClassPrompt = promptPlaceholder.getExistingTestClassPlaceholder()
+                    .replace("{{testclass}}", existingTestClass == null ? "" : existingTestClass);
+            Content existingTestClassContent = Content.builder().role("model")
+                    .parts(Part.builder().text(existingTestClassPrompt).build()).build();
+
+            String errorOutputPrompt = promptPlaceholder.getErrorOutputPlaceholder()
+                    .replace("{{erroroutput}}", errorOutput == null ? "" : errorOutput);
+            Content errorOutputContent = Content.builder().role("user")
+                    .parts(Part.builder().text(errorOutputPrompt).build()).build();
 
             List<Content> contents = new ArrayList<>();
             contents.add(inputContent);
             contents.add(existingTestClassContent);
-            if(!errorOutput.isEmpty()) contents.add(errorOutputContent);
-            ContextClassesResponseOutput parsed = callWithRetries(client, contents, cfg, ContextClassesResponseOutput.class);
-            Set<String> ctx = parsed.outputRequiredClassContextPaths != null
-                    ? new HashSet<>(parsed.outputRequiredClassContextPaths)
-                    : new HashSet<>();
+            if (!errorOutput.isEmpty()) contents.add(errorOutputContent);
+
+            // ==== Gemini client ====
+            String apiKey = AISettings.getInstance().getOpenAiKey();
+            Client client = Client.builder().apiKey(apiKey).build();
+
+            GenerateContentConfig cfg = GenerateContentConfig.builder()
+                    .responseMimeType("text/plain")   // plain text only
+                    .candidateCount(1)
+                    .systemInstruction(systemInstructionContextContent)
+                    .thinkingConfig(ThinkingConfig.builder().thinkingBudget(0).build())
+                    .build();
+
+            // ==== Blocking call ====
+            GenerateContentResponse resp = client.models
+                    .generateContent(AISettings.getInstance().getModel(), contents, cfg);
+
+            StringBuilder sb = new StringBuilder();
+            resp.candidates().ifPresent(cands -> {
+                if (!cands.isEmpty()) {
+                    cands.get(0).content().ifPresent(content ->
+                            content.parts().ifPresent(parts -> {
+                                for (Part p : parts) p.text().ifPresent(sb::append);
+                            })
+                    );
+                }
+            });
+
+            // ==== Parse response ====
+            // Expecting lines of context class paths
+// ==== Parse response ====
+            String rawText = sb.toString()
+                    .replaceAll("```\\w*\\s*", "")   // strip markdown fences if present
+                    .replaceAll("```", "")
+                    .trim();
+
+            Set<String> ctx = new HashSet<>();
+            try {
+                if (rawText.startsWith("[") && rawText.endsWith("]")) {
+                    // It's a JSON array
+                    List<String> list = MAPPER.readValue(rawText, new TypeReference<List<String>>() {});
+                    ctx.addAll(list);
+                } else {
+                    // Fallback: treat as newline-separated plain text
+                    ctx.addAll(Arrays.stream(rawText.split("\\R"))
+                            .map(String::trim)
+                            .filter(s -> !s.isEmpty())
+                            .collect(Collectors.toSet()));
+                }
+            } catch (Exception e) {
+                // Fallback to raw text lines if JSON parsing fails
+                ctx.addAll(Arrays.stream(rawText.split("\\R"))
+                        .map(String::trim)
+                        .filter(s -> !s.isEmpty())
+                        .collect(Collectors.toSet()));
+            }
+
 
             PromptResponseOutput out = new PromptResponseOutput();
             out.setContextClasses(ctx);
 
             ticker.stopWithMessage("Done");
             long end = System.nanoTime();
-            Telemetry.genCompleted(testClassName,String.valueOf(attempt),(end - start) / 1_000_000);
+            Telemetry.genCompleted(testClassName, String.valueOf(attempt), (end - start) / 1_000_000);
             return out;
 
         } catch (Throwable t) {
-            Telemetry.genFailed(testClassName,String.valueOf(attempt),t.getMessage());
+            Telemetry.genFailed(testClassName, String.valueOf(attempt), t.getMessage());
             ticker.stopWithMessage("Failed");
-            throw new Exception(t.getMessage());
+            PromptResponseOutput out = new PromptResponseOutput();
+            out.setContextClasses(new HashSet<>());
+            return out;
         }
     }
+
     /**
      * FREE: Blocking call to Gemini with JSON schema; expects:
      * {
@@ -301,16 +345,22 @@ public final class JAIPilotLLM {
                     }
 
                     if (!delta.isEmpty()) {
-                        attemptBuf.append(delta);
-                        if (onDelta != null) onDelta.accept(delta);
+                        // Clean markdown fences if present
+                        String clean = delta
+                                .replaceAll("```java\\s*", "")
+                                .replaceAll("```\\s*", "");
 
-                        // Optional: update indicator with latest non-blank line
+                        attemptBuf.append(clean);
+                        if (onDelta != null) onDelta.accept(clean);
+
+                        // Update indicator with latest line
                         if (indicator != null) {
-                            int lastNl = delta.lastIndexOf('\n');
-                            String tail = (lastNl >= 0 ? delta.substring(lastNl + 1) : delta).trim();
+                            int lastNl = clean.lastIndexOf('\n');
+                            String tail = (lastNl >= 0 ? clean.substring(lastNl + 1) : clean).trim();
                             if (!tail.isEmpty()) indicator.setText2(tail);
                         }
                     }
+
                 }
 
                 // Success: return full output

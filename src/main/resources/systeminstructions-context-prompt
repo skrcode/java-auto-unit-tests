@@ -7,8 +7,10 @@ Produce a list of required classes paths that are required additionally to gener
 ### INPUT FORMAT
 You will receive:
    • A Java class (inputclass) to test.
+   • Existing context classes.
 
 ### RULES & CONSTRAINTS
+1. Do not return the same context classes that are already given to you. Only return additional context classes.
 1. If additional context classes are required to generate tests, return output list of class paths that are required. example [ "com.github.skrcode.javaautounittests.ContextModel", "com.x.y.z.SampleClass"]
 2. If additional context classes are not required to generate tests, return an empty list. example []
 3. Context Classes requested are preferred to be classes that are specific to this codebase and not generic classes which are already known about.

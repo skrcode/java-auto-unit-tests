@@ -67,7 +67,7 @@ public final class TestGenerationWorker {
 
                 if (attempt > MAX_ATTEMPTS) break;
                 for(int contextClassAttempt = 1;contextClassAttempt<=MAX_ATTEMPTS;contextClassAttempt++) {
-                    PromptResponseOutput allSingleTestContext = JAIPilotLLM.getAllSingleTestContext(prompt, testFileName, cutClass, existingIndividualTestClass, errorOutput, contextClassesSource, attempt, indicator);
+                    PromptResponseOutput allSingleTestContext = JAIPilotLLM.getAllSingleTestContext(prompt, testFileName, cutClass, existingIndividualTestClass, errorOutput, contextClassesSource, contextClassAttempt, indicator);
                     allSingleTestContext.getContextClasses().removeAll(contextClasses);
                     if(allSingleTestContext.getContextClasses().size() == 0) break;
                     contextClassesSource.addAll(getSourceCodeOfContextClasses(project,allSingleTestContext.getContextClasses()));
