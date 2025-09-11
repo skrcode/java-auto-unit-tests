@@ -38,6 +38,7 @@ public final class TestGenerationWorker {
             Prompt prompt = new Prompt();
             prompt.setGenerateMorePlaceholder(PromptBuilder.getPromptPlaceholder("generate-more-prompt"));
             prompt.setSystemInstructionsPlaceholder(PromptBuilder.getPromptPlaceholder("systeminstructions-prompt"));
+            prompt.setSystemInstructionsContextPlaceholder(PromptBuilder.getPromptPlaceholder("systeminstructions-context-prompt"));
             prompt.setErrorOutputPlaceholder(PromptBuilder.getPromptPlaceholder("erroroutput-prompt"));
             prompt.setInputPlaceholder(PromptBuilder.getPromptPlaceholder("input-prompt"));
             prompt.setExistingTestClassPlaceholder(PromptBuilder.getPromptPlaceholder("testclass-prompt"));
@@ -45,6 +46,7 @@ public final class TestGenerationWorker {
             String testFileName = cutName + "Test.java";
             Telemetry.allGenBegin(testFileName);
             Set<String> contextClasses = new HashSet<>();
+            List<String> contextClassesSource = new ArrayList<>();
             // Attempts
             boolean isLLMGeneratedAtleastOnce = false;
             String existingIndividualTestClass = "";
@@ -64,22 +66,21 @@ public final class TestGenerationWorker {
                 }
 
                 if (attempt > MAX_ATTEMPTS) break;
-                if(attempt == 1) {
-                    for(int contextClassAttempt = 1;contextClassAttempt<=MAX_ATTEMPTS;contextClassAttempt++) {
-                        List<String> contextClassesSourceForGettingContextClass = getSourceCodeOfContextClasses(project,contextClasses);
-                        PromptResponseOutput allSingleTestContext = JAIPilotLLM.getAllSingleTestContext(prompt, testFileName, cutClass, existingIndividualTestClass, errorOutput, contextClassesSourceForGettingContextClass, attempt, indicator);
-                        if(allSingleTestContext.getContextClasses().size() == 0) break;
-                        contextClasses.addAll(allSingleTestContext.getContextClasses());
-                    }
+                for(int contextClassAttempt = 1;contextClassAttempt<=MAX_ATTEMPTS;contextClassAttempt++) {
+                    PromptResponseOutput allSingleTestContext = JAIPilotLLM.getAllSingleTestContext(prompt, testFileName, cutClass, existingIndividualTestClass, errorOutput, contextClassesSource, attempt, indicator);
+                    allSingleTestContext.getContextClasses().removeAll(contextClasses);
+                    if(allSingleTestContext.getContextClasses().size() == 0) break;
+                    contextClassesSource.addAll(getSourceCodeOfContextClasses(project,allSingleTestContext.getContextClasses()));
+                    contextClasses.addAll(allSingleTestContext.getContextClasses());
                 }
+
                 indicator.setText("Invoking LLM Attempt #" + attempt + "/" + MAX_ATTEMPTS);
-                List<String> contextClassesSource = getSourceCodeOfContextClasses(project,contextClasses);
+                contextClassesSource = getSourceCodeOfContextClasses(project,contextClasses);
                 PromptResponseOutput promptResponseOutput;
                 if(AISettings.getInstance().getMode().equals("Pro"))
                     promptResponseOutput  = JAIPilotLLM.getAllSingleTestPro(testFileName, cutClass, existingIndividualTestClass, errorOutput, contextClassesSource, attempt, indicator);
                 else promptResponseOutput = JAIPilotLLM.getAllSingleTest( prompt, testFileName, cutClass, existingIndividualTestClass, errorOutput, contextClassesSource, attempt, indicator);
                 if(!Objects.isNull(promptResponseOutput.getTestClassCode())) {
-                    contextClasses.addAll(promptResponseOutput.getContextClasses());
                     isLLMGeneratedAtleastOnce = true;
                     indicator.setText("Successfully invoked LLM Attempt #" + attempt + "/" + MAX_ATTEMPTS);
                     BuilderUtil.write(project, testFile, packageDir, testFileName, promptResponseOutput.getTestClassCode());

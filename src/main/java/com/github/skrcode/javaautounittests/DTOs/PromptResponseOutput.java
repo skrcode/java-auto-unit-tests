@@ -1,10 +1,10 @@
 package com.github.skrcode.javaautounittests.DTOs;
 
-import java.util.List;
+import java.util.Set;
 
 public class PromptResponseOutput {
     private String testClassCode;
-    private List<String> contextClasses;
+    private Set<String> contextClasses;
 
     public String getTestClassCode() {
         return testClassCode;
@@ -14,11 +14,11 @@ public class PromptResponseOutput {
         this.testClassCode = testClassCode;
     }
 
-    public List<String> getContextClasses() {
+    public Set<String> getContextClasses() {
         return contextClasses;
     }
 
-    public void setContextClasses(List<String> contextClasses) {
+    public void setContextClasses(Set<String> contextClasses) {
         this.contextClasses = contextClasses;
     }
 }

@@ -6,7 +6,6 @@ import com.github.javaparser.JavaParser;
 import com.github.skrcode.javaautounittests.DTOs.ContextClassesResponseOutput;
 import com.github.skrcode.javaautounittests.DTOs.Prompt;
 import com.github.skrcode.javaautounittests.DTOs.PromptResponseOutput;
-import com.github.skrcode.javaautounittests.DTOs.ResponseOutput;
 import com.github.skrcode.javaautounittests.settings.AISettings;
 import com.github.skrcode.javaautounittests.settings.Telemetry;
 import com.google.genai.Client;
@@ -91,9 +90,9 @@ public final class JAIPilotLLM {
             contents.add(existingTestClassContent);
             if(!errorOutput.isEmpty()) contents.add(errorOutputContent);
             ContextClassesResponseOutput parsed = callWithRetries(client, contents, cfg, ContextClassesResponseOutput.class);
-            List<String> ctx = parsed.outputRequiredClassContextPaths != null
-                    ? parsed.outputRequiredClassContextPaths
-                    : new ArrayList<>();
+            Set<String> ctx = parsed.outputRequiredClassContextPaths != null
+                    ? new HashSet<>(parsed.outputRequiredClassContextPaths)
+                    : new HashSet<>();
 
             PromptResponseOutput out = new PromptResponseOutput();
             out.setContextClasses(ctx);
@@ -119,91 +118,110 @@ public final class JAIPilotLLM {
      */
     public static PromptResponseOutput getAllSingleTest(
             Prompt promptPlaceholder,
-            String testClassName,              // kept for signature compatibility (unused)
+            String testClassName,
             String inputClass,
             String existingTestClass,
             String errorOutput,
             List<String> contextClassesSources,
-            int attempt,                       // kept for signature compatibility (unused)
+            int attempt,
             ProgressIndicator indicator
     ) throws Exception {
-        ElapsedTicker ticker = new ElapsedTicker(indicator, "Attempt #"+attempt+": Running model…");
+
+        ElapsedTicker ticker = new ElapsedTicker(indicator, "Attempt #" + attempt + ": Running model…");
         ticker.start();
         long start = System.nanoTime();
         Telemetry.genStarted(testClassName, String.valueOf(attempt));
+
         try {
-            // System instructions - user
+            // ==== Prompt setup ====
             String systemInstructionPrompt = promptPlaceholder.getSystemInstructionsPlaceholder();
-            Content systemInstructionContent = Content.builder().role("user").parts(Part.builder().text(systemInstructionPrompt).build()).build();
-            // Input class - user - 1
-            // Context Classes - user - 2
-            // Test classname - user - 3
-            String inputPrompt = promptPlaceholder.getInputPlaceholder().replace("{{inputclass}}",inputClass == null ? "" : inputClass).replace("{{contextclasses}}",joinLines(contextClassesSources)).replace("{{testclassname}}",testClassName == null ? "" : testClassName);
-            Content inputContent = Content.builder().role("user").parts(Part.builder().text(inputPrompt).build()).build();
-            // Existing Test class - model
-            String existingTestClassPrompt = promptPlaceholder.getExistingTestClassPlaceholder().replace("{{testclass}}",existingTestClass == null ? "" : existingTestClass);
-            Content existingTestClassContent = Content.builder().role("model").parts(Part.builder().text(existingTestClassPrompt).build()).build();
-            // Error output - user - 1
-            String errorOutputPrompt = promptPlaceholder.getErrorOutputPlaceholder().replace("{{erroroutput}}", errorOutput == null ? "" : errorOutput);
-            Content errorOutputContent = Content.builder().role("user").parts(Part.builder().text(errorOutputPrompt).build()).build();
-
-            // Generate more - user - 1
-            String generateMorePrompt = promptPlaceholder.getGenerateMorePlaceholder();
-            Content generateMoreContent = Content.builder().role("user").parts(Part.builder().text(generateMorePrompt).build()).build();
-
-            // Gemini client (blocking)
-            String apiKey = AISettings.getInstance().getOpenAiKey();
-            Client client = Client.builder().apiKey(apiKey).build();
-
-            // JSON schema
-            Schema schema = Schema.builder()
-                    .type(Type.Known.OBJECT)
-                    .properties(Map.of(
-                            "outputTestClass", Schema.builder().type(Type.Known.STRING).build(),
-                            "outputRequiredClassContextPaths", Schema.builder()
-                                    .type(Type.Known.ARRAY)
-                                    .items(Schema.builder().type(Type.Known.STRING).build())
-                                    .build()
-                    ))
+            Content systemInstructionContent = Content.builder()
+                    .role("user")
+                    .parts(Part.builder().text(systemInstructionPrompt).build())
                     .build();
-            GenerateContentConfig cfg = GenerateContentConfig.builder()
-                    .responseMimeType("application/json")
-                    .candidateCount(1)
-//                    .thinkingConfig(ThinkingConfig.builder().thinkingBudget(0).build())
-                    .systemInstruction(systemInstructionContent)
-                    .responseSchema(schema)
+
+            String inputPrompt = promptPlaceholder.getInputPlaceholder()
+                    .replace("{{inputclass}}", inputClass == null ? "" : inputClass)
+                    .replace("{{contextclasses}}", joinLines(contextClassesSources))
+                    .replace("{{testclassname}}", testClassName == null ? "" : testClassName);
+            Content inputContent = Content.builder().role("user")
+                    .parts(Part.builder().text(inputPrompt).build())
+                    .build();
+
+            String existingTestClassPrompt = promptPlaceholder.getExistingTestClassPlaceholder()
+                    .replace("{{testclass}}", existingTestClass == null ? "" : existingTestClass);
+            Content existingTestClassContent = Content.builder().role("model")
+                    .parts(Part.builder().text(existingTestClassPrompt).build())
+                    .build();
+
+            String errorOutputPrompt = promptPlaceholder.getErrorOutputPlaceholder()
+                    .replace("{{erroroutput}}", errorOutput == null ? "" : errorOutput);
+            Content errorOutputContent = Content.builder().role("user")
+                    .parts(Part.builder().text(errorOutputPrompt).build())
+                    .build();
+
+            String generateMorePrompt = promptPlaceholder.getGenerateMorePlaceholder();
+            Content generateMoreContent = Content.builder().role("user")
+                    .parts(Part.builder().text(generateMorePrompt).build())
                     .build();
 
             List<Content> contents = new ArrayList<>();
             contents.add(inputContent);
             contents.add(existingTestClassContent);
-            if(errorOutput.isEmpty()) {
-                if(!existingTestClass.isEmpty()) contents.add(generateMoreContent);
+            if (errorOutput == null || errorOutput.isEmpty()) {
+                if (existingTestClass != null && !existingTestClass.isEmpty()) {
+                    contents.add(generateMoreContent);
+                }
+            } else {
+                contents.add(errorOutputContent);
             }
-            else contents.add(errorOutputContent);
 
-            ResponseOutput parsed = callWithRetries(client, contents, cfg, ResponseOutput.class);
 
-            String testClass = parsed.outputTestClass == null ? "" : parsed.outputTestClass;
-            List<String> ctx = parsed.outputRequiredClassContextPaths != null
-                    ? parsed.outputRequiredClassContextPaths
-                    : new ArrayList<>();
+            // ==== Gemini client ====
+            String apiKey = AISettings.getInstance().getOpenAiKey();
+            Client client = Client.builder().apiKey(apiKey).build();
 
+            GenerateContentConfig cfg = GenerateContentConfig.builder()
+                    .responseMimeType("text/plain") // Only raw test class
+                    .candidateCount(1)
+                    .thinkingConfig(ThinkingConfig.builder().thinkingBudget(0).build())
+                    .systemInstruction(systemInstructionContent)
+                    .build();
+
+            // Stream with retries
+            String full = streamWithRetries(
+                    client,
+                    contents,
+                    cfg,
+                    indicator,
+                    delta -> {
+                        // 1) Live progress line-by-line (already handled inside helper via indicator.setText2)
+                        // 2) Optional: append to an editor buffer for a “typing” effect
+                        //    run later on EDT to avoid thrashing:
+                        // ApplicationManager.getApplication().invokeLater(() ->
+                        //     WriteCommandAction.runWriteCommandAction(project, () -> { appendToDoc(editor, delta); })
+                        // );
+                    }
+            );
+
+            // ==== Build output ====
+            // Build output with ONLY the test class
             PromptResponseOutput out = new PromptResponseOutput();
-            out.setTestClassCode(testClass);
-            out.setContextClasses(ctx);
+            out.setTestClassCode(full);
 
             ticker.stopWithMessage("Done");
             long end = System.nanoTime();
-            Telemetry.genCompleted(testClassName,String.valueOf(attempt),(end - start) / 1_000_000);
+            Telemetry.genCompleted(testClassName, String.valueOf(attempt), (end - start) / 1_000_000);
             return out;
 
         } catch (Throwable t) {
-            Telemetry.genFailed(testClassName,String.valueOf(attempt),t.getMessage());
+            Telemetry.genFailed(testClassName, String.valueOf(attempt), t.getMessage());
             ticker.stopWithMessage("Failed");
             throw new Exception(t.getMessage());
         }
     }
+
+
 
     private static JsonNode callProWithRetries(
             HttpClient http , HttpRequest req) throws Exception {
@@ -242,6 +260,86 @@ public final class JAIPilotLLM {
         }
         throw new IllegalStateException("Unexpected: reached end of retry loop");
     }
+
+    private static String streamWithRetries(
+            Client client,
+            List<Content> contents,
+            GenerateContentConfig cfg,
+            ProgressIndicator indicator,
+            java.util.function.Consumer<String> onDelta // may be null
+    ) throws Exception {
+
+        int retries = 0;
+        final String model = AISettings.getInstance().getModel();
+
+        while (retries < MAX_RETRIES) {
+            StringBuilder attemptBuf = new StringBuilder();
+            try (var stream = client.models.generateContentStream(model, contents, cfg)) {
+                for (var chunk : stream) {
+                    if (indicator != null && indicator.isCanceled()) {
+                        throw new com.intellij.openapi.progress.ProcessCanceledException();
+                    }
+
+                    // Prefer SDK's direct text accessor
+                    String delta = "";
+                    if (!chunk.text().isEmpty()) {
+                        delta = chunk.text();
+                    } else {
+                        // Defensive fallback: stitch from candidates/parts
+                        delta = chunk.candidates()
+                                .flatMap(cands -> cands.stream().findFirst())
+                                .flatMap(c -> c.content())
+                                .flatMap(ct -> ct.parts())
+                                .map(parts -> {
+                                    StringBuilder sb = new StringBuilder();
+                                    for (Part p : parts) {
+                                        p.text().ifPresent(sb::append);
+                                    }
+                                    return sb.toString();
+                                })
+                                .orElse("");
+                    }
+
+                    if (!delta.isEmpty()) {
+                        attemptBuf.append(delta);
+                        if (onDelta != null) onDelta.accept(delta);
+
+                        // Optional: update indicator with latest non-blank line
+                        if (indicator != null) {
+                            int lastNl = delta.lastIndexOf('\n');
+                            String tail = (lastNl >= 0 ? delta.substring(lastNl + 1) : delta).trim();
+                            if (!tail.isEmpty()) indicator.setText2(tail);
+                        }
+                    }
+                }
+
+                // Success: return full output
+                return attemptBuf.toString();
+            }
+            catch (ClientException ce) {
+                throw ce; // invalid key / bad request, don't retry
+            }
+            catch (com.intellij.openapi.progress.ProcessCanceledException pce) {
+                throw pce; // respect user cancel
+            }
+            catch (Exception e) {
+                retries++;
+                if (retries >= MAX_RETRIES) {
+                    throw e;
+                }
+                long backoffMs = (long) (500L * Math.pow(2, retries - 1));
+                if (indicator != null) {
+                    indicator.setText2("Retry " + retries + "/" + MAX_RETRIES +
+                            " in " + backoffMs + " ms — " + e.getMessage());
+                }
+                Thread.sleep(backoffMs);
+            }
+        }
+
+        throw new IllegalStateException("Unexpected: reached end of retry loop");
+    }
+
+
 
     private static <T> T callWithRetries(
             Client client,
@@ -340,7 +438,7 @@ public final class JAIPilotLLM {
 
             JsonNode node = callProWithRetries(http, req);
             String testClass = node.has("outputTestClass") ? node.get("outputTestClass").asText("") : "";
-            List<String> ctx = new ArrayList<>();
+            Set<String> ctx = new HashSet<>();
             if (node.has("outputRequiredClassContextPaths") && node.get("outputRequiredClassContextPaths").isArray()) {
                 for (JsonNode c : node.get("outputRequiredClassContextPaths")) ctx.add(c.asText());
             }
