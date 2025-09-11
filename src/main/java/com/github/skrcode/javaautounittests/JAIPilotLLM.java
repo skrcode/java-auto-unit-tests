@@ -87,6 +87,7 @@ public final class JAIPilotLLM {
                     .responseMimeType("text/plain")   // plain text only
                     .candidateCount(1)
                     .systemInstruction(systemInstructionContextContent)
+                    .temperature(0f)
                     .thinkingConfig(ThinkingConfig.builder().thinkingBudget(0).build())
                     .build();
 
