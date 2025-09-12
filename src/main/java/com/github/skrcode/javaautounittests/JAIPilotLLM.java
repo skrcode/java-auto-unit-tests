@@ -58,9 +58,8 @@ public final class JAIPilotLLM {
                     .parts(Part.builder().text(systemInstructionContextPrompt).build())
                     .build();
 
-            String inputPrompt = promptPlaceholder.getInputPlaceholder()
+            String inputPrompt = promptPlaceholder.getInputContextPlaceholder()
                     .replace("{{inputclass}}", inputClass == null ? "" : inputClass);
-//                    .replace("{{contextclasses}}", joinLines(contextClassesSources));
             Content inputContent = Content.builder().role("user")
                     .parts(Part.builder().text(inputPrompt).build()).build();
 

@@ -2,11 +2,20 @@ package com.github.skrcode.javaautounittests.DTOs;
 
 public class Prompt {
     private String inputPlaceholder;
+    private String inputContextPlaceholder;
     private String errorOutputPlaceholder;
     private String systemInstructionsPlaceholder;
     private String generateMorePlaceholder;
     private String systemInstructionsContextPlaceholder;
 
+
+    public String getInputContextPlaceholder() {
+        return inputContextPlaceholder;
+    }
+
+    public void setInputContextPlaceholder(String inputContextPlaceholder) {
+        this.inputContextPlaceholder = inputContextPlaceholder;
+    }
 
     public String getSystemInstructionsContextPlaceholder() {
         return systemInstructionsContextPlaceholder;
