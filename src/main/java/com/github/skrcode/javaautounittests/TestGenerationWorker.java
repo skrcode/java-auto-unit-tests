@@ -42,6 +42,7 @@ public final class TestGenerationWorker {
             prompt.setErrorOutputPlaceholder(PromptBuilder.getPromptPlaceholder("erroroutput-prompt"));
             prompt.setInputPlaceholder(PromptBuilder.getPromptPlaceholder("input-prompt"));
             prompt.setInputContextPlaceholder(PromptBuilder.getPromptPlaceholder("input-context-prompt"));
+            prompt.setGenerateMoreContextPlaceholder(PromptBuilder.getPromptPlaceholder("generate-more-context-prompt"));
             prompt.setExistingTestClassPlaceholder(PromptBuilder.getPromptPlaceholder("testclass-prompt"));
             String errorOutput = "";
             String testFileName = cutName + "Test.java";

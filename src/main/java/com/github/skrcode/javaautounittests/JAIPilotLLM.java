@@ -87,7 +87,9 @@ public final class JAIPilotLLM {
 
             if(!existingTestClass.isEmpty()) contents.add(existingTestClassContent);
             if (!errorOutput.isEmpty()) contents.add(errorOutputContent);
-
+            Content generateMoreContextPrompt = Content.builder().role("user")
+                    .parts(Part.builder().text(promptPlaceholder.getGenerateMoreContextPlaceholder()).build()).build();
+            if(contextClasses.size() > 0 || !errorOutput.isEmpty() || !existingTestClass.isEmpty()) contents.add(generateMoreContextPrompt);
             // ==== Gemini client ====
             String apiKey = AISettings.getInstance().getOpenAiKey();
             Client client = Client.builder().apiKey(apiKey).build();

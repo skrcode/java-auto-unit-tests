@@ -6,8 +6,16 @@ public class Prompt {
     private String errorOutputPlaceholder;
     private String systemInstructionsPlaceholder;
     private String generateMorePlaceholder;
+    private String generateMoreContextPlaceholder;
     private String systemInstructionsContextPlaceholder;
 
+    public String getGenerateMoreContextPlaceholder() {
+        return generateMoreContextPlaceholder;
+    }
+
+    public void setGenerateMoreContextPlaceholder(String generateMoreContextPlaceholder) {
+        this.generateMoreContextPlaceholder = generateMoreContextPlaceholder;
+    }
 
     public String getInputContextPlaceholder() {
         return inputContextPlaceholder;
