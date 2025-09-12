@@ -45,7 +45,7 @@ public final class TestGenerationWorker {
             String errorOutput = "";
             String testFileName = cutName + "Test.java";
             Telemetry.allGenBegin(testFileName);
-            Set<String> contextClasses = new HashSet<>();
+            List<String> contextClasses = new ArrayList<>();
             List<String> contextClassesSource = new ArrayList<>();
             // Attempts
             boolean isLLMGeneratedAtleastOnce = false;
@@ -66,9 +66,8 @@ public final class TestGenerationWorker {
                 }
 
                 if (attempt > MAX_ATTEMPTS) break;
-                for(int contextClassAttempt = 1;contextClassAttempt<=MAX_ATTEMPTS;contextClassAttempt++) {
-                    PromptResponseOutput allSingleTestContext = JAIPilotLLM.getAllSingleTestContext(prompt, testFileName, cutClass, existingIndividualTestClass, errorOutput, contextClassesSource, contextClassAttempt, indicator);
-                    allSingleTestContext.getContextClasses().removeAll(contextClasses);
+                for(int contextClassAttempt = 1;contextClassAttempt<=MAX_ATTEMPTS/3;contextClassAttempt++) {
+                    PromptResponseOutput allSingleTestContext = JAIPilotLLM.getAllSingleTestContext(prompt, testFileName, cutClass, existingIndividualTestClass, errorOutput, contextClassesSource,contextClasses, contextClassAttempt, indicator);
                     if(allSingleTestContext.getContextClasses().size() == 0) break;
                     contextClassesSource.addAll(getSourceCodeOfContextClasses(project,allSingleTestContext.getContextClasses()));
                     contextClasses.addAll(allSingleTestContext.getContextClasses());

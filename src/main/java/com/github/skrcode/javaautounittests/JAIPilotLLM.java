@@ -41,6 +41,7 @@ public final class JAIPilotLLM {
             String existingTestClass,
             String errorOutput,
             List<String> contextClassesSources,
+            List<String> contextClasses,
             int attempt,                       // kept for signature compatibility (unused)
             ProgressIndicator indicator
     ) {
@@ -58,15 +59,14 @@ public final class JAIPilotLLM {
                     .build();
 
             String inputPrompt = promptPlaceholder.getInputPlaceholder()
-                    .replace("{{inputclass}}", inputClass == null ? "" : inputClass)
-                    .replace("{{contextclasses}}", joinLines(contextClassesSources))
-                    .replace("{{testclassname}}", testClassName == null ? "" : testClassName);
+                    .replace("{{inputclass}}", inputClass == null ? "" : inputClass);
+//                    .replace("{{contextclasses}}", joinLines(contextClassesSources));
             Content inputContent = Content.builder().role("user")
                     .parts(Part.builder().text(inputPrompt).build()).build();
 
             String existingTestClassPrompt = promptPlaceholder.getExistingTestClassPlaceholder()
                     .replace("{{testclass}}", existingTestClass == null ? "" : existingTestClass);
-            Content existingTestClassContent = Content.builder().role("model")
+            Content existingTestClassContent = Content.builder().role("user")
                     .parts(Part.builder().text(existingTestClassPrompt).build()).build();
 
             String errorOutputPrompt = promptPlaceholder.getErrorOutputPlaceholder()
@@ -76,7 +76,17 @@ public final class JAIPilotLLM {
 
             List<Content> contents = new ArrayList<>();
             contents.add(inputContent);
-            contents.add(existingTestClassContent);
+
+            for(int i=0;i < contextClasses.size(); i++) {
+                Content contextClass = Content.builder().role("model")
+                        .parts(Part.builder().text(contextClasses.get(i)).build()).build();
+                Content contextClassSource = Content.builder().role("user")
+                        .parts(Part.builder().text(contextClassesSources.get(i)).build()).build();
+                contents.add(contextClass);
+                contents.add(contextClassSource);
+            }
+
+            if(!existingTestClass.isEmpty()) contents.add(existingTestClassContent);
             if (!errorOutput.isEmpty()) contents.add(errorOutputContent);
 
             // ==== Gemini client ====
@@ -87,7 +97,6 @@ public final class JAIPilotLLM {
                     .responseMimeType("text/plain")   // plain text only
                     .candidateCount(1)
                     .systemInstruction(systemInstructionContextContent)
-                    .temperature(0f)
                     .thinkingConfig(ThinkingConfig.builder().thinkingBudget(0).build())
                     .build();
 
