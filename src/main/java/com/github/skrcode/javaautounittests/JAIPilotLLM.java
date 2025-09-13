@@ -51,12 +51,6 @@ public final class JAIPilotLLM {
         Telemetry.genStarted(testClassName, String.valueOf(attempt));
 
         try {
-            // ==== Build prompt ====
-            String systemInstructionContextPrompt = promptPlaceholder.getSystemInstructionsContextPlaceholder();
-            Content systemInstructionContextContent = Content.builder()
-                    .role("user")
-                    .parts(Part.builder().text(systemInstructionContextPrompt).build())
-                    .build();
 
             String inputPrompt = promptPlaceholder.getInputContextPlaceholder()
                     .replace("{{inputclass}}", inputClass == null ? "" : inputClass)
@@ -75,22 +69,22 @@ public final class JAIPilotLLM {
                     .parts(Part.builder().text(errorOutputPrompt).build()).build();
 
             List<Content> contents = new ArrayList<>();
+            Content generateMoreContextPrompt = Content.builder().role("user")
+                    .parts(Part.builder().text(promptPlaceholder.getGenerateMoreContextPlaceholder()).build()).build();
+            contents.add(generateMoreContextPrompt);
             contents.add(inputContent);
 
-            for(int i=0;i < contextClasses.size(); i++) {
-                Content contextClass = Content.builder().role("model")
-                        .parts(Part.builder().text(contextClasses.get(i)).build()).build();
-                Content contextClassSource = Content.builder().role("user")
-                        .parts(Part.builder().text(contextClassesSources.get(i)).build()).build();
-                contents.add(contextClass);
-                contents.add(contextClassSource);
-            }
+            Content contextClass = Content.builder().role("model")
+                    .parts(Part.builder().text(joinLines(contextClasses)).build()).build();
+            Content contextClassSource = Content.builder().role("user")
+                    .parts(Part.builder().text(joinLines(contextClassesSources)).build()).build();
+            contents.add(contextClass);
+            contents.add(contextClassSource);
 
             if(!existingTestClass.isEmpty()) contents.add(existingTestClassContent);
             if (!errorOutput.isEmpty()) contents.add(errorOutputContent);
-            Content generateMoreContextPrompt = Content.builder().role("user")
-                    .parts(Part.builder().text(promptPlaceholder.getGenerateMoreContextPlaceholder()).build()).build();
-            if(contextClasses.size() > 0 || !errorOutput.isEmpty() || !existingTestClass.isEmpty()) contents.add(generateMoreContextPrompt);
+
+            contents.add(generateMoreContextPrompt);
             // ==== Gemini client ====
             String apiKey = AISettings.getInstance().getOpenAiKey();
             Client client = Client.builder().apiKey(apiKey).build();
@@ -98,7 +92,6 @@ public final class JAIPilotLLM {
             GenerateContentConfig cfg = GenerateContentConfig.builder()
                     .responseMimeType("text/plain")   // plain text only
                     .candidateCount(1)
-                    .systemInstruction(systemInstructionContextContent)
                     .thinkingConfig(ThinkingConfig.builder().thinkingBudget(0).build())
                     .build();
 

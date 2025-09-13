@@ -7,7 +7,6 @@ public class Prompt {
     private String systemInstructionsPlaceholder;
     private String generateMorePlaceholder;
     private String generateMoreContextPlaceholder;
-    private String systemInstructionsContextPlaceholder;
 
     public String getGenerateMoreContextPlaceholder() {
         return generateMoreContextPlaceholder;
@@ -23,14 +22,6 @@ public class Prompt {
 
     public void setInputContextPlaceholder(String inputContextPlaceholder) {
         this.inputContextPlaceholder = inputContextPlaceholder;
-    }
-
-    public String getSystemInstructionsContextPlaceholder() {
-        return systemInstructionsContextPlaceholder;
-    }
-
-    public void setSystemInstructionsContextPlaceholder(String systemInstructionsContextPlaceholder) {
-        this.systemInstructionsContextPlaceholder = systemInstructionsContextPlaceholder;
     }
 
     public String getExistingTestClassPlaceholder() {

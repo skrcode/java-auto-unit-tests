@@ -38,7 +38,6 @@ public final class TestGenerationWorker {
             Prompt prompt = new Prompt();
             prompt.setGenerateMorePlaceholder(PromptBuilder.getPromptPlaceholder("generate-more-prompt"));
             prompt.setSystemInstructionsPlaceholder(PromptBuilder.getPromptPlaceholder("systeminstructions-prompt"));
-            prompt.setSystemInstructionsContextPlaceholder(PromptBuilder.getPromptPlaceholder("systeminstructions-context-prompt"));
             prompt.setErrorOutputPlaceholder(PromptBuilder.getPromptPlaceholder("erroroutput-prompt"));
             prompt.setInputPlaceholder(PromptBuilder.getPromptPlaceholder("input-prompt"));
             prompt.setInputContextPlaceholder(PromptBuilder.getPromptPlaceholder("input-context-prompt"));
