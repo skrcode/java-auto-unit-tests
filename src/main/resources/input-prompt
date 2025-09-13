@@ -1,7 +1,0 @@
-Use test class name {{testclassname}}.
-
-### Input Class
-{{inputclass}}
-
-### Context classes to help generate tests
-{{contextclasses}}

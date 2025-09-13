@@ -34,14 +34,86 @@ public final class JAIPilotLLM {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     final static int MAX_RETRIES = 5;
 
+    public static Content getSystemInstructionContent(Prompt promptPlaceholder) {
+        String systemInstructionPrompt = promptPlaceholder.getSystemInstructionsPlaceholder();
+        Content systemInstructionContent = Content.builder()
+                .role("user")
+                .parts(Part.builder().text(systemInstructionPrompt).build())
+                .build();
+        return systemInstructionContent;
+    }
+
+    public static Content getInputClassContent(Prompt promptPlaceholder, String inputClass, String testClassName) {
+        String inputPrompt = promptPlaceholder.getInputContextPlaceholder()
+                .replace("{{inputclass}}", inputClass == null ? "" : inputClass)
+                .replace("{{testclassname}}", testClassName == null ? "" : testClassName);
+        Content inputContent = Content.builder().role("user")
+                .parts(Part.builder().text(inputPrompt).build()).build();
+        return inputContent;
+    }
+
+    public static Content getErrorOutputContent(Prompt promptPlaceholder, String errorOutput) {
+        String errorOutputPrompt = promptPlaceholder.getErrorOutputPlaceholder()
+                .replace("{{erroroutput}}", errorOutput == null ? "" : errorOutput);
+        Content errorOutputContent = Content.builder().role("user")
+                .parts(Part.builder().text(errorOutputPrompt).build()).build();
+        return errorOutputContent;
+    }
+
+    public static Content getClassContextPathContent(List<String> contextClasses) {
+        Content contextClass = Content.builder().role("model")
+                .parts(Part.builder().text(joinLines(contextClasses)).build()).build();
+        return contextClass;
+
+    }
+
+    public static Content getClassContextPathSourceContent(List<String> contextClassesSources) {
+        Content contextClassSource = Content.builder().role("user")
+                .parts(Part.builder().text(joinLines(contextClassesSources)).build()).build();
+        return contextClassSource;
+    }
+
+    public static Content getGenerateMoreTestsContent(Prompt promptPlaceholder) {
+        String generateMorePrompt = promptPlaceholder.getGenerateMorePlaceholder();
+        Content generateMoreContent = Content.builder().role("user")
+                .parts(Part.builder().text(generateMorePrompt).build())
+                .build();
+        return generateMoreContent;
+    }
+
+    public static Content getGenerateContextContent(Prompt promptPlaceholder) {
+        Content generateMoreContextPrompt = Content.builder().role("user")
+                .parts(Part.builder().text(promptPlaceholder.getGenerateMoreContextPlaceholder()).build()).build();
+        return generateMoreContextPrompt;
+    }
+
+    public static Content getExistingTestClassContent(Prompt promptPlaceholder, String existingTestClass) {
+        String existingTestClassPrompt = promptPlaceholder.getExistingTestClassPlaceholder()
+                .replace("{{testclass}}", existingTestClass == null ? "" : existingTestClass);
+        Content existingTestClassContent = Content.builder().role("model")
+                .parts(Part.builder().text(existingTestClassPrompt).build()).build();
+        return existingTestClassContent;
+    }
+
+//    system instruction - junit
+//    user - input class
+//    user - error output--------------------
+//      user - give me class context
+//      model - class context path
+//      user = class context source
+//    user - generate tests
+//    model - test---------------------------
+//    user - error output
+//      user - give me class context
+//      model - class context path
+//      user = class context source
+//    user - generate tests
+//    model - test
+
     public static PromptResponseOutput getAllSingleTestContext(
-            Prompt promptPlaceholder,
+            List<Content> contents,
+            Prompt prompt,
             String testClassName,              // kept for signature compatibility (unused)
-            String inputClass,
-            String existingTestClass,
-            String errorOutput,
-            List<String> contextClassesSources,
-            List<String> contextClasses,
             int attempt,                       // kept for signature compatibility (unused)
             ProgressIndicator indicator
     ) {
@@ -51,37 +123,6 @@ public final class JAIPilotLLM {
         Telemetry.genStarted(testClassName, String.valueOf(attempt));
 
         try {
-            String inputPrompt = promptPlaceholder.getInputContextPlaceholder()
-                    .replace("{{inputclass}}", inputClass == null ? "" : inputClass)
-                    .replace("{{testclassname}}", testClassName == null ? "" : testClassName);
-            Content inputContent = Content.builder().role("user")
-                    .parts(Part.builder().text(inputPrompt).build()).build();
-
-            String existingTestClassPrompt = promptPlaceholder.getExistingTestClassPlaceholder()
-                    .replace("{{testclass}}", existingTestClass == null ? "" : existingTestClass);
-            Content existingTestClassContent = Content.builder().role("model")
-                    .parts(Part.builder().text(existingTestClassPrompt).build()).build();
-
-            String errorOutputPrompt = promptPlaceholder.getErrorOutputPlaceholder()
-                    .replace("{{erroroutput}}", errorOutput == null ? "" : errorOutput);
-            Content errorOutputContent = Content.builder().role("user")
-                    .parts(Part.builder().text(errorOutputPrompt).build()).build();
-
-            List<Content> contents = new ArrayList<>();
-            Content generateMoreContextPrompt = Content.builder().role("user")
-                    .parts(Part.builder().text(promptPlaceholder.getGenerateMoreContextPlaceholder()).build()).build();
-            contents.add(inputContent);
-            if(!existingTestClass.isEmpty()) contents.add(existingTestClassContent);
-            if (!errorOutput.isEmpty()) contents.add(errorOutputContent);
-
-            contents.add(generateMoreContextPrompt);
-            Content contextClass = Content.builder().role("model")
-                    .parts(Part.builder().text(joinLines(contextClasses)).build()).build();
-            Content contextClassSource = Content.builder().role("user")
-                    .parts(Part.builder().text(joinLines(contextClassesSources)).build()).build();
-            contents.add(contextClass);
-            contents.add(contextClassSource);
-            contents.add(generateMoreContextPrompt);
             // ==== Gemini client ====
             String apiKey = AISettings.getInstance().getOpenAiKey();
             Client client = Client.builder().apiKey(apiKey).build();
@@ -89,7 +130,7 @@ public final class JAIPilotLLM {
             GenerateContentConfig cfg = GenerateContentConfig.builder()
                     .responseMimeType("text/plain")   // plain text only
                     .candidateCount(1)
-//                    .thinkingConfig(ThinkingConfig.builder().thinkingBudget(0).build())
+                    .thinkingConfig(ThinkingConfig.builder().thinkingBudget(0).build())
                     .build();
 
             // ==== Blocking call ====
@@ -115,7 +156,7 @@ public final class JAIPilotLLM {
                     .replaceAll("```", "")
                     .trim();
 
-            Set<String> ctx = new HashSet<>();
+            List<String> ctx = new ArrayList<>();
             try {
                 if (rawText.startsWith("[") && rawText.endsWith("]")) {
                     // It's a JSON array
@@ -149,7 +190,7 @@ public final class JAIPilotLLM {
             Telemetry.genFailed(testClassName, String.valueOf(attempt), t.getMessage());
             ticker.stopWithMessage("Failed");
             PromptResponseOutput out = new PromptResponseOutput();
-            out.setContextClasses(new HashSet<>());
+            out.setContextClasses(new ArrayList<>());
             return out;
         }
     }
@@ -163,12 +204,9 @@ public final class JAIPilotLLM {
      * Shows elapsed time in the ProgressIndicator while the request runs.
      */
     public static PromptResponseOutput getAllSingleTest(
-            Prompt promptPlaceholder,
+            List<Content> contents,
+            Prompt prompt,
             String testClassName,
-            String inputClass,
-            String existingTestClass,
-            String errorOutput,
-            List<String> contextClassesSources,
             int attempt,
             ProgressIndicator indicator
     ) throws Exception {
@@ -179,50 +217,6 @@ public final class JAIPilotLLM {
         Telemetry.genStarted(testClassName, String.valueOf(attempt));
 
         try {
-            // ==== Prompt setup ====
-            String systemInstructionPrompt = promptPlaceholder.getSystemInstructionsPlaceholder();
-            Content systemInstructionContent = Content.builder()
-                    .role("user")
-                    .parts(Part.builder().text(systemInstructionPrompt).build())
-                    .build();
-
-            String inputPrompt = promptPlaceholder.getInputPlaceholder()
-                    .replace("{{inputclass}}", inputClass == null ? "" : inputClass)
-                    .replace("{{contextclasses}}", joinLines(contextClassesSources))
-                    .replace("{{testclassname}}", testClassName == null ? "" : testClassName);
-            Content inputContent = Content.builder().role("user")
-                    .parts(Part.builder().text(inputPrompt).build())
-                    .build();
-
-            String existingTestClassPrompt = promptPlaceholder.getExistingTestClassPlaceholder()
-                    .replace("{{testclass}}", existingTestClass == null ? "" : existingTestClass);
-            Content existingTestClassContent = Content.builder().role("model")
-                    .parts(Part.builder().text(existingTestClassPrompt).build())
-                    .build();
-
-            String errorOutputPrompt = promptPlaceholder.getErrorOutputPlaceholder()
-                    .replace("{{erroroutput}}", errorOutput == null ? "" : errorOutput);
-            Content errorOutputContent = Content.builder().role("user")
-                    .parts(Part.builder().text(errorOutputPrompt).build())
-                    .build();
-
-            String generateMorePrompt = promptPlaceholder.getGenerateMorePlaceholder();
-            Content generateMoreContent = Content.builder().role("user")
-                    .parts(Part.builder().text(generateMorePrompt).build())
-                    .build();
-
-            List<Content> contents = new ArrayList<>();
-            contents.add(inputContent);
-            contents.add(existingTestClassContent);
-            if (errorOutput == null || errorOutput.isEmpty()) {
-                if (existingTestClass != null && !existingTestClass.isEmpty()) {
-                    contents.add(generateMoreContent);
-                }
-            } else {
-                contents.add(errorOutputContent);
-            }
-
-
             // ==== Gemini client ====
             String apiKey = AISettings.getInstance().getOpenAiKey();
             Client client = Client.builder().apiKey(apiKey).build();
@@ -230,8 +224,8 @@ public final class JAIPilotLLM {
             GenerateContentConfig cfg = GenerateContentConfig.builder()
                     .responseMimeType("text/plain") // Only raw test class
                     .candidateCount(1)
-//                    .thinkingConfig(ThinkingConfig.builder().thinkingBudget(0).build())
-                    .systemInstruction(systemInstructionContent)
+                    .thinkingConfig(ThinkingConfig.builder().thinkingBudget(0).build())
+                    .systemInstruction(getSystemInstructionContent(prompt))
                     .build();
 
             // Stream with retries
@@ -349,8 +343,10 @@ public final class JAIPilotLLM {
 
                     if (!delta.isEmpty()) {
                         String clean = delta
-                                .replaceAll("(?s)```java\\b\\s*", "")
-                                .replaceAll("(?s)```", "");
+                                .replaceAll("(?s)```java\\b\\s*", "")  // remove ```java
+                                .replaceAll("(?s)```", "")             // remove closing ```
+                                .replaceFirst("(?m)^java\\s*$", "");   // remove lone "java" line
+
 
                         attemptBuf.append(clean);
 
@@ -502,7 +498,7 @@ public final class JAIPilotLLM {
 
             JsonNode node = callProWithRetries(http, req);
             String testClass = node.has("outputTestClass") ? node.get("outputTestClass").asText("") : "";
-            Set<String> ctx = new HashSet<>();
+            List<String> ctx = new ArrayList<>();
             if (node.has("outputRequiredClassContextPaths") && node.get("outputRequiredClassContextPaths").isArray()) {
                 for (JsonNode c : node.get("outputRequiredClassContextPaths")) ctx.add(c.asText());
             }

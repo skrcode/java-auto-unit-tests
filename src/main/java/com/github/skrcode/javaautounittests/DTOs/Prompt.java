@@ -1,7 +1,6 @@
 package com.github.skrcode.javaautounittests.DTOs;
 
 public class Prompt {
-    private String inputPlaceholder;
     private String inputContextPlaceholder;
     private String errorOutputPlaceholder;
     private String systemInstructionsPlaceholder;
@@ -40,14 +39,6 @@ public class Prompt {
 
     public void setSystemInstructionsPlaceholder(String systemInstructionsPlaceholder) {
         this.systemInstructionsPlaceholder = systemInstructionsPlaceholder;
-    }
-
-    public String getInputPlaceholder() {
-        return inputPlaceholder;
-    }
-
-    public void setInputPlaceholder(String inputPlaceholder) {
-        this.inputPlaceholder = inputPlaceholder;
     }
 
     public String getErrorOutputPlaceholder() {
