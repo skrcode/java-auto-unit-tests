@@ -32,7 +32,7 @@ import java.util.stream.Collectors;
 public final class JAIPilotLLM {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    final static int MAX_RETRIES = 3;
+    final static int MAX_RETRIES = 5;
 
     public static PromptResponseOutput getAllSingleTestContext(
             Prompt promptPlaceholder,
@@ -51,7 +51,6 @@ public final class JAIPilotLLM {
         Telemetry.genStarted(testClassName, String.valueOf(attempt));
 
         try {
-
             String inputPrompt = promptPlaceholder.getInputContextPlaceholder()
                     .replace("{{inputclass}}", inputClass == null ? "" : inputClass)
                     .replace("{{testclassname}}", testClassName == null ? "" : testClassName);
@@ -60,7 +59,7 @@ public final class JAIPilotLLM {
 
             String existingTestClassPrompt = promptPlaceholder.getExistingTestClassPlaceholder()
                     .replace("{{testclass}}", existingTestClass == null ? "" : existingTestClass);
-            Content existingTestClassContent = Content.builder().role("user")
+            Content existingTestClassContent = Content.builder().role("model")
                     .parts(Part.builder().text(existingTestClassPrompt).build()).build();
 
             String errorOutputPrompt = promptPlaceholder.getErrorOutputPlaceholder()
@@ -71,19 +70,17 @@ public final class JAIPilotLLM {
             List<Content> contents = new ArrayList<>();
             Content generateMoreContextPrompt = Content.builder().role("user")
                     .parts(Part.builder().text(promptPlaceholder.getGenerateMoreContextPlaceholder()).build()).build();
-            contents.add(generateMoreContextPrompt);
             contents.add(inputContent);
+            if(!existingTestClass.isEmpty()) contents.add(existingTestClassContent);
+            if (!errorOutput.isEmpty()) contents.add(errorOutputContent);
 
+            contents.add(generateMoreContextPrompt);
             Content contextClass = Content.builder().role("model")
                     .parts(Part.builder().text(joinLines(contextClasses)).build()).build();
             Content contextClassSource = Content.builder().role("user")
                     .parts(Part.builder().text(joinLines(contextClassesSources)).build()).build();
             contents.add(contextClass);
             contents.add(contextClassSource);
-
-            if(!existingTestClass.isEmpty()) contents.add(existingTestClassContent);
-            if (!errorOutput.isEmpty()) contents.add(errorOutputContent);
-
             contents.add(generateMoreContextPrompt);
             // ==== Gemini client ====
             String apiKey = AISettings.getInstance().getOpenAiKey();
@@ -92,7 +89,7 @@ public final class JAIPilotLLM {
             GenerateContentConfig cfg = GenerateContentConfig.builder()
                     .responseMimeType("text/plain")   // plain text only
                     .candidateCount(1)
-                    .thinkingConfig(ThinkingConfig.builder().thinkingBudget(0).build())
+//                    .thinkingConfig(ThinkingConfig.builder().thinkingBudget(0).build())
                     .build();
 
             // ==== Blocking call ====
@@ -233,7 +230,7 @@ public final class JAIPilotLLM {
             GenerateContentConfig cfg = GenerateContentConfig.builder()
                     .responseMimeType("text/plain") // Only raw test class
                     .candidateCount(1)
-                    .thinkingConfig(ThinkingConfig.builder().thinkingBudget(0).build())
+//                    .thinkingConfig(ThinkingConfig.builder().thinkingBudget(0).build())
                     .systemInstruction(systemInstructionContent)
                     .build();
 
@@ -324,6 +321,7 @@ public final class JAIPilotLLM {
         while (retries < MAX_RETRIES) {
             StringBuilder attemptBuf = new StringBuilder();
             try (var stream = client.models.generateContentStream(model, contents, cfg)) {
+                int lineCounter = 0;
                 for (var chunk : stream) {
                     if (indicator != null && indicator.isCanceled()) {
                         throw new com.intellij.openapi.progress.ProcessCanceledException();
@@ -350,19 +348,30 @@ public final class JAIPilotLLM {
                     }
 
                     if (!delta.isEmpty()) {
-                        // Clean markdown fences if present
                         String clean = delta
-                                .replaceAll("```java\\s*", "")
-                                .replaceAll("```\\s*", "");
+                                .replaceAll("(?s)```java\\b\\s*", "")
+                                .replaceAll("(?s)```", "");
 
                         attemptBuf.append(clean);
+
+                        // ===== Accurate line numbering =====
+                        // 1) Count *all* newlines in just this chunk
+                        for (int i = 0; i < clean.length(); i++) {
+                            if (clean.charAt(i) == '\n') lineCounter++;
+                        }
+
                         if (onDelta != null) onDelta.accept(clean);
 
-                        // Update indicator with latest line
                         if (indicator != null) {
-                            int lastNl = clean.lastIndexOf('\n');
-                            String tail = (lastNl >= 0 ? clean.substring(lastNl + 1) : clean).trim();
-                            if (!tail.isEmpty()) indicator.setText2(tail);
+                            // 2) Take the *actual* tail line from the full buffer
+                            int lastNl = attemptBuf.lastIndexOf("\n");
+                            String tail = (lastNl >= 0 ? attemptBuf.substring(lastNl + 1) : attemptBuf.toString()).trim();
+
+                            // 3) Line number = (# of newlines so far) + 1 (for the current line)
+                            if (!tail.isEmpty()) {
+                                long lineNo = lineCounter + 1;
+                                indicator.setText2(lineNo + ": " + tail);
+                            }
                         }
                     }
 

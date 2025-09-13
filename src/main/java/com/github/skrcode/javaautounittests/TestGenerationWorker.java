@@ -20,7 +20,7 @@ import java.util.*;
 
 public final class TestGenerationWorker {
 
-    private static final int MAX_ATTEMPTS= 10;
+    private static final int MAX_ATTEMPTS= 20;
 
     public static void process(Project project, PsiClass cut, @NotNull ProgressIndicator indicator, PsiDirectory testRoot) {
 
@@ -59,10 +59,10 @@ public final class TestGenerationWorker {
                     indicator.setText("Compiling #" + attempt + "/" + MAX_ATTEMPTS + " : " + testFileName);
                     existingIndividualTestClass = ReadAction.compute(() -> testFile.get().getText());
                     errorOutput = BuilderUtil.compileJUnitClass(project, testFile);
-                    if (errorOutput.isEmpty() && isLLMGeneratedAtleastOnce) break;
-//                        errorOutput = BuilderUtil.runJUnitClass(project, testFile.get());
-//                        if (errorOutput.isEmpty() ) break;
-//                    }
+                    if (errorOutput.isEmpty()) {
+                        errorOutput = BuilderUtil.runJUnitClass(project, testFile.get());
+                        if (errorOutput.isEmpty() && isLLMGeneratedAtleastOnce) break;
+                    }
                     indicator.setText("Compiled #" + attempt + "/" + MAX_ATTEMPTS + ": " + testFileName);
                 }
 

@@ -12,6 +12,9 @@ You will receive:
    • Existing context classes.
    • Errors and current test class if present.
 
+### OUTPUT FORMAT
+Strictly return only the final array list of fully qualified class paths whose source you want me to additionally provide you for context. example [], example [ "com.github.skrcode.javaautounittests.ContextModel", "com.x.y.z.SampleClass"]
+
 ### RULES & CONSTRAINTS
 1. Do not ask for context classes whose source you already know about. Only return additional context classes that you need so that you can generate better quality units tests.
 2. If additional context classes are required to generate tests, return output list of class paths that are required. example [ "com.github.skrcode.javaautounittests.ContextModel", "com.x.y.z.SampleClass"]
