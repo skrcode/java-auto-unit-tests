@@ -60,6 +60,7 @@ public final class TestGenerationWorker {
                 if (ReadAction.compute(() -> testFile.get()) != null) {
                     indicator.setText("Compiling #" + attempt + "/" + MAX_ATTEMPTS + " : " + testFileName);
                     existingIndividualTestClass = ReadAction.compute(() -> testFile.get().getText());
+                    contents.add(JAIPilotLLM.getExistingTestClassContent(prompt,existingIndividualTestClass));
                     errorOutput = BuilderUtil.compileJUnitClass(project, testFile);
                     if (errorOutput.isEmpty()) {
                         errorOutput = BuilderUtil.runJUnitClass(project, testFile.get());
@@ -69,7 +70,7 @@ public final class TestGenerationWorker {
                 }
 
                 if (attempt > MAX_ATTEMPTS) break;
-                if (errorOutput.isEmpty())
+                if (errorOutput.isEmpty() && errorOutput.length()>0)
                     contents.add(JAIPilotLLM.getErrorOutputContent(prompt, errorOutput));
 
                 for(int contextClassAttempt = 1;contextClassAttempt<=MAX_ATTEMPTS/3;contextClassAttempt++) {
@@ -86,7 +87,6 @@ public final class TestGenerationWorker {
                     promptResponseOutput  = JAIPilotLLM.getAllSingleTest( contents, prompt, testFileName, attempt, indicator);
                 else promptResponseOutput = JAIPilotLLM.getAllSingleTest( contents, prompt, testFileName, attempt, indicator);
                 if(!Objects.isNull(promptResponseOutput.getTestClassCode())) {
-                    contents.add(JAIPilotLLM.getExistingTestClassContent(prompt,promptResponseOutput.getTestClassCode()));
                     isLLMGeneratedAtleastOnce = true;
                     indicator.setText("Successfully invoked LLM Attempt #" + attempt + "/" + MAX_ATTEMPTS);
                     BuilderUtil.write(project, testFile, packageDir, testFileName, promptResponseOutput.getTestClassCode());

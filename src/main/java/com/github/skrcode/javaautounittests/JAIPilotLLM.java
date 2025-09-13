@@ -97,12 +97,13 @@ public final class JAIPilotLLM {
 
 //    system instruction - junit
 //    user - input class
-//    user - error output--------------------
+//    model - test--------------------
+//    user - error output
 //      user - give me class context
 //      model - class context path
 //      user = class context source
-//    user - generate tests
-//    model - test---------------------------
+//    user - generate tests---------------------------
+//    model - test
 //    user - error output
 //      user - give me class context
 //      model - class context path
