@@ -43,10 +43,9 @@ public final class JAIPilotLLM {
         return systemInstructionContent;
     }
 
-    public static Content getInputClassContent(Prompt promptPlaceholder, String inputClass, String testClassName) {
+    public static Content getInputClassContent(Prompt promptPlaceholder, String inputClass) {
         String inputPrompt = promptPlaceholder.getInputContextPlaceholder()
-                .replace("{{inputclass}}", inputClass == null ? "" : inputClass)
-                .replace("{{testclassname}}", testClassName == null ? "" : testClassName);
+                .replace("{{inputclass}}", inputClass == null ? "" : inputClass);
         Content inputContent = Content.builder().role("user")
                 .parts(Part.builder().text(inputPrompt).build()).build();
         return inputContent;
@@ -73,8 +72,9 @@ public final class JAIPilotLLM {
         return contextClassSource;
     }
 
-    public static Content getGenerateMoreTestsContent(Prompt promptPlaceholder) {
-        String generateMorePrompt = promptPlaceholder.getGenerateMorePlaceholder();
+    public static Content getGenerateMoreTestsContent(Prompt promptPlaceholder, String testClassName) {
+        String generateMorePrompt = promptPlaceholder.getGenerateMorePlaceholder()
+                .replace("{{testclassname}}", testClassName == null ? "" : testClassName);
         Content generateMoreContent = Content.builder().role("user")
                 .parts(Part.builder().text(generateMorePrompt).build())
                 .build();

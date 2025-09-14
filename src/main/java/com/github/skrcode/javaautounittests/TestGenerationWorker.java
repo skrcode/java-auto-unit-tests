@@ -49,7 +49,7 @@ public final class TestGenerationWorker {
             String testFileName = cutName + "Test.java";
             Telemetry.allGenBegin(testFileName);
             List<Content> contents = new ArrayList<>();
-            contents.add(JAIPilotLLM.getInputClassContent(prompt, cutClass, testFileName));
+            contents.add(JAIPilotLLM.getInputClassContent(prompt, cutClass));
             // Attempts
             boolean isLLMGeneratedAtleastOnce = false;
             String existingIndividualTestClass = "";
@@ -80,7 +80,7 @@ public final class TestGenerationWorker {
                     contents.add(JAIPilotLLM.getClassContextPathContent(allSingleTestContext.getContextClasses()));
                     contents.add(JAIPilotLLM.getClassContextPathSourceContent(getSourceCodeOfContextClasses(project,allSingleTestContext.getContextClasses())));
                 }
-                contents.add(JAIPilotLLM.getGenerateMoreTestsContent(prompt));
+                contents.add(JAIPilotLLM.getGenerateMoreTestsContent(prompt, testFileName));
                 indicator.setText("Invoking LLM Attempt #" + attempt + "/" + MAX_ATTEMPTS);
                 PromptResponseOutput promptResponseOutput;
                 if(AISettings.getInstance().getMode().equals("Pro"))
