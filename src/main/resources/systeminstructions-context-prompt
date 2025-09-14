@@ -7,8 +7,8 @@ Do ask for context classes whose source you already know about. Use the existing
 My conversation would always contain a single input class with multiple iterations of context class source, intermediate states of test classes, and errors. Always return context class paths whose source you would need to generate/fix tests for the input class.
 
 ### OUTPUT FORMAT
-Strictly return only the final array list of fully qualified class paths whose source you want me to additionally provide you for context. example [], example [ "com.github.skrcode.javaautounittests.ContextModel", "com.x.y.z.SampleClass"]
-Do not return the entire class.
+Strictly return only the final array list of fully qualified class paths whose source you want me to additionally provide you for context. example [], example [ "com.github.skrcode.javaautounittests.ContextModel", "com.x.y.z.SampleClass"] when prompted. You do not need to generate anything apart from this throughtout the lifecycle of this conversation.
+Use the intermediate states of context class sources, error outputs, test classes that you are provided and always return only the final array list of fully qualified class paths whose source you want me to additionally provide you for context.
 
 ### RULES & CONSTRAINTS
 1. Do not ask for context classes whose source you already know about. Only return additional context classes that you need so that you can generate better quality units tests.
