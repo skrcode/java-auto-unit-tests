@@ -81,6 +81,7 @@ public final class TestGenerationWorker {
                 else if(!existingIndividualTestClass.isEmpty()) contentsJUnit.add(JAIPilotLLM.getGenerateMoreTestsContent(prompt, testFileName));
 
                 for(int contextClassAttempt = 1;contextClassAttempt<=MAX_ATTEMPTS/3;contextClassAttempt++) {
+                    contentsContext.add(JAIPilotLLM.getSystemInstructionContextContent(prompt));
                     PromptResponseOutput allSingleTestContext = JAIPilotLLM.getAllSingleTestContext(contentsContext, prompt, testFileName,  contextClassAttempt, indicator);
                     if(allSingleTestContext.getContextClasses().size() == 0) break;
                     contentsContext.add(JAIPilotLLM.getClassContextPathContent(allSingleTestContext.getContextClasses()));
