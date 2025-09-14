@@ -4,16 +4,9 @@ public class Prompt {
     private String inputContextPlaceholder;
     private String errorOutputPlaceholder;
     private String systemInstructionsPlaceholder;
+    private String systemInstructionsContextPlaceholder;
     private String generateMorePlaceholder;
-    private String generateMoreContextPlaceholder;
-
-    public String getGenerateMoreContextPlaceholder() {
-        return generateMoreContextPlaceholder;
-    }
-
-    public void setGenerateMoreContextPlaceholder(String generateMoreContextPlaceholder) {
-        this.generateMoreContextPlaceholder = generateMoreContextPlaceholder;
-    }
+    private String contextClassesSourcePlaceholder;
 
     public String getInputContextPlaceholder() {
         return inputContextPlaceholder;
@@ -54,5 +47,21 @@ public class Prompt {
 
     public void setGenerateMorePlaceholder(String generateMorePlaceholder) {
         this.generateMorePlaceholder = generateMorePlaceholder;
+    }
+
+    public String getSystemInstructionsContextPlaceholder() {
+        return systemInstructionsContextPlaceholder;
+    }
+
+    public void setSystemInstructionsContextPlaceholder(String systemInstructionsContextPlaceholder) {
+        this.systemInstructionsContextPlaceholder = systemInstructionsContextPlaceholder;
+    }
+
+    public String getContextClassesSourcePlaceholder() {
+        return contextClassesSourcePlaceholder;
+    }
+
+    public void setContextClassesSourcePlaceholder(String contextClassesSourcePlaceholder) {
+        this.contextClassesSourcePlaceholder = contextClassesSourcePlaceholder;
     }
 }

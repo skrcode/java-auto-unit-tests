@@ -43,6 +43,15 @@ public final class JAIPilotLLM {
         return systemInstructionContent;
     }
 
+    public static Content getSystemInstructionContextContent(Prompt promptPlaceholder) {
+        String systemInstructionPrompt = promptPlaceholder.getSystemInstructionsPlaceholder();
+        Content systemInstructionContent = Content.builder()
+                .role("user")
+                .parts(Part.builder().text(systemInstructionPrompt).build())
+                .build();
+        return systemInstructionContent;
+    }
+
     public static Content getInputClassContent(Prompt promptPlaceholder, String inputClass) {
         String inputPrompt = promptPlaceholder.getInputContextPlaceholder()
                 .replace("{{inputclass}}", inputClass == null ? "" : inputClass);
@@ -66,9 +75,11 @@ public final class JAIPilotLLM {
 
     }
 
-    public static Content getClassContextPathSourceContent(List<String> contextClassesSources) {
+    public static Content getClassContextPathSourceContent(Prompt promptPlaceholder, List<String> contextClassesSources) {
+        String contextClasses = promptPlaceholder.getContextClassesSourcePlaceholder()
+                .replace("{{contextclasses}}", joinLines(contextClassesSources));
         Content contextClassSource = Content.builder().role("user")
-                .parts(Part.builder().text(joinLines(contextClassesSources)).build()).build();
+                .parts(Part.builder().text(contextClasses).build()).build();
         return contextClassSource;
     }
 
@@ -81,16 +92,10 @@ public final class JAIPilotLLM {
         return generateMoreContent;
     }
 
-    public static Content getGenerateContextContent(Prompt promptPlaceholder) {
-        Content generateMoreContextPrompt = Content.builder().role("user")
-                .parts(Part.builder().text(promptPlaceholder.getGenerateMoreContextPlaceholder()).build()).build();
-        return generateMoreContextPrompt;
-    }
-
-    public static Content getExistingTestClassContent(Prompt promptPlaceholder, String existingTestClass) {
+    public static Content getExistingTestClassContent(Prompt promptPlaceholder, String existingTestClass, String role) {
         String existingTestClassPrompt = promptPlaceholder.getExistingTestClassPlaceholder()
                 .replace("{{testclass}}", existingTestClass == null ? "" : existingTestClass);
-        Content existingTestClassContent = Content.builder().role("model")
+        Content existingTestClassContent = Content.builder().role(role)
                 .parts(Part.builder().text(existingTestClassPrompt).build()).build();
         return existingTestClassContent;
     }
@@ -131,6 +136,7 @@ public final class JAIPilotLLM {
             GenerateContentConfig cfg = GenerateContentConfig.builder()
                     .responseMimeType("text/plain")   // plain text only
                     .candidateCount(1)
+                    .systemInstruction(getSystemInstructionContextContent(prompt))
                     .thinkingConfig(ThinkingConfig.builder().thinkingBudget(0).build())
                     .build();
 
