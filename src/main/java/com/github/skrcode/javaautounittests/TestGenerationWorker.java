@@ -70,15 +70,15 @@ public final class TestGenerationWorker {
                 }
 
                 if (attempt > MAX_ATTEMPTS) break;
-                if (errorOutput.isEmpty() && errorOutput.length()>0)
+                if (!errorOutput.isEmpty())
                     contents.add(JAIPilotLLM.getErrorOutputContent(prompt, errorOutput));
 
                 for(int contextClassAttempt = 1;contextClassAttempt<=MAX_ATTEMPTS/3;contextClassAttempt++) {
                     contents.add(JAIPilotLLM.getGenerateContextContent(prompt));
                     PromptResponseOutput allSingleTestContext = JAIPilotLLM.getAllSingleTestContext(contents, prompt, testFileName,  contextClassAttempt, indicator);
-                    if(allSingleTestContext.getContextClasses().size() == 0) break;
                     contents.add(JAIPilotLLM.getClassContextPathContent(allSingleTestContext.getContextClasses()));
                     contents.add(JAIPilotLLM.getClassContextPathSourceContent(getSourceCodeOfContextClasses(project,allSingleTestContext.getContextClasses())));
+                    if(allSingleTestContext.getContextClasses().size() == 0) break;
                 }
                 contents.add(JAIPilotLLM.getGenerateMoreTestsContent(prompt, testFileName));
                 indicator.setText("Invoking LLM Attempt #" + attempt + "/" + MAX_ATTEMPTS);
