@@ -44,7 +44,7 @@ public final class JAIPilotLLM {
     }
 
     public static Content getSystemInstructionContextContent(Prompt promptPlaceholder) {
-        String systemInstructionPrompt = promptPlaceholder.getSystemInstructionsPlaceholder();
+        String systemInstructionPrompt = promptPlaceholder.getSystemInstructionsContextPlaceholder();
         Content systemInstructionContent = Content.builder()
                 .role("user")
                 .parts(Part.builder().text(systemInstructionPrompt).build())
