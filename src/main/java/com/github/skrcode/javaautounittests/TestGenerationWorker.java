@@ -4,6 +4,7 @@ import com.github.skrcode.javaautounittests.DTOs.Prompt;
 import com.github.skrcode.javaautounittests.DTOs.PromptResponseOutput;
 import com.github.skrcode.javaautounittests.settings.AISettings;
 import com.github.skrcode.javaautounittests.settings.Telemetry;
+import com.google.genai.types.Content;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.command.WriteCommandAction;
@@ -22,7 +23,7 @@ import java.util.Objects;
 
 public final class TestGenerationWorker {
 
-    private static final int MAX_ATTEMPTS= 10;
+    private static final int MAX_ATTEMPTS= 20;
 
     public static void process(Project project, PsiClass cut, @NotNull ProgressIndicator indicator, PsiDirectory testRoot) {
 
@@ -41,12 +42,14 @@ public final class TestGenerationWorker {
             prompt.setGenerateMorePlaceholder(PromptBuilder.getPromptPlaceholder("generate-more-prompt"));
             prompt.setSystemInstructionsPlaceholder(PromptBuilder.getPromptPlaceholder("systeminstructions-prompt"));
             prompt.setErrorOutputPlaceholder(PromptBuilder.getPromptPlaceholder("erroroutput-prompt"));
-            prompt.setInputPlaceholder(PromptBuilder.getPromptPlaceholder("input-prompt"));
+            prompt.setInputContextPlaceholder(PromptBuilder.getPromptPlaceholder("input-context-prompt"));
+            prompt.setGenerateMoreContextPlaceholder(PromptBuilder.getPromptPlaceholder("generate-more-context-prompt"));
             prompt.setExistingTestClassPlaceholder(PromptBuilder.getPromptPlaceholder("testclass-prompt"));
             String errorOutput = "";
             String testFileName = cutName + "Test.java";
             Telemetry.allGenBegin(testFileName);
-            List<String> contextClasses = new ArrayList<>();
+            List<Content> contents = new ArrayList<>();
+            contents.add(JAIPilotLLM.getInputClassContent(prompt, cutClass));
             // Attempts
             boolean isLLMGeneratedAtleastOnce = false;
             String existingIndividualTestClass = "";
@@ -57,23 +60,33 @@ public final class TestGenerationWorker {
                 if (ReadAction.compute(() -> testFile.get()) != null) {
                     indicator.setText("Compiling #" + attempt + "/" + MAX_ATTEMPTS + " : " + testFileName);
                     existingIndividualTestClass = ReadAction.compute(() -> testFile.get().getText());
+                    contents.add(JAIPilotLLM.getExistingTestClassContent(prompt,existingIndividualTestClass));
                     errorOutput = BuilderUtil.compileJUnitClass(project, testFile);
-                    if (errorOutput.isEmpty() && isLLMGeneratedAtleastOnce) break;
-//                        errorOutput = BuilderUtil.runJUnitClass(project, testFile.get());
-//                        if (errorOutput.isEmpty() ) break;
-//                    }
+                    if (errorOutput.isEmpty()) {
+                        errorOutput = BuilderUtil.runJUnitClass(project, testFile.get());
+                        if (errorOutput.isEmpty() && isLLMGeneratedAtleastOnce) break;
+                    }
                     indicator.setText("Compiled #" + attempt + "/" + MAX_ATTEMPTS + ": " + testFileName);
                 }
 
                 if (attempt > MAX_ATTEMPTS) break;
+                if (!errorOutput.isEmpty())
+                    contents.add(JAIPilotLLM.getErrorOutputContent(prompt, errorOutput));
+
+                for(int contextClassAttempt = 1;contextClassAttempt<=MAX_ATTEMPTS/3;contextClassAttempt++) {
+                    contents.add(JAIPilotLLM.getGenerateContextContent(prompt));
+                    PromptResponseOutput allSingleTestContext = JAIPilotLLM.getAllSingleTestContext(contents, prompt, testFileName,  contextClassAttempt, indicator);
+                    contents.add(JAIPilotLLM.getClassContextPathContent(allSingleTestContext.getContextClasses()));
+                    contents.add(JAIPilotLLM.getClassContextPathSourceContent(getSourceCodeOfContextClasses(project,allSingleTestContext.getContextClasses())));
+                    if(allSingleTestContext.getContextClasses().size() == 0) break;
+                }
+                contents.add(JAIPilotLLM.getGenerateMoreTestsContent(prompt, testFileName));
                 indicator.setText("Invoking LLM Attempt #" + attempt + "/" + MAX_ATTEMPTS);
-                List<String> contextClassesSource = getSourceCodeOfContextClasses(project,contextClasses);
                 PromptResponseOutput promptResponseOutput;
                 if(AISettings.getInstance().getMode().equals("Pro"))
-                    promptResponseOutput  = JAIPilotLLM.getAllSingleTestPro(testFileName, cutClass, existingIndividualTestClass, errorOutput, contextClassesSource, attempt, indicator);
-                else promptResponseOutput = JAIPilotLLM.getAllSingleTest( prompt, testFileName, cutClass, existingIndividualTestClass, errorOutput, contextClassesSource, attempt, indicator);
+                    promptResponseOutput  = JAIPilotLLM.getAllSingleTest( contents, prompt, testFileName, attempt, indicator);
+                else promptResponseOutput = JAIPilotLLM.getAllSingleTest( contents, prompt, testFileName, attempt, indicator);
                 if(!Objects.isNull(promptResponseOutput.getTestClassCode())) {
-                    contextClasses = promptResponseOutput.getContextClasses();
                     isLLMGeneratedAtleastOnce = true;
                     indicator.setText("Successfully invoked LLM Attempt #" + attempt + "/" + MAX_ATTEMPTS);
                     BuilderUtil.write(project, testFile, packageDir, testFileName, promptResponseOutput.getTestClassCode());
@@ -94,7 +107,7 @@ public final class TestGenerationWorker {
 
     private static @Nullable PsiDirectory resolveTestPackageDir(Project project,
                                                                 PsiDirectory testRoot,
-                                                                PsiClass cut) {
+                                                                PsiClass cut) throws Exception {
 
         PsiPackage cutPkg = ReadAction.compute(() ->
                 JavaDirectoryService.getInstance().getPackage(cut.getContainingFile().getContainingDirectory())
@@ -135,17 +148,24 @@ public final class TestGenerationWorker {
     /** Recursively find or create nested sub-directories like {@code org/example/service}. */
     private static @Nullable PsiDirectory getOrCreateSubdirectoryPath(Project project,
                                                                       PsiDirectory root,
-                                                                      String relativePath) {
-        return WriteCommandAction.writeCommandAction(project).compute(() -> {
-            PsiDirectory current = root;
-            for (String part : relativePath.split("/")) {
-                PsiDirectory next = current.findSubdirectory(part);
-                if (next == null) next = current.createSubdirectory(part);
-                current = next;
-            }
-            return current;
-        });
+                                                                      String relativePath) throws Exception {
+        try {
+            return WriteCommandAction.writeCommandAction(project).compute(() -> {
+                PsiDirectory current = root;
+                for (String part : relativePath.split("/")) {
+                    PsiDirectory next = current.findSubdirectory(part);
+                    if (next == null) {
+                        next = current.createSubdirectory(part);
+                    }
+                    current = next;
+                }
+                return current;
+            });
+        } catch (Exception e) {
+            throw new Exception("Incorrect tests source directory");
+        }
     }
+
 
     private TestGenerationWorker() {} // no-instantiation
 }

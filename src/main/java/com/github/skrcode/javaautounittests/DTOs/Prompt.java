@@ -1,10 +1,27 @@
 package com.github.skrcode.javaautounittests.DTOs;
 
 public class Prompt {
-    private String inputPlaceholder;
+    private String inputContextPlaceholder;
     private String errorOutputPlaceholder;
     private String systemInstructionsPlaceholder;
     private String generateMorePlaceholder;
+    private String generateMoreContextPlaceholder;
+
+    public String getGenerateMoreContextPlaceholder() {
+        return generateMoreContextPlaceholder;
+    }
+
+    public void setGenerateMoreContextPlaceholder(String generateMoreContextPlaceholder) {
+        this.generateMoreContextPlaceholder = generateMoreContextPlaceholder;
+    }
+
+    public String getInputContextPlaceholder() {
+        return inputContextPlaceholder;
+    }
+
+    public void setInputContextPlaceholder(String inputContextPlaceholder) {
+        this.inputContextPlaceholder = inputContextPlaceholder;
+    }
 
     public String getExistingTestClassPlaceholder() {
         return existingTestClassPlaceholder;
@@ -22,14 +39,6 @@ public class Prompt {
 
     public void setSystemInstructionsPlaceholder(String systemInstructionsPlaceholder) {
         this.systemInstructionsPlaceholder = systemInstructionsPlaceholder;
-    }
-
-    public String getInputPlaceholder() {
-        return inputPlaceholder;
-    }
-
-    public void setInputPlaceholder(String inputPlaceholder) {
-        this.inputPlaceholder = inputPlaceholder;
     }
 
     public String getErrorOutputPlaceholder() {
