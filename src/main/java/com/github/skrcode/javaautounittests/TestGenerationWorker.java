@@ -84,8 +84,8 @@ public final class TestGenerationWorker {
                 else if(!existingIndividualTestClass.isEmpty()) contentsJUnit.add(JAIPilotLLM.getGenerateMoreTestsContent(prompt, testFileName));
 
                 for(int contextClassAttempt = 1;contextClassAttempt<=MAX_ATTEMPTS/3;contextClassAttempt++) {
-                    contentsContext.add(JAIPilotLLM.getSystemInstructionContextContent(prompt));
-                    PromptResponseOutput allSingleTestContext = JAIPilotLLM.getAllSingleTestContext(contentsContext, prompt, testFileName,  contextClassAttempt, indicator);
+                    contentsContext.add(JAIPilotLLM.getSystemInstructionContextContent(prompt, CUTUtil.findMockitoVersion(project)));
+                    PromptResponseOutput allSingleTestContext = JAIPilotLLM.getAllSingleTestContext(contentsContext, prompt, testFileName,  contextClassAttempt, indicator, CUTUtil.findMockitoVersion(project));
                     if(allSingleTestContext.getContextClasses().size() == 0) break;
                     contentsContext.add(JAIPilotLLM.getClassContextPathContent(allSingleTestContext.getContextClasses()));
                     Content sourceCodeOfContextClasses = JAIPilotLLM.getClassContextPathSourceContent(prompt, getSourceCodeOfContextClasses(project, allSingleTestContext.getContextClasses()));
@@ -96,8 +96,8 @@ public final class TestGenerationWorker {
                 indicator.setText("Invoking LLM Attempt #" + attempt + "/" + MAX_ATTEMPTS);
                 PromptResponseOutput promptResponseOutput;
                 if(AISettings.getInstance().getMode().equals("Pro"))
-                    promptResponseOutput  = JAIPilotLLM.getAllSingleTest( contentsJUnit, prompt, testFileName, attempt, indicator);
-                else promptResponseOutput = JAIPilotLLM.getAllSingleTest( contentsJUnit, prompt, testFileName, attempt, indicator);
+                    promptResponseOutput  = JAIPilotLLM.getAllSingleTest( contentsJUnit, prompt, testFileName, attempt, indicator, CUTUtil.findMockitoVersion(project));
+                else promptResponseOutput = JAIPilotLLM.getAllSingleTest( contentsJUnit, prompt, testFileName, attempt, indicator ,CUTUtil.findMockitoVersion(project));
                 if(!Objects.isNull(promptResponseOutput.getTestClassCode())) {
                     isLLMGeneratedAtleastOnce = true;
                     indicator.setText("Successfully invoked LLM Attempt #" + attempt + "/" + MAX_ATTEMPTS);

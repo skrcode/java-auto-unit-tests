@@ -99,10 +99,10 @@ public class BuilderUtil {
                             @Override
                             public void onTextAvailable(ProcessEvent event, Key outputType) {
                                 String line = event.getText().trim();
-                                if (line.startsWith("##teamcity[testFailed")) {
-//                                    String testName = extractAttr(line, "name");
-//                                    String message = extractAttr(line, "message");
-//                                    String details = extractAttr(line, "details");
+                                if (line.startsWith("##teamcity[testFailed") && failures.isEmpty()) {
+                                    String testName = extractAttr(line, "name");
+                                    String message = extractAttr(line, "message");
+                                    String details = extractAttr(line, "details");
 
                                     failures.append(line)
                                             .append("\n\n");

@@ -32,8 +32,8 @@ public final class JAIPilotLLM {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     final static int MAX_RETRIES = 20;
 
-    public static Content getSystemInstructionContent(Prompt promptPlaceholder) {
-        String systemInstructionPrompt = promptPlaceholder.getSystemInstructionsPlaceholder();
+    public static Content getSystemInstructionContent(Prompt promptPlaceholder, String mockitoversion) {
+        String systemInstructionPrompt = promptPlaceholder.getSystemInstructionsPlaceholder().replace("{{mockitoversion}}", mockitoversion);
         Content systemInstructionContent = Content.builder()
                 .role("user")
                 .parts(Part.builder().text(systemInstructionPrompt).build())
@@ -41,8 +41,8 @@ public final class JAIPilotLLM {
         return systemInstructionContent;
     }
 
-    public static Content getSystemInstructionContextContent(Prompt promptPlaceholder) {
-        String systemInstructionPrompt = promptPlaceholder.getSystemInstructionsContextPlaceholder();
+    public static Content getSystemInstructionContextContent(Prompt promptPlaceholder, String mockitoversion) {
+        String systemInstructionPrompt = promptPlaceholder.getSystemInstructionsContextPlaceholder().replace("{{mockitoversion}}", mockitoversion);
         Content systemInstructionContent = Content.builder()
                 .role("user")
                 .parts(Part.builder().text(systemInstructionPrompt).build())
@@ -119,7 +119,8 @@ public final class JAIPilotLLM {
             Prompt prompt,
             String testClassName,              // kept for signature compatibility (unused)
             int attempt,                       // kept for signature compatibility (unused)
-            ProgressIndicator indicator
+            ProgressIndicator indicator,
+            String mockitoversion
     ) {
         ElapsedTicker ticker = new ElapsedTicker(indicator, "Getting Context.. Attempt #" + attempt);
         ticker.start();
@@ -142,48 +143,40 @@ public final class JAIPilotLLM {
                 GenerateContentConfig cfg = GenerateContentConfig.builder()
                         .responseMimeType("text/plain")
                         .candidateCount(1)
-                        .systemInstruction(getSystemInstructionContextContent(prompt))
+                        .systemInstruction(getSystemInstructionContextContent(prompt, mockitoversion))
                         .thinkingConfig(ThinkingConfig.builder().thinkingBudget(0).build())
                         .build();
 
-                // ==== Streaming with line-by-line updates ====
+                // ==== Streaming with early format validation ====
                 int lineCounter = 0;
+                boolean formatBroken = false;
+
                 try (var stream = client.models.generateContentStream(model, contents, cfg)) {
                     for (var chunk : stream) {
                         if (indicator != null && indicator.isCanceled()) {
                             throw new com.intellij.openapi.progress.ProcessCanceledException();
                         }
 
-                        String delta = "";
-                        if (!chunk.text().isEmpty()) {
-                            delta = chunk.text();
-                        } else {
-                            delta = chunk.candidates()
-                                    .flatMap(cands -> cands.stream().findFirst())
-                                    .flatMap(c -> c.content())
-                                    .flatMap(ct -> ct.parts())
-                                    .map(parts -> {
-                                        StringBuilder sb = new StringBuilder();
-                                        for (Part p : parts) {
-                                            p.text().ifPresent(sb::append);
-                                        }
-                                        return sb.toString();
-                                    })
-                                    .orElse("");
-                        }
-
+                        String delta = extractDelta(chunk);
                         if (!delta.isEmpty()) {
-                            String clean = delta
-                                    .replaceAll("(?s)```java\\b\\s*", "")
-                                    .replaceAll("(?s)```", "")
-                                    .replaceFirst("(?m)^java\\s*$", "");
-
+                            String clean = sanitize(delta);
                             attemptBuf.append(clean);
 
+                            // quick live validation: must look like JSON array of strings
+                            String snapshot = attemptBuf.toString().trim();
+
+                            // If starts with wrong token or contains "package"/"import" → bail out
+                            if ((snapshot.length() > 1 && snapshot.charAt(0) != '[')
+                                    || snapshot.contains("package ")
+                                    || snapshot.contains("import ")) {
+                                formatBroken = true;
+                                break; // break out of stream immediately
+                            }
+
+                            // update progress text
                             for (int i = 0; i < clean.length(); i++) {
                                 if (clean.charAt(i) == '\n') lineCounter++;
                             }
-
                             if (indicator != null) {
                                 int lastNl = attemptBuf.lastIndexOf("\n");
                                 String tail = (lastNl >= 0 ? attemptBuf.substring(lastNl + 1) : attemptBuf.toString()).trim();
@@ -194,6 +187,13 @@ public final class JAIPilotLLM {
                             }
                         }
                     }
+                }
+
+                if (formatBroken) {
+                    if (indicator != null) {
+                        indicator.setText2("Retry " + retries + "/" + MAX_RETRIES + " — early invalid format detected");
+                    }
+                    continue; // retry instantly
                 }
 
                 // ==== Parse + validate response ====
@@ -211,11 +211,9 @@ public final class JAIPilotLLM {
 
                 // ==== Validation: must be a list of class paths ====
                 if (!ctx.isEmpty() && ctx.stream().allMatch(s -> s.matches("[a-zA-Z_][\\w$]*(\\.[a-zA-Z_][\\w$]*)*"))) {
-                    // Trim to max 10, preserve order
                     if (ctx.size() > 10) {
                         ctx = ctx.subList(0, 10);
                     }
-
                     PromptResponseOutput out = new PromptResponseOutput();
                     out.setContextClasses(ctx);
 
@@ -254,6 +252,32 @@ public final class JAIPilotLLM {
         return out;
     }
 
+    // Helper: extract delta text from stream chunk
+    private static String extractDelta(GenerateContentResponse chunk) {
+        if (!chunk.text().isEmpty()) {
+            return chunk.text();
+        }
+        return chunk.candidates()
+                .flatMap(cands -> cands.stream().findFirst())
+                .flatMap(c -> c.content())
+                .flatMap(ct -> ct.parts())
+                .map(parts -> {
+                    StringBuilder sb = new StringBuilder();
+                    for (Part p : parts) {
+                        p.text().ifPresent(sb::append);
+                    }
+                    return sb.toString();
+                })
+                .orElse("");
+    }
+
+    // Helper: strip markdown fences and stray "java"
+    private static String sanitize(String s) {
+        return s.replaceAll("(?s)```java\\b\\s*", "")
+                .replaceAll("(?s)```", "")
+                .replaceFirst("(?m)^java\\s*$", "");
+    }
+
 
 
 
@@ -270,7 +294,8 @@ public final class JAIPilotLLM {
             Prompt prompt,
             String testClassName,
             int attempt,
-            ProgressIndicator indicator
+            ProgressIndicator indicator,
+            String mockitoversion
     ) throws Exception {
 
         ElapsedTicker ticker = new ElapsedTicker(indicator, "Attempt #" + attempt + ": Running model…");
@@ -287,7 +312,7 @@ public final class JAIPilotLLM {
                     .responseMimeType("text/plain") // Only raw test class
                     .candidateCount(1)
                     .thinkingConfig(ThinkingConfig.builder().thinkingBudget(0).build())
-                    .systemInstruction(getSystemInstructionContent(prompt))
+                    .systemInstruction(getSystemInstructionContent(prompt, mockitoversion))
                     .build();
 
             // Stream with retries

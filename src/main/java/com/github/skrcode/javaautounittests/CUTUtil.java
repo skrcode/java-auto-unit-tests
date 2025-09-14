@@ -4,7 +4,11 @@ import com.intellij.application.options.CodeStyle;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.project.Project;
-import com.intellij.psi.*;
+import com.intellij.openapi.roots.libraries.Library;
+import com.intellij.openapi.roots.libraries.LibraryTable;
+import com.intellij.openapi.roots.libraries.LibraryTablesRegistrar;
+import com.intellij.psi.PsiClass;
+import com.intellij.psi.PsiJavaFile;
 import com.intellij.psi.codeStyle.JavaCodeStyleManager;
 import com.intellij.psi.codeStyle.JavaCodeStyleSettings;
 import com.intellij.psi.codeStyle.PackageEntryTable;
@@ -22,6 +26,21 @@ import java.lang.reflect.Field;
  */
 public final class CUTUtil {
     private CUTUtil() {}
+
+    public static String findMockitoVersion(Project project) {
+        LibraryTable table = LibraryTablesRegistrar.getInstance().getLibraryTable(project);
+        for (Library lib : table.getLibraries()) {
+            String name = lib.getName();
+            if (name != null && name.toLowerCase().contains("mockito")) {
+                // e.g. "Gradle: org.mockito:mockito-core:5.12.0"
+                String[] parts = name.split(":");
+                if (parts.length >= 3) {
+                    return parts[parts.length - 1]; // the version string
+                }
+            }
+        }
+        return ""; // not found
+    }
 
     /* ---------------------------------------------------------------------- */
     /** Expands all star imports.  Call this inside your plugin before
