@@ -126,124 +126,134 @@ public final class JAIPilotLLM {
         long start = System.nanoTime();
         Telemetry.genStarted(testClassName, String.valueOf(attempt));
 
-        final StringBuilder attemptBuf = new StringBuilder();
+        final int MAX_RETRIES = 3; // configurable
+        int retries = 0;
 
-        try {
-            // ==== Gemini client ====
-            String apiKey = AISettings.getInstance().getOpenAiKey();
-            String model = AISettings.getInstance().getModel();
-            Client client = Client.builder().apiKey(apiKey).build();
+        while (retries < MAX_RETRIES) {
+            retries++;
+            StringBuilder attemptBuf = new StringBuilder();
 
-            GenerateContentConfig cfg = GenerateContentConfig.builder()
-                    .responseMimeType("text/plain")   // plain text only
-                    .candidateCount(1)
-                    .systemInstruction(getSystemInstructionContextContent(prompt))
-                    .thinkingConfig(ThinkingConfig.builder().thinkingBudget(0).build())
-                    .build();
+            try {
+                // ==== Gemini client ====
+                String apiKey = AISettings.getInstance().getOpenAiKey();
+                String model = AISettings.getInstance().getModel();
+                Client client = Client.builder().apiKey(apiKey).build();
 
-            // ==== Streaming with line-by-line ProgressIndicator.setText2 updates ====
-            int lineCounter = 0;
-            try (var stream = client.models.generateContentStream(model, contents, cfg)) {
-                for (var chunk : stream) {
-                    if (indicator != null && indicator.isCanceled()) {
-                        throw new com.intellij.openapi.progress.ProcessCanceledException();
-                    }
+                GenerateContentConfig cfg = GenerateContentConfig.builder()
+                        .responseMimeType("text/plain")
+                        .candidateCount(1)
+                        .systemInstruction(getSystemInstructionContextContent(prompt))
+                        .thinkingConfig(ThinkingConfig.builder().thinkingBudget(0).build())
+                        .build();
 
-                    // Prefer SDK's direct text accessor
-                    String delta = "";
-                    if (!chunk.text().isEmpty()) {
-                        delta = chunk.text();
-                    } else {
-                        // Defensive fallback: stitch from candidates/parts
-                        delta = chunk.candidates()
-                                .flatMap(cands -> cands.stream().findFirst())
-                                .flatMap(c -> c.content())
-                                .flatMap(ct -> ct.parts())
-                                .map(parts -> {
-                                    StringBuilder sb = new StringBuilder();
-                                    for (Part p : parts) {
-                                        p.text().ifPresent(sb::append);
-                                    }
-                                    return sb.toString();
-                                })
-                                .orElse("");
-                    }
-
-                    if (!delta.isEmpty()) {
-                        // Clean common markdown/code-fence noise
-                        String clean = delta
-                                .replaceAll("(?s)```java\\b\\s*", "")  // remove ```java
-                                .replaceAll("(?s)```", "")             // remove closing ```
-                                .replaceFirst("(?m)^java\\s*$", "");   // remove lone "java" line
-
-                        attemptBuf.append(clean);
-
-                        // Count *all* newlines in just this chunk
-                        for (int i = 0; i < clean.length(); i++) {
-                            if (clean.charAt(i) == '\n') lineCounter++;
+                // ==== Streaming with line-by-line updates ====
+                int lineCounter = 0;
+                try (var stream = client.models.generateContentStream(model, contents, cfg)) {
+                    for (var chunk : stream) {
+                        if (indicator != null && indicator.isCanceled()) {
+                            throw new com.intellij.openapi.progress.ProcessCanceledException();
                         }
 
-                        if (indicator != null) {
-                            // Take the actual tail line from the full buffer
-                            int lastNl = attemptBuf.lastIndexOf("\n");
-                            String tail = (lastNl >= 0 ? attemptBuf.substring(lastNl + 1) : attemptBuf.toString()).trim();
+                        String delta = "";
+                        if (!chunk.text().isEmpty()) {
+                            delta = chunk.text();
+                        } else {
+                            delta = chunk.candidates()
+                                    .flatMap(cands -> cands.stream().findFirst())
+                                    .flatMap(c -> c.content())
+                                    .flatMap(ct -> ct.parts())
+                                    .map(parts -> {
+                                        StringBuilder sb = new StringBuilder();
+                                        for (Part p : parts) {
+                                            p.text().ifPresent(sb::append);
+                                        }
+                                        return sb.toString();
+                                    })
+                                    .orElse("");
+                        }
 
-                            // Line number = (# of newlines so far) + 1 (for the current line)
-                            if (!tail.isEmpty()) {
-                                long lineNo = lineCounter + 1L;
-                                indicator.setText2(lineNo + ": " + tail);
+                        if (!delta.isEmpty()) {
+                            String clean = delta
+                                    .replaceAll("(?s)```java\\b\\s*", "")
+                                    .replaceAll("(?s)```", "")
+                                    .replaceFirst("(?m)^java\\s*$", "");
+
+                            attemptBuf.append(clean);
+
+                            for (int i = 0; i < clean.length(); i++) {
+                                if (clean.charAt(i) == '\n') lineCounter++;
+                            }
+
+                            if (indicator != null) {
+                                int lastNl = attemptBuf.lastIndexOf("\n");
+                                String tail = (lastNl >= 0 ? attemptBuf.substring(lastNl + 1) : attemptBuf.toString()).trim();
+                                if (!tail.isEmpty()) {
+                                    long lineNo = lineCounter + 1L;
+                                    indicator.setText2(lineNo + ": " + tail);
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            // ==== Parse response ====
-            String rawText = attemptBuf.toString().trim();
+                // ==== Parse + validate response ====
+                String rawText = attemptBuf.toString().trim();
+                List<String> ctx = new ArrayList<>();
 
-            List<String> ctx = new ArrayList<>();
-            try {
-                if (rawText.startsWith("[") && rawText.endsWith("]")) {
-                    // JSON array of classpaths
-                    ctx.addAll(MAPPER.readValue(rawText, new com.fasterxml.jackson.core.type.TypeReference<List<String>>() {}));
-                } else {
-                    // newline-separated fallback
-                    ctx.addAll(Arrays.stream(rawText.split("\\R"))
-                            .map(String::trim)
-                            .filter(s -> !s.isEmpty())
-                            .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new))); // preserve order, de-dupe
+                try {
+                    if (rawText.startsWith("[") && rawText.endsWith("]")) {
+                        ctx.addAll(MAPPER.readValue(rawText,
+                                new com.fasterxml.jackson.core.type.TypeReference<List<String>>() {}));
+                    }
+                } catch (Exception ignored) {
+                    // Parsing failed → retry loop will handle
                 }
-            } catch (Exception e) {
-                // Fallback to raw lines if JSON parsing fails
-                ctx.addAll(Arrays.stream(rawText.split("\\R"))
-                        .map(String::trim)
-                        .filter(s -> !s.isEmpty())
-                        .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new)));
+
+                // ==== Validation: must be a list of class paths ====
+                if (!ctx.isEmpty() && ctx.stream().allMatch(s -> s.matches("[a-zA-Z_][\\w$]*(\\.[a-zA-Z_][\\w$]*)*"))) {
+                    // Trim to max 10, preserve order
+                    if (ctx.size() > 10) {
+                        ctx = ctx.subList(0, 10);
+                    }
+
+                    PromptResponseOutput out = new PromptResponseOutput();
+                    out.setContextClasses(ctx);
+
+                    ticker.stopWithMessage("Done");
+                    long end = System.nanoTime();
+                    Telemetry.genCompleted(testClassName, String.valueOf(attempt), (end - start) / 1_000_000);
+                    return out;
+                }
+
+                // If invalid, retry
+                if (retries < MAX_RETRIES && indicator != null) {
+                    indicator.setText2("Retry " + retries + "/" + MAX_RETRIES +
+                            " — invalid response format for context classes");
+                }
+            } catch (com.intellij.openapi.progress.ProcessCanceledException pce) {
+                Telemetry.genFailed(testClassName, String.valueOf(attempt), "Canceled");
+                ticker.stopWithMessage("Canceled");
+                PromptResponseOutput out = new PromptResponseOutput();
+                out.setContextClasses(new ArrayList<>());
+                return out;
+            } catch (Throwable t) {
+                if (retries >= MAX_RETRIES) {
+                    Telemetry.genFailed(testClassName, String.valueOf(attempt), t.getMessage());
+                    ticker.stopWithMessage("Failed");
+                    PromptResponseOutput out = new PromptResponseOutput();
+                    out.setContextClasses(new ArrayList<>());
+                    return out;
+                }
             }
-
-            PromptResponseOutput out = new PromptResponseOutput();
-            out.setContextClasses(ctx);
-
-            ticker.stopWithMessage("Done");
-            long end = System.nanoTime();
-            Telemetry.genCompleted(testClassName, String.valueOf(attempt), (end - start) / 1_000_000);
-            return out;
-
-        } catch (com.intellij.openapi.progress.ProcessCanceledException pce) {
-            Telemetry.genFailed(testClassName, String.valueOf(attempt), "Canceled");
-            ticker.stopWithMessage("Canceled");
-            PromptResponseOutput out = new PromptResponseOutput();
-            out.setContextClasses(new ArrayList<>());
-            return out;
-
-        } catch (Throwable t) {
-            Telemetry.genFailed(testClassName, String.valueOf(attempt), t.getMessage());
-            ticker.stopWithMessage("Failed");
-            PromptResponseOutput out = new PromptResponseOutput();
-            out.setContextClasses(new ArrayList<>());
-            return out;
         }
+
+        // ==== Fallback after retries ====
+        PromptResponseOutput out = new PromptResponseOutput();
+        out.setContextClasses(new ArrayList<>());
+        ticker.stopWithMessage("Failed after retries");
+        return out;
     }
+
 
 
 
@@ -399,11 +409,9 @@ public final class JAIPilotLLM {
                                 .replaceAll("(?s)```", "")             // remove closing ```
                                 .replaceFirst("(?m)^java\\s*$", "");   // remove lone "java" line
 
-
                         attemptBuf.append(clean);
 
                         // ===== Accurate line numbering =====
-                        // 1) Count *all* newlines in just this chunk
                         for (int i = 0; i < clean.length(); i++) {
                             if (clean.charAt(i) == '\n') lineCounter++;
                         }
@@ -411,22 +419,26 @@ public final class JAIPilotLLM {
                         if (onDelta != null) onDelta.accept(clean);
 
                         if (indicator != null) {
-                            // 2) Take the *actual* tail line from the full buffer
                             int lastNl = attemptBuf.lastIndexOf("\n");
                             String tail = (lastNl >= 0 ? attemptBuf.substring(lastNl + 1) : attemptBuf.toString()).trim();
-
-                            // 3) Line number = (# of newlines so far) + 1 (for the current line)
                             if (!tail.isEmpty()) {
                                 long lineNo = lineCounter + 1;
                                 indicator.setText2(lineNo + ": " + tail);
                             }
                         }
                     }
-
                 }
 
-                // Success: return full output
-                return attemptBuf.toString();
+                String fullOutput = attemptBuf.toString();
+
+                // ===== JavaParser validation =====
+                JavaParser parser = new JavaParser();
+                if (!parser.parse(fullOutput).isSuccessful()) {
+                    throw new Exception("JavaParser validation failed: invalid Java syntax");
+                }
+
+                // Success: return validated output
+                return fullOutput;
             }
             catch (ClientException ce) {
                 throw ce; // invalid key / bad request, don't retry
@@ -450,6 +462,7 @@ public final class JAIPilotLLM {
 
         throw new IllegalStateException("Unexpected: reached end of retry loop");
     }
+
 
 
 

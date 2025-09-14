@@ -49,14 +49,17 @@ public final class TestGenerationWorker {
             String errorOutput = "";
             String testFileName = cutName + "Test.java";
             Telemetry.allGenBegin(testFileName);
-            List<Content> contentsJUnit = new ArrayList<>();
+
             List<Content> contentsContext = new ArrayList<>();
-            contentsJUnit.add(JAIPilotLLM.getInputClassContent(prompt, cutClass));
+            List<Content> allSourceCodeOfContextClasses = new ArrayList<>();
+
             contentsContext.add(JAIPilotLLM.getInputClassContent(prompt, cutClass));
             // Attempts
             boolean isLLMGeneratedAtleastOnce = false;
             String existingIndividualTestClass = "";
             for (; ; attempt++) {
+                List<Content> contentsJUnit = new ArrayList<>();
+                contentsJUnit.add(JAIPilotLLM.getInputClassContent(prompt, cutClass));
                 indicator.setText("Generating test : attempt" + attempt + "/" + MAX_ATTEMPTS);
 
                 Ref<PsiFile> testFile = ReadAction.compute(() -> Ref.create(packageDir.findFile(testFileName)));
@@ -87,8 +90,9 @@ public final class TestGenerationWorker {
                     contentsContext.add(JAIPilotLLM.getClassContextPathContent(allSingleTestContext.getContextClasses()));
                     Content sourceCodeOfContextClasses = JAIPilotLLM.getClassContextPathSourceContent(prompt, getSourceCodeOfContextClasses(project, allSingleTestContext.getContextClasses()));
                     contentsContext.add(sourceCodeOfContextClasses);
-                    contentsJUnit.add(sourceCodeOfContextClasses);
+                    allSourceCodeOfContextClasses.add(sourceCodeOfContextClasses);
                 }
+
                 indicator.setText("Invoking LLM Attempt #" + attempt + "/" + MAX_ATTEMPTS);
                 PromptResponseOutput promptResponseOutput;
                 if(AISettings.getInstance().getMode().equals("Pro"))
