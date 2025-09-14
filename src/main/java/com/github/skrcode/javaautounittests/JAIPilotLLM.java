@@ -1,6 +1,5 @@
 package com.github.skrcode.javaautounittests;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.javaparser.JavaParser;
@@ -26,13 +25,12 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 /** Simple blocking (non-streaming) façade with elapsed-time indicator. */
 public final class JAIPilotLLM {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    final static int MAX_RETRIES = 5;
+    final static int MAX_RETRIES = 20;
 
     public static Content getSystemInstructionContent(Prompt promptPlaceholder) {
         String systemInstructionPrompt = promptPlaceholder.getSystemInstructionsPlaceholder();
@@ -128,9 +126,12 @@ public final class JAIPilotLLM {
         long start = System.nanoTime();
         Telemetry.genStarted(testClassName, String.valueOf(attempt));
 
+        final StringBuilder attemptBuf = new StringBuilder();
+
         try {
             // ==== Gemini client ====
             String apiKey = AISettings.getInstance().getOpenAiKey();
+            String model = AISettings.getInstance().getModel();
             Client client = Client.builder().apiKey(apiKey).build();
 
             GenerateContentConfig cfg = GenerateContentConfig.builder()
@@ -140,50 +141,85 @@ public final class JAIPilotLLM {
                     .thinkingConfig(ThinkingConfig.builder().thinkingBudget(0).build())
                     .build();
 
-            // ==== Blocking call ====
-            GenerateContentResponse resp = client.models
-                    .generateContent(AISettings.getInstance().getModel(), contents, cfg);
+            // ==== Streaming with line-by-line ProgressIndicator.setText2 updates ====
+            int lineCounter = 0;
+            try (var stream = client.models.generateContentStream(model, contents, cfg)) {
+                for (var chunk : stream) {
+                    if (indicator != null && indicator.isCanceled()) {
+                        throw new com.intellij.openapi.progress.ProcessCanceledException();
+                    }
 
-            StringBuilder sb = new StringBuilder();
-            resp.candidates().ifPresent(cands -> {
-                if (!cands.isEmpty()) {
-                    cands.get(0).content().ifPresent(content ->
-                            content.parts().ifPresent(parts -> {
-                                for (Part p : parts) p.text().ifPresent(sb::append);
-                            })
-                    );
+                    // Prefer SDK's direct text accessor
+                    String delta = "";
+                    if (!chunk.text().isEmpty()) {
+                        delta = chunk.text();
+                    } else {
+                        // Defensive fallback: stitch from candidates/parts
+                        delta = chunk.candidates()
+                                .flatMap(cands -> cands.stream().findFirst())
+                                .flatMap(c -> c.content())
+                                .flatMap(ct -> ct.parts())
+                                .map(parts -> {
+                                    StringBuilder sb = new StringBuilder();
+                                    for (Part p : parts) {
+                                        p.text().ifPresent(sb::append);
+                                    }
+                                    return sb.toString();
+                                })
+                                .orElse("");
+                    }
+
+                    if (!delta.isEmpty()) {
+                        // Clean common markdown/code-fence noise
+                        String clean = delta
+                                .replaceAll("(?s)```java\\b\\s*", "")  // remove ```java
+                                .replaceAll("(?s)```", "")             // remove closing ```
+                                .replaceFirst("(?m)^java\\s*$", "");   // remove lone "java" line
+
+                        attemptBuf.append(clean);
+
+                        // Count *all* newlines in just this chunk
+                        for (int i = 0; i < clean.length(); i++) {
+                            if (clean.charAt(i) == '\n') lineCounter++;
+                        }
+
+                        if (indicator != null) {
+                            // Take the actual tail line from the full buffer
+                            int lastNl = attemptBuf.lastIndexOf("\n");
+                            String tail = (lastNl >= 0 ? attemptBuf.substring(lastNl + 1) : attemptBuf.toString()).trim();
+
+                            // Line number = (# of newlines so far) + 1 (for the current line)
+                            if (!tail.isEmpty()) {
+                                long lineNo = lineCounter + 1L;
+                                indicator.setText2(lineNo + ": " + tail);
+                            }
+                        }
+                    }
                 }
-            });
+            }
 
             // ==== Parse response ====
-            // Expecting lines of context class paths
-// ==== Parse response ====
-            String rawText = sb.toString()
-                    .replaceAll("```\\w*\\s*", "")   // strip markdown fences if present
-                    .replaceAll("```", "")
-                    .trim();
+            String rawText = attemptBuf.toString().trim();
 
             List<String> ctx = new ArrayList<>();
             try {
                 if (rawText.startsWith("[") && rawText.endsWith("]")) {
-                    // It's a JSON array
-                    List<String> list = MAPPER.readValue(rawText, new TypeReference<List<String>>() {});
-                    ctx.addAll(list);
+                    // JSON array of classpaths
+                    ctx.addAll(MAPPER.readValue(rawText, new com.fasterxml.jackson.core.type.TypeReference<List<String>>() {}));
                 } else {
-                    // Fallback: treat as newline-separated plain text
+                    // newline-separated fallback
                     ctx.addAll(Arrays.stream(rawText.split("\\R"))
                             .map(String::trim)
                             .filter(s -> !s.isEmpty())
-                            .collect(Collectors.toSet()));
+                            .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new))); // preserve order, de-dupe
                 }
             } catch (Exception e) {
-                // Fallback to raw text lines if JSON parsing fails
+                // Fallback to raw lines if JSON parsing fails
                 ctx.addAll(Arrays.stream(rawText.split("\\R"))
                         .map(String::trim)
                         .filter(s -> !s.isEmpty())
-                        .collect(Collectors.toSet()));
+                        .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new)));
             }
-
 
             PromptResponseOutput out = new PromptResponseOutput();
             out.setContextClasses(ctx);
@@ -191,6 +227,13 @@ public final class JAIPilotLLM {
             ticker.stopWithMessage("Done");
             long end = System.nanoTime();
             Telemetry.genCompleted(testClassName, String.valueOf(attempt), (end - start) / 1_000_000);
+            return out;
+
+        } catch (com.intellij.openapi.progress.ProcessCanceledException pce) {
+            Telemetry.genFailed(testClassName, String.valueOf(attempt), "Canceled");
+            ticker.stopWithMessage("Canceled");
+            PromptResponseOutput out = new PromptResponseOutput();
+            out.setContextClasses(new ArrayList<>());
             return out;
 
         } catch (Throwable t) {
@@ -201,6 +244,8 @@ public final class JAIPilotLLM {
             return out;
         }
     }
+
+
 
     /**
      * FREE: Blocking call to Gemini with JSON schema; expects:
