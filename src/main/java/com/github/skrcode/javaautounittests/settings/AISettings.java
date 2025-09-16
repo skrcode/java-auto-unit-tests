@@ -16,11 +16,8 @@ public class AISettings implements PersistentStateComponent<AISettings.State> {
         public String openAiKey = "";       // Free API Key
         public String proKey = "";          // Pro API Key
         public String model = "";           // Gemini Model (Free mode)
-//        public String testDirectory = "";   // Test directory path
         public String mode = "Pro";
-//        public Boolean proKeyValidated = null;
         public boolean telemetryEnabled = true;
-//        public boolean thinkingMode = false;
     }
 
     private State state = new State();
@@ -66,14 +63,6 @@ public class AISettings implements PersistentStateComponent<AISettings.State> {
         state.model = model;
     }
 
-//    public String getTestDirectory() {
-//        return state.testDirectory;
-//    }
-//
-//    public void setTestDirectory(String dir) {
-//        state.testDirectory = dir;
-//    }
-
     public String getMode() {
         return state.mode;
     }
@@ -82,18 +71,7 @@ public class AISettings implements PersistentStateComponent<AISettings.State> {
         state.mode = mode;
     }
 
-//    public void setProKeyValidated(Boolean isProKeyValidated) {
-//        state.proKeyValidated = isProKeyValidated;
-//    }
-//
-//    public Boolean isProKeyValidated() {
-//        return state.proKeyValidated;
-//    }
-
     public boolean isTelemetryEnabled() { return state.telemetryEnabled; }
     public void setTelemetryEnabled(boolean v) { state.telemetryEnabled = v; }
-
-//    public boolean isThinkingMode() { return getState().thinkingMode; }
-//    public void setThinkingMode(boolean v) { getState().thinkingMode = v; }
 
 }

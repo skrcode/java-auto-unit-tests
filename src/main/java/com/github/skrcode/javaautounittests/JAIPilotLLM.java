@@ -6,7 +6,7 @@ import com.github.javaparser.JavaParser;
 import com.github.skrcode.javaautounittests.DTOs.Prompt;
 import com.github.skrcode.javaautounittests.DTOs.PromptResponseOutput;
 import com.github.skrcode.javaautounittests.settings.AISettings;
-import com.github.skrcode.javaautounittests.settings.Telemetry;
+import com.github.skrcode.javaautounittests.settings.telemetry.Telemetry;
 import com.google.genai.Client;
 import com.google.genai.errors.ClientException;
 import com.google.genai.types.*;
@@ -97,22 +97,6 @@ public final class JAIPilotLLM {
                 .parts(Part.builder().text(existingTestClassPrompt).build()).build();
         return existingTestClassContent;
     }
-
-//    system instruction - junit
-//    user - input class
-//    model - test--------------------
-//    user - error output
-//      user - give me class context
-//      model - class context path
-//      user = class context source
-//    user - generate tests---------------------------
-//    model - test
-//    user - error output
-//      user - give me class context
-//      model - class context path
-//      user = class context source
-//    user - generate tests
-//    model - test
 
     public static PromptResponseOutput getAllSingleTestContext(
             List<Content> contents,

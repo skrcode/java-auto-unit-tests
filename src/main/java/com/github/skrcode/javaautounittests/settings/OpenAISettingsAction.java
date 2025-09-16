@@ -1,5 +1,6 @@
 package com.github.skrcode.javaautounittests.settings;
 
+import com.github.skrcode.javaautounittests.settings.telemetry.Telemetry;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.options.ShowSettingsUtil;

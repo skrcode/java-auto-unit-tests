@@ -124,7 +124,7 @@ public class BuilderUtil {
         });
 
         try {
-            if (!latch.await(60, TimeUnit.SECONDS)) {
+            if (!latch.await(200, TimeUnit.SECONDS)) {
                 return "TEST_EXECUTION_TIMEOUT";
             }
         } catch (InterruptedException e) {
@@ -144,13 +144,7 @@ public class BuilderUtil {
     }
 
 
-
-
-
     public static String compileJUnitClass(Project project, Ref<PsiFile> testFile)  {
-
-//        String staticErrors = getAllErrorMessages(project, testFile.get());
-//        if(!staticErrors.isEmpty()) return staticErrors;
 
         CountDownLatch latch = new CountDownLatch(1);
         StringBuilder result = new StringBuilder();
@@ -183,38 +177,6 @@ public class BuilderUtil {
 
         return result.toString().trim();
     }
-
-//    public static String getAllErrorMessages(Project project, PsiFile psiFile) {
-//        Document doc = psiFile.getViewProvider().getDocument();
-//
-//        // Collect all highlights
-//        DaemonCodeAnalyzerEx analyzerEx = DaemonCodeAnalyzerEx.getInstanceEx(project);
-//        DaemonProgressIndicator indicator = new DaemonProgressIndicator();
-//        List<HighlightInfo> infos = analyzerEx.runMainPasses(psiFile, doc, indicator);
-//
-//
-//        return infos.stream()
-//                .filter(info -> info.getSeverity().equals(com.intellij.lang.annotation.HighlightSeverity.ERROR))
-//                .map(info -> {
-//                    int errorLine = doc.getLineNumber(info.getStartOffset());
-//
-//                    // Define range (clamped to file boundaries)
-//                    int startLine = Math.max(0, errorLine - 2);
-//                    int endLine = Math.min(doc.getLineCount() - 1, errorLine + 2);
-//
-//                    StringBuilder context = new StringBuilder();
-//                    for (int line = startLine; line <= endLine; line++) {
-//                        int lineStartOffset = doc.getLineStartOffset(line);
-//                        int lineEndOffset = doc.getLineEndOffset(line);
-//                        String text = doc.getText(new TextRange(lineStartOffset, lineEndOffset));
-//                        context.append(line + 1).append(": ").append(text).append("\n");
-//                    }
-//
-//                    return "Error: " + info.getDescription() + "\nContext:\n" + context;
-//                })
-//                .collect(Collectors.joining("\n---\n"));
-//    }
-//
 
     private static String getLineFromVirtualFile(Project project, VirtualFile file, int lineNumber) {
         if (lineNumber < 1) return "<invalid line number>";
