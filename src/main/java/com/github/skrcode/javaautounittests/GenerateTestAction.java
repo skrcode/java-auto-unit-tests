@@ -54,7 +54,7 @@ public class GenerateTestAction extends AnAction implements DumbAware {
             }
         }
 
-        BulkGeneratorService.enqueue(project, classes, stringPathToPsiDirectory(project,AIProjectSettings.getInstance(project).getTestDirectory()));
+        BulkGeneratorService.enqueue(project, classes.get(0), stringPathToPsiDirectory(project,AIProjectSettings.getInstance(project).getTestDirectory()));
     }
 
     private static @Nullable PsiDirectory stringPathToPsiDirectory(Project project, String path) {

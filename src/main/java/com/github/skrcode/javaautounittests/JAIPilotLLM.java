@@ -6,11 +6,13 @@ import com.github.javaparser.JavaParser;
 import com.github.skrcode.javaautounittests.DTOs.Prompt;
 import com.github.skrcode.javaautounittests.DTOs.PromptResponseOutput;
 import com.github.skrcode.javaautounittests.settings.AISettings;
+import com.github.skrcode.javaautounittests.settings.JAIPilotConsoleManager;
 import com.github.skrcode.javaautounittests.settings.telemetry.Telemetry;
 import com.google.genai.Client;
 import com.google.genai.errors.ClientException;
 import com.google.genai.types.*;
-import com.intellij.openapi.progress.ProgressIndicator;
+import com.intellij.execution.ui.ConsoleView;
+import com.intellij.execution.ui.ConsoleViewContentType;
 
 import javax.swing.*;
 import java.io.IOException;
@@ -20,13 +22,16 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
-/** Simple blocking (non-streaming) façade with elapsed-time indicator. */
+/** Simple blocking (non-streaming) façade with elapsed-time myConsole. */
 public final class JAIPilotLLM {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -103,10 +108,10 @@ public final class JAIPilotLLM {
             Prompt prompt,
             String testClassName,              // kept for signature compatibility (unused)
             int attempt,                       // kept for signature compatibility (unused)
-            ProgressIndicator indicator,
+            ConsoleView myConsole,
             String mockitoversion
     ) {
-        ElapsedTicker ticker = new ElapsedTicker(indicator, "Getting Context.. Attempt #" + attempt);
+        ElapsedTicker ticker = new ElapsedTicker(myConsole, "Getting Context.. Attempt #" + attempt);
         ticker.start();
         long start = System.nanoTime();
         Telemetry.genStarted(testClassName, String.valueOf(attempt));
@@ -137,9 +142,10 @@ public final class JAIPilotLLM {
 
                 try (var stream = client.models.generateContentStream(model, contents, cfg)) {
                     for (var chunk : stream) {
-                        if (indicator != null && indicator.isCanceled()) {
-                            throw new com.intellij.openapi.progress.ProcessCanceledException();
-                        }
+//                        TODO
+//                        if (myConsole != null && myConsole.isCanceled()) {
+//                            throw new com.intellij.openapi.progress.ProcessCanceledException();
+//                        }
 
                         String delta = extractDelta(chunk);
                         if (!delta.isEmpty()) {
@@ -161,12 +167,12 @@ public final class JAIPilotLLM {
                             for (int i = 0; i < clean.length(); i++) {
                                 if (clean.charAt(i) == '\n') lineCounter++;
                             }
-                            if (indicator != null) {
+                            if (myConsole != null) {
                                 int lastNl = attemptBuf.lastIndexOf("\n");
                                 String tail = (lastNl >= 0 ? attemptBuf.substring(lastNl + 1) : attemptBuf.toString()).trim();
                                 if (!tail.isEmpty()) {
                                     long lineNo = lineCounter + 1L;
-                                    indicator.setText2(lineNo + ": " + tail);
+                                    JAIPilotConsoleManager.print(myConsole,lineNo + ": " + tail,ConsoleViewContentType.NORMAL_OUTPUT);
                                 }
                             }
                         }
@@ -174,8 +180,8 @@ public final class JAIPilotLLM {
                 }
 
                 if (formatBroken) {
-                    if (indicator != null) {
-                        indicator.setText2("Retry " + retries + "/" + MAX_RETRIES + " — early invalid format detected");
+                    if (myConsole != null) {
+                        JAIPilotConsoleManager.print(myConsole,"Retry " + retries + "/" + MAX_RETRIES + " — early invalid format detected",ConsoleViewContentType.NORMAL_OUTPUT);
                     }
                     continue; // retry instantly
                 }
@@ -208,9 +214,9 @@ public final class JAIPilotLLM {
                 }
 
                 // If invalid, retry
-                if (retries < MAX_RETRIES && indicator != null) {
-                    indicator.setText2("Retry " + retries + "/" + MAX_RETRIES +
-                            " — invalid response format for context classes");
+                if (retries < MAX_RETRIES && myConsole != null) {
+                    JAIPilotConsoleManager.print(myConsole,"Retry " + retries + "/" + MAX_RETRIES +
+                            " — invalid response format for context classes",ConsoleViewContentType.NORMAL_OUTPUT);
                 }
             } catch (com.intellij.openapi.progress.ProcessCanceledException pce) {
                 Telemetry.genFailed(testClassName, String.valueOf(attempt), "Canceled");
@@ -278,11 +284,11 @@ public final class JAIPilotLLM {
             Prompt prompt,
             String testClassName,
             int attempt,
-            ProgressIndicator indicator,
+            ConsoleView myConsole,
             String mockitoversion
     ) throws Exception {
 
-        ElapsedTicker ticker = new ElapsedTicker(indicator, "Attempt #" + attempt + ": Running model…");
+        ElapsedTicker ticker = new ElapsedTicker(myConsole, "Attempt #" + attempt + ": Running model…");
         ticker.start();
         long start = System.nanoTime();
         Telemetry.genStarted(testClassName, String.valueOf(attempt));
@@ -304,9 +310,9 @@ public final class JAIPilotLLM {
                     client,
                     contents,
                     cfg,
-                    indicator,
+                    myConsole,
                     delta -> {
-                        // 1) Live progress line-by-line (already handled inside helper via indicator.setText2)
+                        // 1) Live progress line-by-line (already handled inside helper via myConsole.setText2)
                         // 2) Optional: append to an editor buffer for a “typing” effect
                         //    run later on EDT to avoid thrashing:
                         // ApplicationManager.getApplication().invokeLater(() ->
@@ -376,7 +382,7 @@ public final class JAIPilotLLM {
             Client client,
             List<Content> contents,
             GenerateContentConfig cfg,
-            ProgressIndicator indicator,
+            ConsoleView myConsole,
             java.util.function.Consumer<String> onDelta // may be null
     ) throws Exception {
 
@@ -388,9 +394,10 @@ public final class JAIPilotLLM {
             try (var stream = client.models.generateContentStream(model, contents, cfg)) {
                 int lineCounter = 0;
                 for (var chunk : stream) {
-                    if (indicator != null && indicator.isCanceled()) {
-                        throw new com.intellij.openapi.progress.ProcessCanceledException();
-                    }
+//                    TODO
+//                    if (myConsole != null && myConsole.isCanceled()) {
+//                        throw new com.intellij.openapi.progress.ProcessCanceledException();
+//                    }
 
                     // Prefer SDK's direct text accessor
                     String delta = "";
@@ -427,12 +434,12 @@ public final class JAIPilotLLM {
 
                         if (onDelta != null) onDelta.accept(clean);
 
-                        if (indicator != null) {
+                        if (myConsole != null) {
                             int lastNl = attemptBuf.lastIndexOf("\n");
                             String tail = (lastNl >= 0 ? attemptBuf.substring(lastNl + 1) : attemptBuf.toString()).trim();
                             if (!tail.isEmpty()) {
                                 long lineNo = lineCounter + 1;
-                                indicator.setText2(lineNo + ": " + tail);
+                                JAIPilotConsoleManager.print(myConsole,lineNo + ": " + tail,ConsoleViewContentType.NORMAL_OUTPUT);
                             }
                         }
                     }
@@ -461,9 +468,9 @@ public final class JAIPilotLLM {
                     throw e;
                 }
                 long backoffMs = (long) (500L * Math.pow(2, retries - 1));
-                if (indicator != null) {
-                    indicator.setText2("Retry " + retries + "/" + MAX_RETRIES +
-                            " in " + backoffMs + " ms — " + e.getMessage());
+                if (myConsole != null) {
+                    JAIPilotConsoleManager.print(myConsole,"Retry " + retries + "/" + MAX_RETRIES +
+                            " in " + backoffMs + " ms — " + e.getMessage(),ConsoleViewContentType.NORMAL_OUTPUT);
                 }
                 Thread.sleep(backoffMs);
             }
@@ -538,9 +545,9 @@ public final class JAIPilotLLM {
             String errorOutput,
             List<String> contextClassesSource,
             int attempt,
-            ProgressIndicator indicator
+            ConsoleView myConsole
     ) throws Exception {
-        ElapsedTicker ticker = new ElapsedTicker(indicator, "Attempt #"+attempt+": Running model…");
+        ElapsedTicker ticker = new ElapsedTicker(myConsole, "Attempt #"+attempt+": Running model…");
         ticker.start();
         Telemetry.genStarted(testFileName, String.valueOf(attempt));
         long start = System.nanoTime();
@@ -607,31 +614,31 @@ public final class JAIPilotLLM {
 
     // ---- elapsed-time ticker (minimal, per-call) ----
     private static final class ElapsedTicker {
-        private final ProgressIndicator indicator;
+        private final ConsoleView myConsole;
         private final String prefix;
         private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         private final long startNanos = System.nanoTime();
         private ScheduledFuture<?> task;
 
-        ElapsedTicker(ProgressIndicator indicator, String prefix) {
-            this.indicator = indicator;
+        ElapsedTicker(ConsoleView myConsole, String prefix) {
+            this.myConsole = myConsole;
             this.prefix = prefix == null ? "" : prefix;
         }
 
         void start() {
-            if (indicator == null) return;
+            if (myConsole == null) return;
             task = scheduler.scheduleAtFixedRate(() -> {
                 String hms = formatElapsed(System.nanoTime() - startNanos);
-                SwingUtilities.invokeLater(() -> indicator.setText(prefix + " (" + hms + ")"));
+                SwingUtilities.invokeLater(() -> JAIPilotConsoleManager.print(myConsole,prefix + " (" + hms + ")", ConsoleViewContentType.NORMAL_OUTPUT));
             }, 0, 1, TimeUnit.SECONDS);
         }
 
         void stopWithMessage(String finalPrefix) {
             if (task != null) task.cancel(true);
             scheduler.shutdownNow();
-            if (indicator != null) {
+            if (myConsole != null) {
                 String hms = formatElapsed(System.nanoTime() - startNanos);
-                SwingUtilities.invokeLater(() -> indicator.setText(finalPrefix + " (" + hms + ")"));
+                SwingUtilities.invokeLater(() -> JAIPilotConsoleManager.print(myConsole,finalPrefix + " (" + hms + ")",ConsoleViewContentType.NORMAL_OUTPUT));
             }
         }
 

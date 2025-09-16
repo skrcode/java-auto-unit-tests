@@ -3,12 +3,14 @@ package com.github.skrcode.javaautounittests;
 import com.github.skrcode.javaautounittests.DTOs.Prompt;
 import com.github.skrcode.javaautounittests.DTOs.PromptResponseOutput;
 import com.github.skrcode.javaautounittests.settings.AISettings;
+import com.github.skrcode.javaautounittests.settings.JAIPilotConsoleManager;
 import com.github.skrcode.javaautounittests.settings.telemetry.Telemetry;
 import com.google.genai.types.Content;
+import com.intellij.execution.ui.ConsoleView;
+import com.intellij.execution.ui.ConsoleViewContentType;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.command.WriteCommandAction;
-import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.util.Ref;
@@ -25,27 +27,20 @@ public final class TestGenerationWorker {
 
     private static final int MAX_ATTEMPTS= 20;
 
-    public static void process(Project project, PsiClass cut, @NotNull ProgressIndicator indicator, PsiDirectory testRoot) {
+    public static void process(Project project, PsiClass cut, @NotNull ConsoleView myConsole, PsiDirectory testRoot) {
 
         int attempt = 1;
         try {
             long start = System.nanoTime();
             PsiDirectory packageDir = resolveTestPackageDir(project, testRoot, cut);
             if (packageDir == null) {
-                indicator.setText("Cannot determine package for CUT");
+                JAIPilotConsoleManager.print(myConsole,"Cannot determine package for CUT", ConsoleViewContentType.ERROR_OUTPUT);
                 return;
             }
 
             String cutName = ReadAction.compute(() -> cut.isValid() ? cut.getName() : "<invalid>");
             String cutClass = CUTUtil.cleanedSourceForLLM(project, cut);
             Prompt prompt = new Prompt();
-            prompt.setGenerateMorePlaceholder(PromptBuilder.getPromptPlaceholder("0.0.20/generate-more-prompt"));
-            prompt.setSystemInstructionsPlaceholder(PromptBuilder.getPromptPlaceholder("0.0.20/systeminstructions-prompt"));
-            prompt.setSystemInstructionsContextPlaceholder(PromptBuilder.getPromptPlaceholder("0.0.20/systeminstructions-context-prompt"));
-            prompt.setErrorOutputPlaceholder(PromptBuilder.getPromptPlaceholder("0.0.20/erroroutput-prompt"));
-            prompt.setInputContextPlaceholder(PromptBuilder.getPromptPlaceholder("0.0.20/input-prompt"));
-            prompt.setContextClassesSourcePlaceholder(PromptBuilder.getPromptPlaceholder("0.0.20/contextclasssource-prompt"));
-            prompt.setExistingTestClassPlaceholder(PromptBuilder.getPromptPlaceholder("0.0.20/testclass-prompt"));
             String errorOutput = "";
             String testFileName = cutName + "Test.java";
             Telemetry.allGenBegin(testFileName);
@@ -60,11 +55,11 @@ public final class TestGenerationWorker {
             for (; ; attempt++) {
                 List<Content> contentsJUnit = new ArrayList<>();
                 contentsJUnit.add(JAIPilotLLM.getInputClassContent(prompt, cutClass));
-                indicator.setText("Generating test : attempt" + attempt + "/" + MAX_ATTEMPTS);
+                JAIPilotConsoleManager.print(myConsole,"Generating test : attempt" + attempt + "/" + MAX_ATTEMPTS,ConsoleViewContentType.NORMAL_OUTPUT);
 
                 Ref<PsiFile> testFile = ReadAction.compute(() -> Ref.create(packageDir.findFile(testFileName)));
                 if (ReadAction.compute(() -> testFile.get()) != null) {
-                    indicator.setText("Compiling #" + attempt + "/" + MAX_ATTEMPTS + " : " + testFileName);
+                    JAIPilotConsoleManager.print(myConsole,"Compiling #" + attempt + "/" + MAX_ATTEMPTS + " : " + testFileName,ConsoleViewContentType.NORMAL_OUTPUT);
                     existingIndividualTestClass = ReadAction.compute(() -> testFile.get().getText());
                     contentsJUnit.add(JAIPilotLLM.getExistingTestClassContent(prompt,existingIndividualTestClass, "model"));
                     contentsContext.add(JAIPilotLLM.getExistingTestClassContent(prompt,existingIndividualTestClass, "user"));
@@ -73,7 +68,7 @@ public final class TestGenerationWorker {
                         errorOutput = BuilderUtil.runJUnitClass(project, testFile.get());
                         if (errorOutput.isEmpty() && isLLMGeneratedAtleastOnce) break;
                     }
-                    indicator.setText("Compiled #" + attempt + "/" + MAX_ATTEMPTS + ": " + testFileName);
+                    JAIPilotConsoleManager.print(myConsole,"Compiled #" + attempt + "/" + MAX_ATTEMPTS + ": " + testFileName,ConsoleViewContentType.NORMAL_OUTPUT);
                 }
 
                 if (attempt > MAX_ATTEMPTS) break;
@@ -85,7 +80,7 @@ public final class TestGenerationWorker {
 
                 for(int contextClassAttempt = 1;contextClassAttempt<=MAX_ATTEMPTS/3;contextClassAttempt++) {
                     contentsContext.add(JAIPilotLLM.getSystemInstructionContextContent(prompt, CUTUtil.findMockitoVersion(project)));
-                    PromptResponseOutput allSingleTestContext = JAIPilotLLM.getAllSingleTestContext(contentsContext, prompt, testFileName,  contextClassAttempt, indicator, CUTUtil.findMockitoVersion(project));
+                    PromptResponseOutput allSingleTestContext = JAIPilotLLM.getAllSingleTestContext(contentsContext, prompt, testFileName,  contextClassAttempt, myConsole, CUTUtil.findMockitoVersion(project));
                     if(allSingleTestContext.getContextClasses().size() == 0) break;
                     contentsContext.add(JAIPilotLLM.getClassContextPathContent(allSingleTestContext.getContextClasses()));
                     Content sourceCodeOfContextClasses = JAIPilotLLM.getClassContextPathSourceContent(prompt, getSourceCodeOfContextClasses(project, allSingleTestContext.getContextClasses()));
@@ -93,20 +88,20 @@ public final class TestGenerationWorker {
                     allSourceCodeOfContextClasses.add(sourceCodeOfContextClasses);
                 }
 
-                indicator.setText("Invoking LLM Attempt #" + attempt + "/" + MAX_ATTEMPTS);
+                JAIPilotConsoleManager.print(myConsole,"Invoking LLM Attempt #" + attempt + "/" + MAX_ATTEMPTS,ConsoleViewContentType.NORMAL_OUTPUT);
                 PromptResponseOutput promptResponseOutput;
                 if(AISettings.getInstance().getMode().equals("Pro"))
-                    promptResponseOutput  = JAIPilotLLM.getAllSingleTest( contentsJUnit, prompt, testFileName, attempt, indicator, CUTUtil.findMockitoVersion(project));
-                else promptResponseOutput = JAIPilotLLM.getAllSingleTest( contentsJUnit, prompt, testFileName, attempt, indicator ,CUTUtil.findMockitoVersion(project));
+                    promptResponseOutput  = JAIPilotLLM.getAllSingleTest( contentsJUnit, prompt, testFileName, attempt, myConsole, CUTUtil.findMockitoVersion(project));
+                else promptResponseOutput = JAIPilotLLM.getAllSingleTest( contentsJUnit, prompt, testFileName, attempt, myConsole ,CUTUtil.findMockitoVersion(project));
                 if(!Objects.isNull(promptResponseOutput.getTestClassCode())) {
                     isLLMGeneratedAtleastOnce = true;
-                    indicator.setText("Successfully invoked LLM Attempt #" + attempt + "/" + MAX_ATTEMPTS);
+                    JAIPilotConsoleManager.print(myConsole,"Successfully invoked LLM Attempt #" + attempt + "/" + MAX_ATTEMPTS,ConsoleViewContentType.NORMAL_OUTPUT);
                     BuilderUtil.write(project, testFile, packageDir, testFileName, promptResponseOutput.getTestClassCode());
                 }
             }
             long end = System.nanoTime();
             Telemetry.allGenDone(testFileName, String.valueOf(attempt), (end - start) / 1_000_000);
-            indicator.setText("Successfully generated Test Class " + testFileName);
+            JAIPilotConsoleManager.print(myConsole,"Successfully generated Test Class " + testFileName,ConsoleViewContentType.NORMAL_OUTPUT);
         }
         catch (Throwable t) {
             Telemetry.allGenError(String.valueOf(attempt), t.getMessage());

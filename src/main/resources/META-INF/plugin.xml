@@ -61,6 +61,12 @@
 
 
     <extensions defaultExtensionNs="com.intellij">
+        <toolWindow
+                id="JAIPilot Console"
+                anchor="bottom"
+                factoryClass="com.github.skrcode.javaautounittests.settings.TestGenerationToolWindowFactory"
+                icon="/icons/jaipilot.svg"
+                canCloseContents="false"/>
 
         <applicationService serviceImplementation="com.github.skrcode.javaautounittests.settings.AISettings"/>
         <projectConfigurable instance="com.github.skrcode.javaautounittests.settings.AISettingsConfigurable" />

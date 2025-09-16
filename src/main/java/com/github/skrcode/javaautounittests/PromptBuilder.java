@@ -17,7 +17,7 @@ import java.util.Map;
 public class PromptBuilder {
 
     public static String getPromptPlaceholder(String fileName) {
-        String promptUrl = "https://raw.githubusercontent.com/skrcode/java-auto-unit-tests/refs/heads/main/src/main/resources/0.0.20" + fileName;
+        String promptUrl = "https://raw.githubusercontent.com/skrcode/java-auto-unit-tests/refs/heads/feature/0.0.20/src/main/resources/0.0.20/" + fileName;
 
         HttpClient client = HttpClient.newHttpClient();
         HttpRequest request = HttpRequest.newBuilder()
