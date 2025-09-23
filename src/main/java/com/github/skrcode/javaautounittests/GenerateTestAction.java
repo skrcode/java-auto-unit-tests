@@ -30,8 +30,6 @@ public class GenerateTestAction extends AnAction implements DumbAware {
 
         if (project == null || elements == null) return;
 
-
-
         List<PsiClass> classes = collectClasses(elements);
         if (classes.isEmpty()) {
             Messages.showErrorDialog(project, "No Java classes found in selection.", "JAIPilot");
@@ -42,7 +40,7 @@ public class GenerateTestAction extends AnAction implements DumbAware {
             return;
         }
         if(AISettings.getInstance().getMode().equals("BYOK")) {
-            if (AISettings.getInstance().getModel().isEmpty() || AIProjectSettings.getInstance(project).getTestDirectory().isEmpty() || AISettings.getInstance().getOpenAiKey().isEmpty()) {
+            if (AIProjectSettings.getInstance(project).getTestDirectory().isEmpty() || AISettings.getInstance().getOpenAiKey().isEmpty()) {
                 Messages.showErrorDialog(project, "Please configure details in settings.", "JAIPilot");
                 return;
             }

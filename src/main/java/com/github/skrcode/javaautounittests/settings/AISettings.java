@@ -9,13 +9,9 @@ import org.jetbrains.annotations.Nullable;
 @State(name = "AISettings", storages = @Storage("AISettings.xml"))
 public class AISettings implements PersistentStateComponent<AISettings.State> {
 
-
-
-
     public static class State {
         public String openAiKey = "";       // Free API Key
         public String proKey = "";          // Pro API Key
-        public String model = "";           // Gemini Model (Free mode)
         public String mode = "Pro";
         public boolean telemetryEnabled = true;
     }
@@ -53,14 +49,6 @@ public class AISettings implements PersistentStateComponent<AISettings.State> {
 
     public void setProKey(String key) {
         state.proKey = key;
-    }
-
-    public String getModel() {
-        return state.model;
-    }
-
-    public void setModel(String model) {
-        state.model = model;
     }
 
     public String getMode() {

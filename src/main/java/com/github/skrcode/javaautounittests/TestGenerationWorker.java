@@ -1,121 +1,185 @@
 package com.github.skrcode.javaautounittests;
 
-import com.github.skrcode.javaautounittests.DTOs.Prompt;
+import com.github.javaparser.JavaParser;
+import com.github.skrcode.javaautounittests.DTOs.Content;
 import com.github.skrcode.javaautounittests.DTOs.PromptResponseOutput;
-import com.github.skrcode.javaautounittests.settings.AISettings;
-import com.github.skrcode.javaautounittests.settings.JAIPilotConsoleManager;
+import com.github.skrcode.javaautounittests.settings.ConsolePrinter;
+import com.github.skrcode.javaautounittests.settings.JAIPilotExecutionManager;
 import com.github.skrcode.javaautounittests.settings.telemetry.Telemetry;
-import com.google.genai.types.Content;
 import com.intellij.execution.ui.ConsoleView;
-import com.intellij.execution.ui.ConsoleViewContentType;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.roots.ProjectRootManager;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.util.Ref;
+import com.intellij.openapi.vfs.VfsUtilCore;
+import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.*;
-import com.intellij.psi.search.GlobalSearchScope;
+import org.codehaus.plexus.util.StringUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
+import java.util.Map;
 
 public final class TestGenerationWorker {
 
-    private static final int MAX_ATTEMPTS= 20;
+    private static final int MAX_ATTEMPTS = 100;
 
     public static void process(Project project, PsiClass cut, @NotNull ConsoleView myConsole, PsiDirectory testRoot) {
-
         int attempt = 1;
         try {
             long start = System.nanoTime();
+
             PsiDirectory packageDir = resolveTestPackageDir(project, testRoot, cut);
             if (packageDir == null) {
-                JAIPilotConsoleManager.print(myConsole,"Cannot determine package for CUT", ConsoleViewContentType.ERROR_OUTPUT);
+                Telemetry.genFailed(null,String.valueOf(attempt),"Cannot determine package for CUT");
+                ConsolePrinter.error(myConsole, "Cannot determine package for CUT");
                 return;
             }
 
             String cutName = ReadAction.compute(() -> cut.isValid() ? cut.getName() : "<invalid>");
-            String cutClass = CUTUtil.cleanedSourceForLLM(project, cut);
-            Prompt prompt = new Prompt();
-            String errorOutput = "";
             String testFileName = cutName + "Test.java";
             Telemetry.allGenBegin(testFileName);
 
-            List<Content> contentsContext = new ArrayList<>();
-            List<Content> allSourceCodeOfContextClasses = new ArrayList<>();
+            boolean isLLMGeneratedAtLeastOnce = false;
 
-            contentsContext.add(JAIPilotLLM.getInputClassContent(prompt, cutClass));
-            // Attempts
-            boolean isLLMGeneratedAtleastOnce = false;
-            String existingIndividualTestClass = "";
-            for (; ; attempt++) {
-                List<Content> contentsJUnit = new ArrayList<>();
-                contentsJUnit.add(JAIPilotLLM.getInputClassContent(prompt, cutClass));
-                JAIPilotConsoleManager.print(myConsole,"Generating test : attempt" + attempt + "/" + MAX_ATTEMPTS,ConsoleViewContentType.NORMAL_OUTPUT);
+            JAIPilotExecutionManager.reset();
+            List<Content> contents = new ArrayList<>();
+            String cutSource = CUTUtil.cleanedSourceForLLM(project, cut);
+            contents.add(JAIPilotLLM.getInputClassContent(cutSource));
 
-                Ref<PsiFile> testFile = ReadAction.compute(() -> Ref.create(packageDir.findFile(testFileName)));
-                if (ReadAction.compute(() -> testFile.get()) != null) {
-                    JAIPilotConsoleManager.print(myConsole,"Compiling #" + attempt + "/" + MAX_ATTEMPTS + " : " + testFileName,ConsoleViewContentType.NORMAL_OUTPUT);
-                    existingIndividualTestClass = ReadAction.compute(() -> testFile.get().getText());
-                    contentsJUnit.add(JAIPilotLLM.getExistingTestClassContent(prompt,existingIndividualTestClass, "model"));
-                    contentsContext.add(JAIPilotLLM.getExistingTestClassContent(prompt,existingIndividualTestClass, "user"));
-                    errorOutput = BuilderUtil.compileJUnitClass(project, testFile);
-                    if (errorOutput.isEmpty()) {
-                        errorOutput = BuilderUtil.runJUnitClass(project, testFile.get());
-                        if (errorOutput.isEmpty() && isLLMGeneratedAtleastOnce) break;
-                    }
-                    JAIPilotConsoleManager.print(myConsole,"Compiled #" + attempt + "/" + MAX_ATTEMPTS + ": " + testFileName,ConsoleViewContentType.NORMAL_OUTPUT);
-                }
-
-                if (attempt > MAX_ATTEMPTS) break;
-                if (!errorOutput.isEmpty()) {
-                    contentsJUnit.add(JAIPilotLLM.getErrorOutputContent(prompt, errorOutput));
-                    contentsContext.add(JAIPilotLLM.getErrorOutputContent(prompt, errorOutput));
-                }
-                else if(!existingIndividualTestClass.isEmpty()) contentsJUnit.add(JAIPilotLLM.getGenerateMoreTestsContent(prompt, testFileName));
-
-                for(int contextClassAttempt = 1;contextClassAttempt<=MAX_ATTEMPTS/3;contextClassAttempt++) {
-                    contentsContext.add(JAIPilotLLM.getSystemInstructionContextContent(prompt, CUTUtil.findMockitoVersion(project)));
-                    PromptResponseOutput allSingleTestContext = JAIPilotLLM.getAllSingleTestContext(contentsContext, prompt, testFileName,  contextClassAttempt, myConsole, CUTUtil.findMockitoVersion(project));
-                    if(allSingleTestContext.getContextClasses().size() == 0) break;
-                    contentsContext.add(JAIPilotLLM.getClassContextPathContent(allSingleTestContext.getContextClasses()));
-                    Content sourceCodeOfContextClasses = JAIPilotLLM.getClassContextPathSourceContent(prompt, getSourceCodeOfContextClasses(project, allSingleTestContext.getContextClasses()));
-                    contentsContext.add(sourceCodeOfContextClasses);
-                    allSourceCodeOfContextClasses.add(sourceCodeOfContextClasses);
-                }
-
-                JAIPilotConsoleManager.print(myConsole,"Invoking LLM Attempt #" + attempt + "/" + MAX_ATTEMPTS,ConsoleViewContentType.NORMAL_OUTPUT);
-                PromptResponseOutput promptResponseOutput;
-                if(AISettings.getInstance().getMode().equals("Pro"))
-                    promptResponseOutput  = JAIPilotLLM.getAllSingleTest( contentsJUnit, prompt, testFileName, attempt, myConsole, CUTUtil.findMockitoVersion(project));
-                else promptResponseOutput = JAIPilotLLM.getAllSingleTest( contentsJUnit, prompt, testFileName, attempt, myConsole ,CUTUtil.findMockitoVersion(project));
-                if(!Objects.isNull(promptResponseOutput.getTestClassCode())) {
-                    isLLMGeneratedAtleastOnce = true;
-                    JAIPilotConsoleManager.print(myConsole,"Successfully invoked LLM Attempt #" + attempt + "/" + MAX_ATTEMPTS,ConsoleViewContentType.NORMAL_OUTPUT);
-                    BuilderUtil.write(project, testFile, packageDir, testFileName, promptResponseOutput.getTestClassCode());
+            // Add existing test class (if present) as context
+            Ref<PsiFile> testFileExisting = ReadAction.compute(() -> Ref.create(packageDir.findFile(testFileName)));
+            if (ReadAction.compute(testFileExisting::get) != null) {
+                String existingTestSource = ReadAction.compute(() -> testFileExisting.get().getText());
+                if (existingTestSource != null && !existingTestSource.isBlank()) {
+                    contents.add(JAIPilotLLM.getExistingTestClassContent(existingTestSource));
                 }
             }
+
+            for (; ; attempt++) {
+                ConsolePrinter.section(myConsole, "Attempting");
+
+                // Check if test file already exists and run it
+                Ref<PsiFile> testFile = ReadAction.compute(() -> Ref.create(packageDir.findFile(testFileName)));
+                if (ReadAction.compute(testFile::get) != null) {
+                    ConsolePrinter.info(myConsole, "Compiling Tests " + testFileName);
+                    String errorOutput = BuilderUtil.compileJUnitClass(project, testFile);
+
+                    if (errorOutput.isEmpty()) {
+                        ConsolePrinter.success(myConsole, "Compilaton Successful " + testFileName);
+                        ConsolePrinter.info(myConsole, "Running Tests" + testFileName);
+                        errorOutput = BuilderUtil.runJUnitClass(project, testFile.get());
+                        if(!errorOutput.isEmpty()) {
+                            ConsolePrinter.info(myConsole, "Found tests execution errors " + testFileName);
+                            contents.add(JAIPilotLLM.getOutputContent(errorOutput));
+                        }
+                        else {
+                            ConsolePrinter.success(myConsole, "Tests execution successful " + testFileName);
+                            if(isLLMGeneratedAtLeastOnce) break;
+                        }
+                    }
+                    else {
+                        ConsolePrinter.info(myConsole, "Found compilation errors " + testFileName);
+                        contents.add(JAIPilotLLM.getOutputContent(errorOutput));
+                    }
+                }
+
+                if (attempt > MAX_ATTEMPTS) {
+                    ConsolePrinter.warn(myConsole, "Attempts breached. I have tried my best to compile and execute tests. Please fix the remaining tests manually. " + testFileName);
+                    break;
+                }
+
+                ConsolePrinter.info(myConsole, "Generating tests " + testFileName +" Please wait....");
+                PromptResponseOutput output = JAIPilotLLM.generateContent(
+                        testFileName,
+                        contents,
+                        myConsole,
+                        attempt
+                );
+                ConsolePrinter.info(myConsole, "Generated tests " + testFileName);
+                contents.add(output.getContent());
+                // Iterate through returned contents (can be text or function calls)
+                if (output.getContent() != null) {
+                    for (Content.Part p : output.getContent().getParts()) {
+                        if (p.getText() != null && !p.getText().isBlank()) {
+                            // ✅ Normal test class candidate
+                            isLLMGeneratedAtLeastOnce = true;
+                            String testCode = stripCodeFences(p.getText());
+                            JavaParser parser = new JavaParser();
+                            if (!parser.parse(testCode).isSuccessful()) {
+                                ConsolePrinter.info(myConsole, "Improper Test File Generated.");
+                                continue;
+                            }
+                            ConsolePrinter.success(myConsole, "Test Generated");
+                            ConsolePrinter.codeBlock(myConsole, List.of(testCode.split("\n")));
+                            BuilderUtil.write(project, testFile, packageDir, testFileName, testCode);
+                            ConsolePrinter.success(myConsole, "Written test to test file");
+                        }
+                        if (p.getFunctionCall() != null) {
+                            Content.FunctionCall fc = p.getFunctionCall();
+                            String fn = fc.getName();
+                            Object args = fc.getArgs();
+                            switch (fn) {
+                                case "fetch_mockito_version":
+                                    ConsolePrinter.info(myConsole, "Fetching mockito version");
+                                    contents.add(JAIPilotLLM.getMockitoVersionContent(project));
+                                    break;
+                                case "get_file":
+                                    if (args instanceof Map) {
+                                        Map<?, ?> argMap = (Map<?, ?>) args;
+                                        String filePath = (String) argMap.get("filePath");
+                                        ConsolePrinter.info(myConsole, "Fetching file details "+filePath);
+                                        String toolResult = getSourceCodeOfContextClasses(project, filePath);
+                                        if(StringUtils.isEmpty(toolResult)) {
+                                            ConsolePrinter.info(myConsole, "File not found "+filePath);
+                                            toolResult = filePath + " not found.";
+                                        }
+                                        else ConsolePrinter.success(myConsole, "Fetched file details "+filePath);
+                                        contents.add(JAIPilotLLM.getContextSourceContent(toolResult));
+                                    }
+                                    break;
+                                case "terminate_call":
+                                    ConsolePrinter.warn(myConsole, "Attempts breached. I have tried my best to compile and execute tests. Please fix the remaining tests manually. ");
+                                    Telemetry.allGenError(String.valueOf(attempt), "terminate call");
+                                    return;
+                            }
+                        }
+                    }
+                }
+
+                // Server stop condition
+                if (output.getErrorCode() == 409) {
+                    ConsolePrinter.warn(myConsole, "Attempts breached. I have tried my best to compile and execute tests. Please fix the remaining tests manually.");
+                    break;
+                }
+            }
+
             long end = System.nanoTime();
             Telemetry.allGenDone(testFileName, String.valueOf(attempt), (end - start) / 1_000_000);
-            JAIPilotConsoleManager.print(myConsole,"Successfully generated Test Class " + testFileName,ConsoleViewContentType.NORMAL_OUTPUT);
-        }
-        catch (Throwable t) {
+
+            ConsolePrinter.section(myConsole, "Summary");
+            ConsolePrinter.success(myConsole, "Successfully generated Test Class " + testFileName);
+
+        } catch (Throwable t) {
             Telemetry.allGenError(String.valueOf(attempt), t.getMessage());
+            ConsolePrinter.error(myConsole, "Generation failed: " + t.getMessage());
+
             t.printStackTrace();
             ApplicationManager.getApplication().invokeLater(() ->
-                    Messages.showErrorDialog(t.getMessage(), "Error")
+                    Messages.showErrorDialog(t.getMessage(), "Error. Please retry in a few minutes.")
             );
         }
     }
 
+
     private static @Nullable PsiDirectory resolveTestPackageDir(Project project,
                                                                 PsiDirectory testRoot,
                                                                 PsiClass cut) throws Exception {
-
         PsiPackage cutPkg = ReadAction.compute(() ->
                 JavaDirectoryService.getInstance().getPackage(cut.getContainingFile().getContainingDirectory())
         );
@@ -125,30 +189,40 @@ public final class TestGenerationWorker {
         return getOrCreateSubdirectoryPath(project, testRoot, relPath);
     }
 
-    private static List<String> getSourceCodeOfContextClasses(Project project, List<String> contextClassesPath) {
-        JavaPsiFacade psiFacade = JavaPsiFacade.getInstance(project);
-        GlobalSearchScope scope = GlobalSearchScope.allScope(project);
-
-        List<String> result = new ArrayList<>();
-        if(contextClassesPath == null) return result;
-        for (String contextClassPath : contextClassesPath) {
-            PsiClass psiClass = ReadAction.compute(() -> psiFacade.findClass(contextClassPath, scope));
-
-            if (psiClass == null || !psiClass.isValid()) {
-                result.add(contextClassPath+" is not valid. Attempt to change this.");
-                continue;
-            }
-
-            PsiFile file = ReadAction.compute(() -> psiClass.getContainingFile());
-            if (file == null || !file.isValid()) {
-                result.add(contextClassPath+" is not valid. Attempt to change this.");
-                continue;
-            }
-            String code = ReadAction.compute(file::getText);
-            result.add(code);
+    public static String getSourceCodeOfContextClasses(Project project, String relativePath) {
+        if (relativePath == null || relativePath.isBlank()) {
+            return "";
         }
 
-        return result;
+        String normPath = relativePath.replace("\\", "/");
+
+        VirtualFile vf = findInProjectAndLibraries(project, normPath);
+        if (vf == null) {
+            return "";
+        }
+
+        PsiFile psiFile = ReadAction.compute(() -> PsiManager.getInstance(project).findFile(vf));
+        if (psiFile == null || !psiFile.isValid()) {
+            return "";
+        }
+
+        return ReadAction.compute(psiFile::getText);
+    }
+
+    private static VirtualFile findInProjectAndLibraries(Project project, String relativePath) {
+        // 1. Search in content + source roots
+        for (VirtualFile root : ProjectRootManager.getInstance(project).getContentSourceRoots()) {
+            VirtualFile vf = VfsUtilCore.findRelativeFile(relativePath, root);
+            if (vf != null) return vf;
+        }
+
+        // 2. Search in libraries (class roots, including JARs)
+        for (VirtualFile root : ProjectRootManager.getInstance(project).orderEntries().classes().getRoots()) {
+            VirtualFile vf = VfsUtilCore.findRelativeFile(relativePath, root);
+            if (vf != null) return vf;
+        }
+
+        return null;
     }
 
 
@@ -173,6 +247,12 @@ public final class TestGenerationWorker {
         }
     }
 
+    private static String stripCodeFences(String text) {
+        if (text == null) return null;
+        return text
+                .replaceFirst("(?s)^```(?:java)?\\n", "")  // only at start
+                .replaceFirst("(?s)\\n```$", "");          // only at end
+    }
 
     private TestGenerationWorker() {} // no-instantiation
 }

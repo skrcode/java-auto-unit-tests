@@ -39,15 +39,19 @@ public final class BulkGeneratorService {
             // Create new console tab on EDT
             ConsoleView console = JAIPilotConsoleManager.openNewConsole(project, tabTitle);
 
-            // Header log
+
+// Header log — clean banner
             JAIPilotConsoleManager.print(console,
-                    "▶️ Starting test generation for " + tabTitle,
+                    "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
+                            " 🚀 JAIPilot Test Generation\n" +
+                            " Class: " + tabTitle + "\n" +
+                            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n",
                     ConsoleViewContentType.SYSTEM_OUTPUT);
 
-            // Now kick off background task
+// Background task
             ProgressManager.getInstance().run(new Task.Backgroundable(
                     project,
-                    "▶️ Starting test generation for " + tabTitle,
+                    "Generating tests for " + tabTitle,
                     true
             ) {
                 @Override
@@ -59,7 +63,7 @@ public final class BulkGeneratorService {
 
                     ApplicationManager.getApplication().invokeLater(() ->
                             JAIPilotConsoleManager.print(console,
-                                    "Processing " + qName,
+                                    "⚙️ Processing " + qName,
                                     ConsoleViewContentType.NORMAL_OUTPUT)
                     );
 
@@ -99,6 +103,7 @@ public final class BulkGeneratorService {
                     });
                 }
             });
+
         });
     }
 

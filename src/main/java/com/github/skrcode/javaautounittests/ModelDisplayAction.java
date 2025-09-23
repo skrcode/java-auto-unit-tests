@@ -14,7 +14,6 @@ public class ModelDisplayAction extends AnAction {
     }
 
     public ModelDisplayAction() {
-        super("Model: " + AISettings.getInstance().getModel());
     }
 
 

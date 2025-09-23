@@ -87,8 +87,7 @@ public class AIStatusWidgetFactory implements StatusBarWidgetFactory {
             if ("Pro".equalsIgnoreCase(mode)) {
                 return s.getProKey() != null && !s.getProKey().isBlank();
             } else {
-                return (s.getOpenAiKey() != null && !s.getOpenAiKey().isBlank())
-                        && (s.getModel() != null && !s.getModel().isBlank());
+                return (s.getOpenAiKey() != null && !s.getOpenAiKey().isBlank());
             }
         }
 

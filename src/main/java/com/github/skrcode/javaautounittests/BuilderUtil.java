@@ -30,11 +30,15 @@ import com.intellij.openapi.util.Key;
 import com.intellij.openapi.util.Ref;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.openapi.wm.ToolWindow;
+import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.psi.*;
 import com.intellij.psi.codeStyle.CodeStyleManager;
 import com.intellij.psi.codeStyle.JavaCodeStyleManager;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -43,16 +47,19 @@ import java.util.concurrent.atomic.AtomicReference;
  * Compiles a JUnit test class, runs it with coverage, and returns:
  *   • ""  → everything succeeded
  *   • compilation errors if compilation failed
- *   • console output if test execution failed (non-zero exit or test failures)
+ *   • structured summary of test execution (failures, ignored, etc.)
+ *
+ * Refocuses the JAIPilot Console after each run.
  */
 public class BuilderUtil {
 
     private BuilderUtil() {}
 
+    // --- Run JUnit class silently and parse TeamCity output ---
     public static String runJUnitClass(Project project, PsiFile psiFile) {
         AtomicReference<ExecutionEnvironment> envRef = new AtomicReference<>();
 
-        // --- Step 1: build environment (EDT) ---
+        // Step 1: Build environment
         ApplicationManager.getApplication().invokeAndWait(() -> {
             JUnitConfigurationType configType = JUnitConfigurationType.getInstance();
             RunnerAndConfigurationSettings settings =
@@ -80,13 +87,17 @@ public class BuilderUtil {
         if (env == null) return "FAILED_TO_CREATE_ENV";
 
         CountDownLatch latch = new CountDownLatch(1);
-        StringBuilder failures = new StringBuilder();
 
-        // --- Step 2: run configuration (EDT) ---
+        // Track results
+        List<String> passedTests = new ArrayList<>();
+        List<String> failedTests = new ArrayList<>();
+        List<String> ignoredTests = new ArrayList<>();
+
+        // Step 2: Run configuration silently
         ApplicationManager.getApplication().invokeAndWait(() -> {
             ProgramRunner<?> runner = ProgramRunner.getRunner(env.getExecutor().getId(), env.getRunProfile());
             if (runner == null) {
-                failures.append("NO_RUNNER_FOUND");
+                failedTests.add("NO_RUNNER_FOUND");
                 latch.countDown();
                 return;
             }
@@ -99,18 +110,37 @@ public class BuilderUtil {
                             @Override
                             public void onTextAvailable(ProcessEvent event, Key outputType) {
                                 String line = event.getText().trim();
-                                if (line.startsWith("##teamcity[testFailed") && failures.isEmpty()) {
-                                    String testName = extractAttr(line, "name");
+
+                                if (line.startsWith("##teamcity[testStarted")) {
+                                    String name = extractAttr(line, "name");
+                                    passedTests.add(name);
+                                } else if (line.startsWith("##teamcity[testFailed")) {
+                                    String name = extractAttr(line, "name");
                                     String message = extractAttr(line, "message");
                                     String details = extractAttr(line, "details");
 
-                                    failures.append(line)
-                                            .append("\n\n");
+                                    failedTests.add(name + " → " + message +
+                                            (details.isEmpty() ? "" : " (" + details + ")"));
+
+                                    passedTests.remove(name);
+                                } else if (line.startsWith("##teamcity[testIgnored")) {
+                                    String name = extractAttr(line, "name");
+                                    ignoredTests.add(name);
+                                    passedTests.remove(name);
                                 }
                             }
+
                             @Override
                             public void processTerminated(ProcessEvent event) {
                                 latch.countDown();
+                                // ✅ Refocus JAIPilot Console after tests finish
+                                ApplicationManager.getApplication().invokeLater(() -> {
+                                    ToolWindow toolWindow =
+                                            ToolWindowManager.getInstance(project).getToolWindow("JAIPilot Console");
+                                    if (toolWindow != null) {
+                                        toolWindow.show();
+                                    }
+                                });
                             }
                         });
                     } else {
@@ -118,7 +148,7 @@ public class BuilderUtil {
                     }
                 });
             } catch (Exception e) {
-                failures.append("TEST_EXECUTION_ERROR: ").append(e.getMessage());
+                failedTests.add("TEST_EXECUTION_ERROR: " + e.getMessage());
                 latch.countDown();
             }
         });
@@ -132,7 +162,7 @@ public class BuilderUtil {
             return "TEST_INTERRUPTED";
         }
 
-        return failures.length() == 0 ? "" : failures.toString().trim();
+        return joinLines(failedTests);
     }
 
     private static String extractAttr(String line, String key) {
@@ -143,36 +173,51 @@ public class BuilderUtil {
         return (end > start) ? line.substring(start, end) : "";
     }
 
-
-    public static String compileJUnitClass(Project project, Ref<PsiFile> testFile)  {
-
+    // --- Compile JUnit class silently ---
+    public static String compileJUnitClass(Project project, Ref<PsiFile> testFile) {
         CountDownLatch latch = new CountDownLatch(1);
         StringBuilder result = new StringBuilder();
-        VirtualFile file = testFile.get().getVirtualFile();
-
-        ApplicationManager.getApplication().invokeAndWait(() -> {
-            CompilerManager.getInstance(project).compile(new VirtualFile[]{file}, (aborted, errors, warnings, context) -> {
-                if (aborted) {
-                    result.append("COMPILATION_ABORTED");
-                } else if (errors > 0) {
-                    result.append("COMPILATION_FAILED\n");
-                    for (CompilerMessage msg : context.getMessages(CompilerMessageCategory.ERROR)) {
-                        int line = ((CompilerMessageImpl) msg).getLine();
-                        String codeLine = (line > 0) ? getLineFromVirtualFile(project, msg.getVirtualFile(), line) : "<unknown>";
-                        result.append("Error at line :" + codeLine + "\n"+msg.getMessage()).append("\n\n");
-                    }
-                }
-                latch.countDown();
-            });
-        });
-
         try {
-            if (!latch.await(60, TimeUnit.SECONDS)) {
-                result.append("COMPILATION_TIMEOUT");
+            VirtualFile file = testFile.get().getVirtualFile();
+
+            ApplicationManager.getApplication().invokeAndWait(() -> {
+                CompilerManager.getInstance(project).compile(new VirtualFile[]{file}, (aborted, errors, warnings, context) -> {
+                    if (aborted) {
+                        result.append("COMPILATION_ABORTED");
+                    } else if (errors > 0) {
+                        result.append("COMPILATION_FAILED\n");
+                        for (CompilerMessage msg : context.getMessages(CompilerMessageCategory.ERROR)) {
+                            int line = ((CompilerMessageImpl) msg).getLine();
+                            String codeLine = (line > 0)
+                                    ? getLineFromVirtualFile(project, msg.getVirtualFile(), line)
+                                    : "<unknown>";
+                            result.append("Error at line " + line + ": " + codeLine + "\n" + msg.getMessage())
+                                    .append("\n\n");
+                        }
+                    }
+                    latch.countDown();
+                    // ✅ Refocus JAIPilot Console after compile finishes
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        ToolWindow toolWindow =
+                                ToolWindowManager.getInstance(project).getToolWindow("JAIPilot Console");
+                        if (toolWindow != null) {
+                            toolWindow.show();
+                        }
+                    });
+                });
+            });
+
+            try {
+                if (!latch.await(60, TimeUnit.SECONDS)) {
+                    result.append("COMPILATION_TIMEOUT");
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                result.append("COMPILATION_INTERRUPTED");
             }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            result.append("COMPILATION_INTERRUPTED");
+        }
+        catch (Exception e) {
+            result.append("Test Class not found");
         }
 
         return result.toString().trim();
@@ -193,7 +238,7 @@ public class BuilderUtil {
         return doc.getText(new TextRange(startOffset, endOffset)).trim();
     }
 
-
+    // --- Write file with cleanup ---
     public static void write(Project project,
                              Ref<PsiFile> testFile,
                              PsiDirectory packageDir,
@@ -218,17 +263,11 @@ public class BuilderUtil {
                 fileToProcess = addedFile;
             }
 
-            // ✅ Optimize imports
             JavaCodeStyleManager.getInstance(project).optimizeImports(fileToProcess);
-
-            // ✅ Rearrange entries
-//            CodeStyleManager.getInstance(project).(fileToProcess);
             new ReformatCodeProcessor(project, fileToProcess, null, false).run();
-
-            // ✅ Cleanup code (reformat)
             CodeStyleManager.getInstance(project).reformat(fileToProcess);
         });
     }
 
-
+    private static String joinLines(List<String> list) { if (list == null || list.isEmpty()) return ""; return String.join("\n", list); }
 }

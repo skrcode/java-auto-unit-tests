@@ -1,24 +1,22 @@
 package com.github.skrcode.javaautounittests.DTOs;
 
-import java.util.List;
-
 public class PromptResponseOutput {
-    private String testClassCode;
-    private List<String> contextClasses;
+    private Content content;
+    private int errorCode;
 
-    public String getTestClassCode() {
-        return testClassCode;
+    public Content getContent() {
+        return content;
     }
 
-    public void setTestClassCode(String testClassCode) {
-        this.testClassCode = testClassCode;
+    public void setContent(Content content) {
+        this.content = content;
     }
 
-    public List<String> getContextClasses() {
-        return contextClasses;
+    public int getErrorCode() {
+        return errorCode;
     }
 
-    public void setContextClasses(List<String> contextClasses) {
-        this.contextClasses = contextClasses;
+    public void setErrorCode(int errorCode) {
+        this.errorCode = errorCode;
     }
 }

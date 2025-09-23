@@ -1,7 +1,6 @@
 // JAIPilot Settings — with “How to use” box at top
 package com.github.skrcode.javaautounittests.settings;
 
-import com.github.skrcode.javaautounittests.PromptBuilder;
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory;
 import com.intellij.openapi.options.Configurable;
 import com.intellij.openapi.project.Project;
@@ -19,12 +18,7 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.LineBorder;
 import java.awt.*;
-import java.awt.datatransfer.Clipboard;
-import java.awt.datatransfer.DataFlavor;
 import java.net.URI;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
 
 public class AISettingsConfigurable implements Configurable {
 
@@ -48,7 +42,6 @@ public class AISettingsConfigurable implements Configurable {
     // Inputs
     private JBPasswordField geminiApiKeyField;
     private JBPasswordField jaipilotKeyField;
-    private JComboBox<String> modelCombo;
     private TextFieldWithBrowseButton testDirField;
 
     // Common
@@ -199,12 +192,7 @@ public class AISettingsConfigurable implements Configurable {
         showGemini.addActionListener(ev -> setReveal(geminiApiKeyField, showGemini.isSelected()));
         geminiRow.add(showGemini);
 
-        modelCombo = new JComboBox<>(new String[]{"Loading models..."});
-        sizeCombo(modelCombo, fieldSize);
-        modelCombo.setEnabled(false);
-
         addFormBlock(customPanel, "Gemini API Key:", geminiRow);
-        addFormBlock(customPanel, "Select Gemini Model:", modelCombo);
 
         modeCards.add(jaipilotPanel, "JAIPilot");
         modeCards.add(customPanel,   "Custom");
@@ -230,7 +218,6 @@ public class AISettingsConfigurable implements Configurable {
         }
 
         updateModeFields();
-        new Thread(this::loadModelsInBackground, "JAIPilot-LoadModels").start();
         return rootPanel;
     }
 
@@ -247,36 +234,13 @@ public class AISettingsConfigurable implements Configurable {
     }
 
     private void sizeField(JTextField field, Dimension d) { field.setPreferredSize(d); field.setMaximumSize(d); }
-    private void sizeCombo(JComboBox<?> combo, Dimension d) { combo.setPreferredSize(d); combo.setMaximumSize(d); }
     private void sizeBrowse(TextFieldWithBrowseButton b, Dimension d) { b.setPreferredSize(d); b.setMaximumSize(d); }
 
     private void updateModeFields() {
         boolean isCustom = customRadio.isSelected();
         cardLayout.show(modeCards, isCustom ? "Custom" : "JAIPilot");
-        modelCombo.setEnabled(isCustom);
         rootPanel.revalidate();
         rootPanel.repaint();
-    }
-
-    private void loadModelsInBackground() {
-        try {
-            Map<String, List<String>> models = PromptBuilder.getModels();
-            List<String> allModels = new ArrayList<>();
-            models.values().forEach(allModels::addAll);
-            SwingUtilities.invokeLater(() -> {
-                modelCombo.removeAllItems();
-                for (String model : allModels) modelCombo.addItem(model);
-                String saved = StringUtil.notNullize(AISettings.getInstance().getModel());
-                if (!saved.isEmpty()) modelCombo.setSelectedItem(saved);
-                modelCombo.setEnabled(customRadio.isSelected());
-            });
-        } catch (Exception ex) {
-            SwingUtilities.invokeLater(() -> {
-                modelCombo.removeAllItems();
-                modelCombo.addItem("Error loading models");
-                modelCombo.setEnabled(false);
-            });
-        }
     }
 
     private String detectTestRoot(Project project) {
@@ -292,12 +256,10 @@ public class AISettingsConfigurable implements Configurable {
     public boolean isModified() {
         AISettings.State app = AISettings.getInstance().getState();
         String projTestDir = AIProjectSettings.getInstance(project).getTestDirectory();
-        String selModel = (String) modelCombo.getSelectedItem();
 
         return !getMode().equals(StringUtil.notNullize(app.mode))
                 || !StringUtil.equals(geminiApiKeyField.getText(), StringUtil.notNullize(app.openAiKey))
                 || !StringUtil.equals(jaipilotKeyField.getText(), StringUtil.notNullize(app.proKey))
-                || !StringUtil.equals(StringUtil.notNullize(selModel), StringUtil.notNullize(app.model))
                 || !StringUtil.equals(StringUtil.notNullize(testDirField.getText()), StringUtil.notNullize(projTestDir))
                 || telemetryCheck.isSelected() != AISettings.getInstance().isTelemetryEnabled();
     }
@@ -308,8 +270,6 @@ public class AISettingsConfigurable implements Configurable {
         app.setMode(getMode());
         app.setOpenAiKey(geminiApiKeyField.getText());
         app.setProKey(jaipilotKeyField.getText());
-        Object sel = modelCombo.getSelectedItem();
-        app.setModel(sel == null ? "" : sel.toString());
         app.setTelemetryEnabled(telemetryCheck.isSelected());
 
         AIProjectSettings proj = AIProjectSettings.getInstance(project);
@@ -325,7 +285,6 @@ public class AISettingsConfigurable implements Configurable {
 
         geminiApiKeyField.setText(StringUtil.notNullize(app.openAiKey));
         jaipilotKeyField.setText(StringUtil.notNullize(app.proKey));
-        modelCombo.setSelectedItem(StringUtil.notNullize(app.model));
 
         String projTestDir = AIProjectSettings.getInstance(project).getTestDirectory();
         testDirField.setText(StringUtil.notNullize(projTestDir));
@@ -346,12 +305,5 @@ public class AISettingsConfigurable implements Configurable {
             Object b = f.getClientProperty("echoBackup");
             if (b instanceof Character) f.setEchoChar((Character) b);
         }
-    }
-    private void pasteFromClipboard(JTextField field) {
-        try {
-            Clipboard cb = Toolkit.getDefaultToolkit().getSystemClipboard();
-            String s = (String) cb.getData(DataFlavor.stringFlavor);
-            if (s != null) field.setText(s.trim());
-        } catch (Exception ignored) {}
     }
 }
