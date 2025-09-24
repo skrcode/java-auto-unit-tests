@@ -157,6 +157,13 @@ public final class TestGenerationWorker {
                     ConsolePrinter.warn(myConsole, "Attempts breached. I have tried my best to compile and execute tests. Please fix the remaining tests manually.");
                     break;
                 }
+
+                if (output.getErrorCode() == 504) {
+                    ConsolePrinter.warn(myConsole,
+                            "This class is too large for JAIPilot Free. Please upgrade to JAIPilot Pro to generate JUnit tests for larger classes.");
+                    break;
+                }
+
             }
 
             long end = System.nanoTime();

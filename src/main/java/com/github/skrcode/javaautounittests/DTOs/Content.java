@@ -39,6 +39,7 @@ public class Content {
 
     // Nested DTO for each part of the message
     public static class Part {
+        private String thoughtSignature;
         private String text;
         private FunctionCall functionCall;
 
@@ -68,10 +69,19 @@ public class Content {
             this.functionCall = functionCall;
         }
 
+        public String getThoughtSignature() {
+            return thoughtSignature;
+        }
+
+        public void setThoughtSignature(String thoughtSignature) {
+            this.thoughtSignature = thoughtSignature;
+        }
+
         @Override
         public String toString() {
             return "Part{" +
-                    "text='" + text + '\'' +
+                    "thoughtSignature='" + thoughtSignature + '\'' +
+                    ", text='" + text + '\'' +
                     ", functionCall=" + functionCall +
                     '}';
         }

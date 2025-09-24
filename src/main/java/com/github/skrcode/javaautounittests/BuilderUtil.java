@@ -112,21 +112,20 @@ public class BuilderUtil {
                                 String line = event.getText().trim();
 
                                 if (line.startsWith("##teamcity[testStarted")) {
-                                    String name = extractAttr(line, "name");
-                                    passedTests.add(name);
+//                                    String name = extractAttr(line, "name");
+//                                    passedTests.add(name);
                                 } else if (line.startsWith("##teamcity[testFailed")) {
-                                    String name = extractAttr(line, "name");
-                                    String message = extractAttr(line, "message");
-                                    String details = extractAttr(line, "details");
+//                                    String name = extractAttr(line, "name");
+//                                    String message = extractAttr(line, "message");
+//                                    String details = extractAttr(line, "details");
 
-                                    failedTests.add(name + " → " + message +
-                                            (details.isEmpty() ? "" : " (" + details + ")"));
+                                    failedTests.add(line);
 
-                                    passedTests.remove(name);
+//                                    passedTests.remove(name);
                                 } else if (line.startsWith("##teamcity[testIgnored")) {
                                     String name = extractAttr(line, "name");
-                                    ignoredTests.add(name);
-                                    passedTests.remove(name);
+//                                    ignoredTests.add(name);
+//                                    passedTests.remove(name);
                                 }
                             }
 
