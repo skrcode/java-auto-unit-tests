@@ -56,7 +56,7 @@ public class BuilderUtil {
     private BuilderUtil() {}
 
     // --- Run JUnit class silently and parse TeamCity output ---
-    public static String runJUnitClass(Project project, PsiFile psiFile) {
+    public static String runJUnitClass(Project project, PsiFile psiFile) throws Exception {
         AtomicReference<ExecutionEnvironment> envRef = new AtomicReference<>();
 
         // Step 1: Build environment
@@ -154,13 +154,15 @@ public class BuilderUtil {
 
         try {
             if (!latch.await(200, TimeUnit.SECONDS)) {
-                return "TEST_EXECUTION_TIMEOUT";
+                throw new Exception("Test Execution Timeout. Cannot run tests. Please fix and retry.");
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return "TEST_INTERRUPTED";
+            throw new Exception("Test Execution Interrupted. Cannot run tests. Please fix and retry.");
         }
 
+        if(failedTests.size() > 0)
+            return failedTests.get(0);
         return joinLines(failedTests);
     }
 

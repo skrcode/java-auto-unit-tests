@@ -72,7 +72,7 @@ public final class TestGenerationWorker {
 
                     if (errorOutput.isEmpty()) {
                         ConsolePrinter.success(myConsole, "Compilaton Successful " + testFileName);
-                        ConsolePrinter.info(myConsole, "Running Tests" + testFileName);
+                        ConsolePrinter.info(myConsole, "Running Tests " + testFileName);
                         errorOutput = BuilderUtil.runJUnitClass(project, testFile.get());
                         if(!errorOutput.isEmpty()) {
                             ConsolePrinter.info(myConsole, "Found tests execution errors " + testFileName);
