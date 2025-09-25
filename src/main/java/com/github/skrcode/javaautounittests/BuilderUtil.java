@@ -160,9 +160,6 @@ public class BuilderUtil {
             Thread.currentThread().interrupt();
             throw new Exception("Test Execution Interrupted. Cannot run tests. Please fix and retry.");
         }
-
-        if(failedTests.size() > 0)
-            return failedTests.get(0);
         return joinLines(failedTests);
     }
 
