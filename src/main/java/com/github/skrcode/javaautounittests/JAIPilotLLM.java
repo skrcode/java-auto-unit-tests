@@ -1,5 +1,6 @@
 package com.github.skrcode.javaautounittests;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.skrcode.javaautounittests.DTOs.Content;
 import com.github.skrcode.javaautounittests.DTOs.PromptResponseOutput;
@@ -81,7 +82,7 @@ public final class JAIPilotLLM {
 
         while (true) {
             try {
-                // Build request payload
+                // --- 1. Create Job ---
                 Map<String, Object> body = new LinkedHashMap<>();
                 body.put("attemptNumber", attempt);
                 body.put("contents", contents);
@@ -104,29 +105,70 @@ public final class JAIPilotLLM {
                         .connectTimeout(Duration.ofSeconds(30))
                         .build();
 
-                HttpRequest req = HttpRequest.newBuilder()
+                HttpRequest createJobReq = HttpRequest.newBuilder()
                         .uri(URI.create("https://otxfylhjrlaesjagfhfi.supabase.co/functions/v1/invoke-junit-llm-stream"))
-                        .timeout(Duration.ofMinutes(10))
+                        .timeout(Duration.ofSeconds(30))
                         .header("Accept", "application/json")
                         .header("Content-Type", "application/json")
                         .header(headerName, headerValue == null ? "" : headerValue)
                         .POST(HttpRequest.BodyPublishers.ofString(requestJson, StandardCharsets.UTF_8))
                         .build();
 
-                // ✅ Attempt API call
-                HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+                HttpResponse<String> createJobResp =
+                        http.send(createJobReq, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 
-                if (resp.statusCode() / 100 != 2) {
-                    throw new RuntimeException("API error: " + resp.statusCode() + " " + resp.body());
+                if (createJobResp.statusCode() / 100 != 2) {
+                    throw new RuntimeException("API error (create-job): " +
+                            createJobResp.statusCode() + " " + createJobResp.body());
                 }
 
-                PromptResponseOutput out = MAPPER.readValue(resp.body(), PromptResponseOutput.class);
+                JsonNode createJobJson = MAPPER.readTree(createJobResp.body());
+                String jobId = createJobJson.get("jobId").asText();
 
-                long end = System.nanoTime();
+                // --- 2. Poll until done ---
+                int pollTime = 0;
+                int sleepTime = 5000; // 5 s
+                int maxPollingTime = 450000; // 450 s
+                while (true) {
+                    if(pollTime > maxPollingTime) {
+                        throw new RuntimeException("Job timed out after " + maxPollingTime + "seconds");
+                    }
+                    HttpRequest pollReq = HttpRequest.newBuilder()
+                            .uri(URI.create("https://otxfylhjrlaesjagfhfi.supabase.co/functions/v1/fetch-job?id=" + jobId))
+                            .timeout(Duration.ofSeconds(30))
+                            .header("Accept", "application/json")
+                            .header(headerName, headerValue == null ? "" : headerValue)
+                            .GET()
+                            .build();
 
-                Telemetry.genCompleted(testClassName, String.valueOf(attempt), (end - start) / 1_000_000);
-                ConsolePrinter.success(myConsole, "Generated test class via " + AISettings.getInstance().getMode());
-                return out;
+                    HttpResponse<String> pollResp =
+                            http.send(pollReq, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+
+                    if (pollResp.statusCode() / 100 != 2) {
+                        throw new RuntimeException("API error (job-status): " +
+                                pollResp.statusCode() + " " + pollResp.body());
+                    }
+
+                    JsonNode pollJson = MAPPER.readTree(pollResp.body());
+                    String status = pollJson.get("status").asText();
+
+                    if ("done".equalsIgnoreCase(status)) {
+                        String output = pollJson.get("output").asText();
+                        PromptResponseOutput out = MAPPER.readValue(output, PromptResponseOutput.class);
+
+                        long end = System.nanoTime();
+                        Telemetry.genCompleted(testClassName, String.valueOf(attempt), (end - start) / 1_000_000);
+                        ConsolePrinter.success(myConsole,
+                                "Generated test class via " + AISettings.getInstance().getMode());
+                        return out;
+                    } else if ("error".equalsIgnoreCase(status)) {
+                        throw new RuntimeException("Job failed: " + pollJson.get("output").asText());
+                    }
+
+                    // Wait before next poll
+                    pollTime += sleepTime;
+                    Thread.sleep(sleepTime);
+                }
 
             } catch (Throwable t) {
                 retries++;
@@ -137,7 +179,7 @@ public final class JAIPilotLLM {
                     throw new Exception("Max retries reached: " + t.getMessage(), t);
                 }
 
-                long sleepMillis = backoffMillis + (long)(Math.random() * 250); // jitter
+                long sleepMillis = backoffMillis + (long) (Math.random() * 250); // jitter
                 ConsolePrinter.warn(myConsole,
                         "Retrying request (" + retries + "/" + MAX_RETRIES + ") after " + sleepMillis + "ms: " + t.getMessage());
 
@@ -146,4 +188,5 @@ public final class JAIPilotLLM {
             }
         }
     }
+
 }
