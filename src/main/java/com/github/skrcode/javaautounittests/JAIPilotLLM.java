@@ -117,8 +117,14 @@ public final class JAIPilotLLM {
                 HttpResponse<String> createJobResp =
                         http.send(createJobReq, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 
+                if (createJobResp.statusCode() / 100 == 4) {
+                    PromptResponseOutput promptResponseOutput = new PromptResponseOutput();
+                    promptResponseOutput.setErrorCode(createJobResp.statusCode());
+                    promptResponseOutput.setErrorBody(createJobResp.body());
+                    return promptResponseOutput;
+                }
                 if (createJobResp.statusCode() / 100 != 2) {
-                    throw new RuntimeException("API error (create-job): " +
+                    throw new RuntimeException("Error : " +
                             createJobResp.statusCode() + " " + createJobResp.body());
                 }
 

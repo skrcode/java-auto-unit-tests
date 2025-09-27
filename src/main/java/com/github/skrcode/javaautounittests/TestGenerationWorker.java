@@ -7,6 +7,9 @@ import com.github.skrcode.javaautounittests.settings.ConsolePrinter;
 import com.github.skrcode.javaautounittests.settings.JAIPilotExecutionManager;
 import com.github.skrcode.javaautounittests.settings.telemetry.Telemetry;
 import com.intellij.execution.ui.ConsoleView;
+import com.intellij.ide.BrowserUtil;
+import com.intellij.notification.NotificationGroupManager;
+import com.intellij.notification.NotificationType;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.command.WriteCommandAction;
@@ -21,6 +24,7 @@ import org.codehaus.plexus.util.StringUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import javax.swing.event.HyperlinkEvent;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -153,9 +157,8 @@ public final class TestGenerationWorker {
                 }
 
                 // Server stop condition
-                if (output.getErrorCode() == 409) {
-                    ConsolePrinter.warn(myConsole, "Attempts breached. I have tried my best to compile and execute tests. Please fix the remaining tests manually.");
-                    break;
+                if (output.getErrorCode() / 100 == 4) {
+                    throw new Exception(output.getErrorBody());
                 }
 
                 if (output.getErrorCode() == 504) {
@@ -171,6 +174,20 @@ public final class TestGenerationWorker {
 
             ConsolePrinter.section(myConsole, "Summary");
             ConsolePrinter.success(myConsole, "Successfully generated Test Class " + testFileName);
+            NotificationGroupManager.getInstance()
+                    .getNotificationGroup("JAIPilot - One-Click Automatic JUnit Test Generator Feedback")
+                    .createNotification(
+                            "All tests generated!",
+                            "If JAIPilot helped you, please <a href=\"https://plugins.jetbrains.com/plugin/27706-jaipilot--ai-unit-test-generator/edit/reviews/new\">leave a review</a> and ⭐️ rate it - it helps a lot!",
+                            NotificationType.INFORMATION
+                    )
+                    .setListener((notification, event) -> {
+                        if (event.getEventType() == HyperlinkEvent.EventType.ACTIVATED) {
+                            BrowserUtil.browse(event.getURL().toString());
+                            notification.expire();
+                        }
+                    })
+                    .notify(project);
 
         } catch (Throwable t) {
             Telemetry.allGenError(String.valueOf(attempt), t.getMessage());

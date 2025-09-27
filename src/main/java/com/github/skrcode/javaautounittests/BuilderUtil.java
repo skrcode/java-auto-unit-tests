@@ -153,8 +153,8 @@ public class BuilderUtil {
         });
 
         try {
-            if (!latch.await(200, TimeUnit.SECONDS)) {
-                throw new Exception("Test Execution Timeout. Cannot run tests. Please fix and retry.");
+            if (!latch.await(60, TimeUnit.SECONDS)) {
+                throw new Exception("Test Execution Timeout. Cannot run tests. Please fix IDE issues and retry.");
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();

@@ -3,9 +3,6 @@ package com.github.skrcode.javaautounittests;
 import com.github.skrcode.javaautounittests.settings.JAIPilotConsoleManager;
 import com.intellij.execution.ui.ConsoleView;
 import com.intellij.execution.ui.ConsoleViewContentType;
-import com.intellij.ide.BrowserUtil;
-import com.intellij.notification.NotificationGroupManager;
-import com.intellij.notification.NotificationType;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.progress.ProgressIndicator;
@@ -18,8 +15,6 @@ import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiDirectory;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-
-import javax.swing.event.HyperlinkEvent;
 
 /**
  * Spins up a background task that iterates over classes sequentially.
@@ -82,24 +77,11 @@ public final class BulkGeneratorService {
                 @Override
                 public void onSuccess() {
                     ApplicationManager.getApplication().invokeLater(() -> {
-                        JAIPilotConsoleManager.print(console,
-                                "✅ All tests generated successfully!",
-                                ConsoleViewContentType.SYSTEM_OUTPUT);
+//                        JAIPilotConsoleManager.print(console,
+//                                "✅ All tests generated successfully!",
+//                                ConsoleViewContentType.SYSTEM_OUTPUT);
 
-                        NotificationGroupManager.getInstance()
-                                .getNotificationGroup("JAIPilot - One-Click Automatic JUnit Test Generator Feedback")
-                                .createNotification(
-                                        "All tests generated!",
-                                        "If JAIPilot helped you, please <a href=\"https://plugins.jetbrains.com/plugin/27706-jaipilot--ai-unit-test-generator/edit/reviews/new\">leave a review</a> and ⭐️ rate it - it helps a lot!",
-                                        NotificationType.INFORMATION
-                                )
-                                .setListener((notification, event) -> {
-                                    if (event.getEventType() == HyperlinkEvent.EventType.ACTIVATED) {
-                                        BrowserUtil.browse(event.getURL().toString());
-                                        notification.expire();
-                                    }
-                                })
-                                .notify(project);
+
                     });
                 }
             });

@@ -3,6 +3,15 @@ package com.github.skrcode.javaautounittests.DTOs;
 public class PromptResponseOutput {
     private Content content;
     private int errorCode;
+    private String errorBody;
+
+    public String getErrorBody() {
+        return errorBody;
+    }
+
+    public void setErrorBody(String errorBody) {
+        this.errorBody = errorBody;
+    }
 
     public Content getContent() {
         return content;
