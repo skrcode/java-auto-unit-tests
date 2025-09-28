@@ -8,7 +8,9 @@ import com.github.skrcode.javaautounittests.settings.AISettings;
 import com.github.skrcode.javaautounittests.settings.ConsolePrinter;
 import com.github.skrcode.javaautounittests.settings.telemetry.Telemetry;
 import com.intellij.execution.ui.ConsoleView;
+import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.project.Project;
+import org.jetbrains.annotations.NotNull;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -73,6 +75,7 @@ public final class JAIPilotLLM {
             List<Content> contents,
             ConsoleView myConsole,
             int attempt
+            , @NotNull ProgressIndicator indicator
     ) throws Exception {
         long start = System.nanoTime();
         Telemetry.genStarted(testClassName, String.valueOf(attempt));
@@ -105,6 +108,7 @@ public final class JAIPilotLLM {
                         .connectTimeout(Duration.ofSeconds(30))
                         .build();
 
+                indicator.checkCanceled();
                 HttpRequest createJobReq = HttpRequest.newBuilder()
                         .uri(URI.create("https://otxfylhjrlaesjagfhfi.supabase.co/functions/v1/invoke-junit-llm-stream"))
                         .timeout(Duration.ofSeconds(30))
@@ -136,6 +140,7 @@ public final class JAIPilotLLM {
                 int sleepTime = 5000; // 5 s
                 int maxPollingTime = 450000; // 450 s
                 while (true) {
+                    indicator.checkCanceled();
                     if(pollTime > maxPollingTime) {
                         throw new RuntimeException("Job timed out after " + maxPollingTime + "seconds");
                     }
@@ -177,6 +182,7 @@ public final class JAIPilotLLM {
                 }
 
             } catch (Throwable t) {
+                indicator.checkCanceled();
                 retries++;
                 if (retries > MAX_RETRIES) {
                     Telemetry.genFailed(testClassName, String.valueOf(attempt), t.getMessage());

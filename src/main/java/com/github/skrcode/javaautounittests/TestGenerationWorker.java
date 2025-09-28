@@ -13,6 +13,7 @@ import com.intellij.notification.NotificationType;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.command.WriteCommandAction;
+import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.ProjectRootManager;
 import com.intellij.openapi.ui.Messages;
@@ -33,9 +34,10 @@ public final class TestGenerationWorker {
 
     private static final int MAX_ATTEMPTS = 100;
 
-    public static void process(Project project, PsiClass cut, @NotNull ConsoleView myConsole, PsiDirectory testRoot) {
+    public static void process(Project project, PsiClass cut, @NotNull ConsoleView myConsole, PsiDirectory testRoot, @NotNull ProgressIndicator indicator) {
         int attempt = 1;
         try {
+
             long start = System.nanoTime();
 
             PsiDirectory packageDir = resolveTestPackageDir(project, testRoot, cut);
@@ -72,11 +74,13 @@ public final class TestGenerationWorker {
                 Ref<PsiFile> testFile = ReadAction.compute(() -> Ref.create(packageDir.findFile(testFileName)));
                 if (ReadAction.compute(testFile::get) != null) {
                     ConsolePrinter.info(myConsole, "Compiling Tests " + testFileName);
+                    indicator.checkCanceled();
                     String errorOutput = BuilderUtil.compileJUnitClass(project, testFile);
 
                     if (errorOutput.isEmpty()) {
                         ConsolePrinter.success(myConsole, "Compilaton Successful " + testFileName);
                         ConsolePrinter.info(myConsole, "Running Tests " + testFileName);
+                        indicator.checkCanceled();
                         errorOutput = BuilderUtil.runJUnitClass(project, testFile.get());
                         if(!errorOutput.isEmpty()) {
                             ConsolePrinter.info(myConsole, "Found tests execution errors " + testFileName);
@@ -99,11 +103,13 @@ public final class TestGenerationWorker {
                 }
 
                 ConsolePrinter.info(myConsole, "Generating tests " + testFileName +" Please wait....");
+                indicator.checkCanceled();
                 PromptResponseOutput output = JAIPilotLLM.generateContent(
                         testFileName,
                         contents,
                         myConsole,
-                        attempt
+                        attempt,
+                        indicator
                 );
                 ConsolePrinter.info(myConsole, "Generated tests " + testFileName);
                 contents.add(output.getContent());
@@ -121,6 +127,7 @@ public final class TestGenerationWorker {
                             }
                             ConsolePrinter.success(myConsole, "Test Generated");
                             ConsolePrinter.codeBlock(myConsole, List.of(testCode.split("\n")));
+                            indicator.checkCanceled();
                             BuilderUtil.write(project, testFile, packageDir, testFileName, testCode);
                             ConsolePrinter.success(myConsole, "Written test to test file");
                         }

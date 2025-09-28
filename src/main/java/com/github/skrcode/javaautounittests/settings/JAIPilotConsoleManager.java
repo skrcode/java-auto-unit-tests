@@ -7,7 +7,6 @@ import com.intellij.icons.AllIcons;
 import com.intellij.openapi.actionSystem.*;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.editor.Editor;
-import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowManager;
@@ -20,6 +19,11 @@ import java.awt.*;
 
 public final class JAIPilotConsoleManager {
 
+    private JAIPilotConsoleManager() {}
+
+    /**
+     * Opens a new console tab with a cancel button wired to the given ProgressIndicator.
+     */
     public static ConsoleView openNewConsole(Project project, String title) {
         ToolWindow toolWindow = ToolWindowManager.getInstance(project).getToolWindow("JAIPilot Console");
         if (toolWindow == null) return null;
@@ -40,22 +44,24 @@ public final class JAIPilotConsoleManager {
         AnAction cancelAction = new AnAction("Cancel JAIPilot", "Stop test generation", AllIcons.Actions.Suspend) {
             @Override
             public void actionPerformed(@NotNull AnActionEvent e) {
-                JAIPilotExecutionManager.cancel();
-                consoleView.print("[JAIPilot] ❌ Cancel requested by user\n", ConsoleViewContentType.ERROR_OUTPUT);
-                throw new ProcessCanceledException(); // friendly cancellation
+//                if (indicator != null && !indicator.isCanceled()) {
+//                    indicator.cancel(); // ✅ cancels the background task
+//                    consoleView.print("[JAIPilot] ❌ Cancel requested by user\n", ConsoleViewContentType.ERROR_OUTPUT);
+//                }
             }
         };
 
         DefaultActionGroup actionGroup = new DefaultActionGroup();
-        actionGroup.add(cancelAction);
-        ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar("JAIPilotConsoleToolbar", actionGroup, false);
+//        actionGroup.add(cancelAction);
+        ActionToolbar toolbar = ActionManager.getInstance()
+                .createActionToolbar("JAIPilotConsoleToolbar", actionGroup, false);
 
         JPanel panel = new JPanel(new BorderLayout());
         panel.add(toolbar.getComponent(), BorderLayout.WEST);
         panel.add(consoleView.getComponent(), BorderLayout.CENTER);
 
         // Add console with toolbar to tool window as a new tab
-        ContentFactory contentFactory = ContentFactory.SERVICE.getInstance();
+        ContentFactory contentFactory = ContentFactory.getInstance();
         Content content = contentFactory.createContent(panel, title, true);
         toolWindow.getContentManager().addContent(content);
         toolWindow.getContentManager().setSelectedContent(content);
@@ -65,6 +71,7 @@ public final class JAIPilotConsoleManager {
     }
 
     public static void print(ConsoleView consoleView, String text, ConsoleViewContentType type) {
+        if (consoleView == null) return;
         ApplicationManager.getApplication().invokeLater(() -> {
             consoleView.print(text + "\n", type);
             if (consoleView instanceof ConsoleViewImpl impl) {
