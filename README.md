@@ -23,7 +23,7 @@
 
 - 🧠 **Understands your code** — generates tests from method logic, inputs, and edge cases
 - ⚡ **One-click generation** — right-click on any class or method to generate tests instantly
-- 🔑 **Flexible setup** — use a JAIPilot License Key (recommended) or bring your own Google Gemini key
+- 🔑 **Setup** — use a JAIPilot License Key
 - 📂 **Custom test root** — choose where generated tests go (e.g., `src/test/java`)
 - 🧪 **JUnit support** — works with your existing Java projects, no custom framework required
 - 🚀 **JAIPilot Pro** — faster, more robust test generation with automatic best-model selection and pay-as-you-go pricing

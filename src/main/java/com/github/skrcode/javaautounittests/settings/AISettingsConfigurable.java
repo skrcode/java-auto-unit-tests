@@ -30,17 +30,10 @@ public class AISettingsConfigurable implements Configurable {
 
     // Root + main sections
     private JPanel rootPanel;
-    private JPanel customPanel;
     private JPanel jaipilotPanel;
     private JPanel modeCards;
     private CardLayout cardLayout;
 
-    // Modes
-    private JRadioButton jaipilotRadio;
-    private JRadioButton customRadio;
-
-    // Inputs
-    private JBPasswordField geminiApiKeyField;
     private JBPasswordField jaipilotKeyField;
     private TextFieldWithBrowseButton testDirField;
 
@@ -85,26 +78,12 @@ public class AISettingsConfigurable implements Configurable {
         // ===== Header =====
         JPanel header = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         header.setAlignmentX(Component.LEFT_ALIGNMENT);
-        JLabel title = new JLabel("Choose setup:");
-        header.add(title);
         contentPanel.add(header);
         contentPanel.add(Box.createVerticalStrut(6));
 
         // ===== Mode toggle =====
         JPanel togglePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         togglePanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-        jaipilotRadio = new JRadioButton("JAIPilot Key (recommended)");
-        customRadio   = new JRadioButton("BYOK – Google Gemini");
-        ButtonGroup group = new ButtonGroup();
-        group.add(jaipilotRadio);
-        group.add(customRadio);
-        togglePanel.add(jaipilotRadio);
-        togglePanel.add(customRadio);
-        contentPanel.add(togglePanel);
-        contentPanel.add(Box.createVerticalStrut(8));
-
-        jaipilotRadio.addActionListener(e -> updateModeFields());
-        customRadio.addActionListener(e -> updateModeFields());
 
         // ===== Common Settings =====
         JPanel commonPanel = new JPanel();
@@ -179,33 +158,11 @@ public class AISettingsConfigurable implements Configurable {
         });
         addFormBlock(jaipilotPanel, null, tip);
 
-        // Custom (BYOK) panel
-        customPanel = new JPanel();
-        customPanel.setLayout(new BoxLayout(customPanel, BoxLayout.Y_AXIS));
-        geminiApiKeyField = new JBPasswordField();
-        sizeField(geminiApiKeyField, fieldSize);
-        JPanel geminiRow = new JPanel();
-        geminiRow.setLayout(new BoxLayout(geminiRow, BoxLayout.X_AXIS));
-        geminiRow.add(geminiApiKeyField);
-        JCheckBox showGemini = new JCheckBox("Show");
-        showGemini.setFocusable(false);
-        showGemini.addActionListener(ev -> setReveal(geminiApiKeyField, showGemini.isSelected()));
-        geminiRow.add(showGemini);
-
-        addFormBlock(customPanel, "Gemini API Key:", geminiRow);
-
         modeCards.add(jaipilotPanel, "JAIPilot");
-        modeCards.add(customPanel,   "Custom");
         contentPanel.add(modeCards);
 
         // Load persisted state
         AISettings app = AISettings.getInstance();
-        String savedMode = StringUtil.notNullize(app.getMode());
-        if ("Pro".equalsIgnoreCase(savedMode)) jaipilotRadio.setSelected(true);
-        else if ("BYOK".equalsIgnoreCase(savedMode)) customRadio.setSelected(true);
-        else jaipilotRadio.setSelected(true);
-
-        geminiApiKeyField.setText(app.getOpenAiKey());
         jaipilotKeyField.setText(app.getProKey());
         telemetryCheck.setSelected(app.isTelemetryEnabled());
 
@@ -217,7 +174,7 @@ public class AISettingsConfigurable implements Configurable {
             testDirField.setText(projectTestDir);
         }
 
-        updateModeFields();
+//        updateModeFields();
         return rootPanel;
     }
 
@@ -236,13 +193,6 @@ public class AISettingsConfigurable implements Configurable {
     private void sizeField(JTextField field, Dimension d) { field.setPreferredSize(d); field.setMaximumSize(d); }
     private void sizeBrowse(TextFieldWithBrowseButton b, Dimension d) { b.setPreferredSize(d); b.setMaximumSize(d); }
 
-    private void updateModeFields() {
-        boolean isCustom = customRadio.isSelected();
-        cardLayout.show(modeCards, isCustom ? "Custom" : "JAIPilot");
-        rootPanel.revalidate();
-        rootPanel.repaint();
-    }
-
     private String detectTestRoot(Project project) {
         for (VirtualFile root : ProjectRootManager.getInstance(project).getContentSourceRoots()) {
             if (ProjectFileIndex.getInstance(project).isInTestSourceContent(root)) {
@@ -257,9 +207,7 @@ public class AISettingsConfigurable implements Configurable {
         AISettings.State app = AISettings.getInstance().getState();
         String projTestDir = AIProjectSettings.getInstance(project).getTestDirectory();
 
-        return !getMode().equals(StringUtil.notNullize(app.mode))
-                || !StringUtil.equals(geminiApiKeyField.getText(), StringUtil.notNullize(app.openAiKey))
-                || !StringUtil.equals(jaipilotKeyField.getText(), StringUtil.notNullize(app.proKey))
+        return !StringUtil.equals(jaipilotKeyField.getText(), StringUtil.notNullize(app.proKey))
                 || !StringUtil.equals(StringUtil.notNullize(testDirField.getText()), StringUtil.notNullize(projTestDir))
                 || telemetryCheck.isSelected() != AISettings.getInstance().isTelemetryEnabled();
     }
@@ -267,8 +215,6 @@ public class AISettingsConfigurable implements Configurable {
     @Override
     public void apply() {
         AISettings app = AISettings.getInstance();
-        app.setMode(getMode());
-        app.setOpenAiKey(geminiApiKeyField.getText());
         app.setProKey(jaipilotKeyField.getText());
         app.setTelemetryEnabled(telemetryCheck.isSelected());
 
@@ -279,20 +225,12 @@ public class AISettingsConfigurable implements Configurable {
     @Override
     public void reset() {
         AISettings.State app = AISettings.getInstance().getState();
-        if ("Pro".equalsIgnoreCase(app.mode)) jaipilotRadio.setSelected(true);
-        else if ("BYOK".equalsIgnoreCase(app.mode)) customRadio.setSelected(true);
-        else jaipilotRadio.setSelected(true);
-
-        geminiApiKeyField.setText(StringUtil.notNullize(app.openAiKey));
         jaipilotKeyField.setText(StringUtil.notNullize(app.proKey));
 
         String projTestDir = AIProjectSettings.getInstance(project).getTestDirectory();
         testDirField.setText(StringUtil.notNullize(projTestDir));
         telemetryCheck.setSelected(AISettings.getInstance().isTelemetryEnabled());
-        updateModeFields();
     }
-
-    private String getMode() { return jaipilotRadio.isSelected() ? "Pro" : "BYOK"; }
 
     private void open(String url) {
         try { Desktop.getDesktop().browse(new URI(url)); } catch (Exception ignored) {}

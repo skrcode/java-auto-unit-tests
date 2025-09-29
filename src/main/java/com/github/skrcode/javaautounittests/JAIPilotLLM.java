@@ -94,15 +94,9 @@ public final class JAIPilotLLM {
                 // Select key based on mode
                 String headerName;
                 String headerValue;
-                if ("BYOK".equalsIgnoreCase(AISettings.getInstance().getMode())) {
-                    String key = AISettings.getInstance().getOpenAiKey();
-                    headerName = "x-gemini-key";
-                    headerValue = key;
-                } else {
-                    String key = AISettings.getInstance().getProKey();
-                    headerName = "Authorization";
-                    headerValue = "Bearer " + key;
-                }
+                String key = AISettings.getInstance().getProKey();
+                headerName = "Authorization";
+                headerValue = "Bearer " + key;
 
                 HttpClient http = HttpClient.newBuilder()
                         .connectTimeout(Duration.ofSeconds(30))
@@ -170,7 +164,7 @@ public final class JAIPilotLLM {
                         long end = System.nanoTime();
                         Telemetry.genCompleted(testClassName, String.valueOf(attempt), (end - start) / 1_000_000);
                         ConsolePrinter.success(myConsole,
-                                "Generated test class via " + AISettings.getInstance().getMode());
+                                "Generated test class");
                         return out;
                     } else if ("error".equalsIgnoreCase(status)) {
                         throw new RuntimeException("Job failed: " + pollJson.get("output").asText());

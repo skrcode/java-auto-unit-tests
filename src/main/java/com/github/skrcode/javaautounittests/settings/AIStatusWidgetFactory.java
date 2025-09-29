@@ -82,13 +82,8 @@ public class AIStatusWidgetFactory implements StatusBarWidgetFactory {
         private boolean isConfigured() {
             AISettings s = AISettings.getInstance();
             AIProjectSettings ps = AIProjectSettings.getInstance(project);
-            String mode = s.getMode() == null ? "" : s.getMode().trim();
             if (ps.getTestDirectory() == null || ps.getTestDirectory().isEmpty()) return false;
-            if ("Pro".equalsIgnoreCase(mode)) {
-                return s.getProKey() != null && !s.getProKey().isBlank();
-            } else {
-                return (s.getOpenAiKey() != null && !s.getOpenAiKey().isBlank());
-            }
+            return s.getProKey() != null && !s.getProKey().isBlank();
         }
 
     }

@@ -66,7 +66,7 @@ public final class TestGenerationWorker {
                     contents.add(JAIPilotLLM.getExistingTestClassContent(existingTestSource));
                 }
             }
-
+            List<Content> actualContents = new ArrayList<>(contents);
             for (; ; attempt++) {
                 ConsolePrinter.section(myConsole, "Attempting");
 
@@ -84,7 +84,7 @@ public final class TestGenerationWorker {
                         errorOutput = BuilderUtil.runJUnitClass(project, testFile.get());
                         if(!errorOutput.isEmpty()) {
                             ConsolePrinter.info(myConsole, "Found tests execution errors " + testFileName);
-                            contents.add(JAIPilotLLM.getOutputContent(errorOutput));
+                            actualContents.add(JAIPilotLLM.getOutputContent(errorOutput));
                         }
                         else {
                             ConsolePrinter.success(myConsole, "Tests execution successful " + testFileName);
@@ -93,7 +93,7 @@ public final class TestGenerationWorker {
                     }
                     else {
                         ConsolePrinter.info(myConsole, "Found compilation errors " + testFileName);
-                        contents.add(JAIPilotLLM.getOutputContent(errorOutput));
+                        actualContents.add(JAIPilotLLM.getOutputContent(errorOutput));
                     }
                 }
 
@@ -106,13 +106,14 @@ public final class TestGenerationWorker {
                 indicator.checkCanceled();
                 PromptResponseOutput output = JAIPilotLLM.generateContent(
                         testFileName,
-                        contents,
+                        actualContents,
                         myConsole,
                         attempt,
                         indicator
                 );
                 ConsolePrinter.info(myConsole, "Generated tests " + testFileName);
-                contents.add(output.getContent());
+                actualContents = new ArrayList<>(contents);
+                actualContents.add(output.getContent());
                 // Iterate through returned contents (can be text or function calls)
                 if (output.getContent() != null) {
                     for (Content.Part p : output.getContent().getParts()) {
@@ -138,7 +139,9 @@ public final class TestGenerationWorker {
                             switch (fn) {
                                 case "fetch_mockito_version":
                                     ConsolePrinter.info(myConsole, "Fetching mockito version");
-                                    contents.add(JAIPilotLLM.getMockitoVersionContent(project));
+                                    Content mockitoVersionContent = JAIPilotLLM.getMockitoVersionContent(project);
+                                    actualContents.add(mockitoVersionContent);
+                                    contents.add(mockitoVersionContent);
                                     break;
                                 case "get_file":
                                     if (args instanceof Map) {
@@ -151,6 +154,7 @@ public final class TestGenerationWorker {
                                             toolResult = filePath + " not found.";
                                         }
                                         else ConsolePrinter.success(myConsole, "Fetched file details "+filePath);
+                                        actualContents.add(JAIPilotLLM.getContextSourceContent(toolResult));
                                         contents.add(JAIPilotLLM.getContextSourceContent(toolResult));
                                     }
                                     break;

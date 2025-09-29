@@ -21,7 +21,7 @@
         </ul>
       </li>
       <li>⚡ <strong>One-click test generation:</strong> Right-click any class or method to create tests instantly</li>
-      <li>🔑 <strong>Flexible setup:</strong> Use a <em>JAIPilot License Key</em> (recommended) or <em>Bring Your Own Gemini Key</em></li>
+      <li>🔑 <strong>Setup:</strong> Use a <em>JAIPilot License Key</em></li>
       <li>📂 <strong>Custom test root:</strong> Choose where generated tests are stored (e.g., <code>src/test/java</code>)</li>
       <li>🧪 <strong>Works with Java & JUnit:</strong> No custom frameworks needed</li>
       <li>🚀 <strong>JAIPilot Pro:</strong> Faster, more robust test generation with automatic best-model selection</li>
@@ -49,10 +49,6 @@
             <action id="OpenSettingsAction"
                     class="com.github.skrcode.javaautounittests.settings.OpenAISettingsAction"
                     text="Settings"/>
-
-            <action id="ModelDisplayAction"
-                    class="com.github.skrcode.javaautounittests.ModelDisplayAction"
-                    text="Plan"/>
         </group>
     </actions>
 
