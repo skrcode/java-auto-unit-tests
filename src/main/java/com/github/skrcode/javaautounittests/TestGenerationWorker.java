@@ -21,6 +21,7 @@ import com.intellij.openapi.util.Ref;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.*;
+import com.intellij.psi.search.GlobalSearchScope;
 import org.codehaus.plexus.util.StringUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -224,26 +225,6 @@ public final class TestGenerationWorker {
         return getOrCreateSubdirectoryPath(project, testRoot, relPath);
     }
 
-    public static String getSourceCodeOfContextClasses(Project project, String relativePath) {
-        if (relativePath == null || relativePath.isBlank()) {
-            return "";
-        }
-
-        String normPath = relativePath.replace("\\", "/");
-
-        VirtualFile vf = findInProjectAndLibraries(project, normPath);
-        if (vf == null) {
-            return "";
-        }
-
-        PsiFile psiFile = ReadAction.compute(() -> PsiManager.getInstance(project).findFile(vf));
-        if (psiFile == null || !psiFile.isValid()) {
-            return "";
-        }
-
-        return ReadAction.compute(psiFile::getText);
-    }
-
     private static VirtualFile findInProjectAndLibraries(Project project, String relativePath) {
         // 1. Search in content + source roots
         for (VirtualFile root : ProjectRootManager.getInstance(project).getContentSourceRoots()) {
@@ -259,6 +240,38 @@ public final class TestGenerationWorker {
 
         return null;
     }
+
+    public static String getSourceCodeOfContextClasses(Project project, String relativePathOrFqcn) {
+        if (relativePathOrFqcn == null || relativePathOrFqcn.isBlank()) {
+            return "";
+        }
+
+        String normPath = relativePathOrFqcn.replace("\\", "/");
+
+        // --- Try existing project/library search ---
+        VirtualFile vf = findInProjectAndLibraries(project, normPath);
+        if (vf != null) {
+            PsiFile psiFile = ReadAction.compute(() -> PsiManager.getInstance(project).findFile(vf));
+            if (psiFile != null && psiFile.isValid()) {
+                return ReadAction.compute(psiFile::getText);
+            }
+        }
+
+        // --- Fallback: try resolving as fully qualified class name ---
+        JavaPsiFacade psiFacade = JavaPsiFacade.getInstance(project);
+        GlobalSearchScope scope = GlobalSearchScope.allScope(project);
+
+        PsiClass psiClass = ReadAction.compute(() -> psiFacade.findClass(relativePathOrFqcn.replace("/", ".").replace(".java", ""), scope));
+        if (psiClass != null && psiClass.isValid()) {
+            PsiFile psiFile = ReadAction.compute(psiClass::getContainingFile);
+            if (psiFile != null && psiFile.isValid()) {
+                return ReadAction.compute(psiFile::getText);
+            }
+        }
+
+        return "";
+    }
+
 
 
     /** Recursively find or create nested sub-directories like {@code org/example/service}. */
