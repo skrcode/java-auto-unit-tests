@@ -187,7 +187,7 @@ public final class TestGenerationWorker {
             ConsolePrinter.section(myConsole, "Summary");
             ConsolePrinter.success(myConsole, "Successfully generated Test Class " + testFileName);
             NotificationGroupManager.getInstance()
-                    .getNotificationGroup("JAIPilot - One-Click Automatic JUnit Test Generator Feedback")
+                    .getNotificationGroup("JAIPilot - One-Click Automatic Java Unit Test Generator Feedback")
                     .createNotification(
                             "All tests generated!",
                             "If JAIPilot helped you, please <a href=\"https://plugins.jetbrains.com/plugin/27706-jaipilot--ai-unit-test-generator/edit/reviews/new\">leave a review</a> and ⭐️ rate it - it helps a lot!",

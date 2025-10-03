@@ -19,7 +19,7 @@
 <!-- Plugin description -->
 **AI-Powered Unit Tests for Java. Generate, run, and fix tests automatically inside IntelliJ.**
 
-*JAIPilot – One-Click Automatic JUnit Test Generator* creates complete, context-aware tests with just a right-click.
+*JAIPilot – One-Click Automatic Java Unit Test Generator* creates complete, context-aware tests with just a right-click.
 
 - 🧠 **Understands your code** — generates tests from method logic, inputs, and edge cases
 - ⚡ **One-click generation** — right-click on any class or method to generate tests instantly

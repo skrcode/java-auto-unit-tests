@@ -1,7 +1,7 @@
 <!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
     <id>com.github.skrcode.javaautounittests</id>
-    <name>JAIPilot - One-Click Automatic JUnit Test Generator</name>
+    <name>JAIPilot - One-Click Automatic Java Unit Test Generator</name>
     <vendor>skrcode</vendor>
     <vendor email="surajkrajan95@gmail.com" url="skrcode.github.io">Suraj Krishnan Rajan</vendor>
 
@@ -11,7 +11,7 @@
     <description><![CDATA[
     <p><strong>Generate High-Coverage Unit Tests for Java — automatically written, run, and fixed by AI.</strong></p>
 
-    <p><em>JAIPilot – One-Click Automatic JUnit Test Generator</em> creates context-aware JUnit tests directly inside IntelliJ.</p>
+    <p><em>JAIPilot – One-Click Automatic Java Unit Test Generator</em> creates context-aware JUnit tests directly inside IntelliJ.</p>
 
     <ul>
       <li>🧠 <strong>Understands your code:</strong>
@@ -35,7 +35,7 @@
         <!-- Popup group shown in Editor + Project View -->
         <group id="AIAutoUnitTestGroup"
                popup="true"
-               text="JAIPilot – One-Click Automatic JUnit Test Generator">
+               text="JAIPilot – One-Click Automatic Java Unit Test Generator">
 
             <!-- where to show the group -->
             <add-to-group group-id="EditorPopupMenu"   anchor="first"/>
@@ -68,7 +68,7 @@
         <projectConfigurable instance="com.github.skrcode.javaautounittests.settings.AISettingsConfigurable" />
         <statusBarWidgetFactory id="AIStatusWidget" implementation="com.github.skrcode.javaautounittests.settings.AIStatusWidgetFactory"/>
         <notificationGroup
-                id="JAIPilot - One-Click Automatic JUnit Test Generator Feedback"
+                id="JAIPilot - One-Click Automatic Java Unit Test Generator Feedback"
                 displayType="BALLOON"
                 isLogByDefault="false"/>
     </extensions>

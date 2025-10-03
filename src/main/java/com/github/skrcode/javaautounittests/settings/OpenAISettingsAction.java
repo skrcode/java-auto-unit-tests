@@ -16,6 +16,6 @@ public class OpenAISettingsAction extends AnAction {
     public void actionPerformed(@NotNull AnActionEvent e) {
         Telemetry.uiClick("settings");
         Project project = e.getProject();
-        ShowSettingsUtil.getInstance().showSettingsDialog(project, "JAIPilot - One-Click Automatic JUnit Test Generator");
+        ShowSettingsUtil.getInstance().showSettingsDialog(project, "JAIPilot - One-Click Automatic Java Unit Test Generator");
     }
 }
