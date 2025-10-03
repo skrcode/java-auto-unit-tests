@@ -66,7 +66,12 @@ public class AISettingsConfigurable implements Configurable {
                 new LineBorder(new Color(200, 200, 200)), new EmptyBorder(10, 10, 10, 10)
         ));
 
-        JLabel howToTitle = new JLabel("After setup, you can right-click any Java class and auto-generate Tests with JAIPilot.");
+        JLabel howToTitle = new JLabel(
+                "<html><div style='width:520px;'>"
+                        + "After setup, you can right-click any Java class and instantly generate Tests with JAIPilot.<br>"
+                        + "<span style='color:#4CAF50;'><b>No credit card required.</b> Free credits included on signup.</span>"
+                        + "</div></html>"
+        );
         howToTitle.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         howToBox.add(howToTitle);
@@ -120,7 +125,8 @@ public class AISettingsConfigurable implements Configurable {
                 "<html><div style='width:520px; text-align:left;'>"
                         + "<b>Quick steps</b>"
                         + "<ol style='margin-top:4px;'>"
-                        + "<li>Click <i>Open Account</i> to sign in or sign up</li>"
+                        + "<li>Click <i>Open Account</i> to sign in or sign up (takes seconds)</li>"
+                        + "<li>You’ll instantly get <b>free credits</b> – no credit card required</li>"
                         + "<li>Copy your <b>License Key</b> from the Account page</li>"
                         + "<li>Paste it below</li>"
                         + "</ol>"
@@ -150,7 +156,10 @@ public class AISettingsConfigurable implements Configurable {
         addFormBlock(jaipilotPanel, "JAIPilot License Key:", keyRow);
 
         JLabel tip = new JLabel(
-                "<html><div style='width:520px; color:#888;'>Tip: You can always reopen <a href='" + ACCOUNT_URL + "'>jaipilot.com/account</a> to manage your key.</div></html>"
+                "<html><div style='width:520px; color:#888;'>"
+                        + "Tip: You can always reopen <a href='" + ACCOUNT_URL + "'>jaipilot.com/account</a> to manage your key.<br>"
+                        + "Signup is free – you’ll always start with trial credits."
+                        + "</div></html>"
         );
         tip.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         tip.addMouseListener(new java.awt.event.MouseAdapter() {
@@ -174,7 +183,6 @@ public class AISettingsConfigurable implements Configurable {
             testDirField.setText(projectTestDir);
         }
 
-//        updateModeFields();
         return rootPanel;
     }
 
