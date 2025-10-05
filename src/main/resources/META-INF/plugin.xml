@@ -4,12 +4,10 @@
     <name>JAIPilot – One-Click AI Agent for Java Unit Testing</name>
     <vendor email="surajkrajan95@gmail.com" url="https://skrcode.github.io">Suraj Krishnan Rajan</vendor>
 
-    <!-- Compatibility -->
-    <idea-version since-build="231" until-build="999.*"/>
-
     <!-- Dependencies -->
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.java</depends>
+    <depends>JUnit</depends>
 
     <!-- Description -->
     <description><![CDATA[
