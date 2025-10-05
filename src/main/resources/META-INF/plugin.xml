@@ -13,7 +13,6 @@
     <description><![CDATA[
     <p><strong>AI-Powered Unit Tests for Java — generate, run, and fix tests automatically inside IntelliJ.</strong></p>
 
-    <p>Stop wasting time writing boilerplate tests.<br/>
     <em>JAIPilot – One-Click AI Agent for Java Unit Testing</em> creates complete, context-aware <strong>JUnit tests</strong> in seconds — right inside your IDE.</p>
 
     <ul>

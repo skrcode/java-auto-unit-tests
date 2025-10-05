@@ -19,7 +19,6 @@
 <!-- Plugin description -->
 **AI-Powered Unit Tests for Java — generate, run, and fix tests automatically inside IntelliJ.**
 
-Stop wasting time writing boilerplate tests.  
 *JAIPilot – One-Click AI Agent for Java Unit Testing* creates complete, context-aware **JUnit tests** in seconds — right inside your IDE.
 
 - 🧠 **Understands your code** — analyzes method logic, parameters, dependencies, and edge cases to generate meaningful tests
