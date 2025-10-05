@@ -31,7 +31,7 @@ Stop wasting time writing boilerplate tests.
 - 💸 **Free credits on signup** — get started instantly with no credit card required
 
 Skip the repetitive test writing. Let JAIPilot handle the heavy lifting — so you can focus on real engineering.  
-Join hundreds of developers using JAIPilot to **ship faster, test smarter, and build with confidence.**
+Join other developers using JAIPilot to **ship faster, test smarter, and build with confidence.**
 <!-- Plugin description end -->
 
 
