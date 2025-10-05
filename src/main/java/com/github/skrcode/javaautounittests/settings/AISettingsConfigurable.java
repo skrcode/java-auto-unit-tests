@@ -46,7 +46,7 @@ public class AISettingsConfigurable implements Configurable {
 
     @Override
     public @Nls(capitalization = Nls.Capitalization.Title) String getDisplayName() {
-        return "JAIPilot - One-Click Automatic Java Unit Test Generator";
+        return "JAIPilot - One-Click AI Agent for Java Unit Testing";
     }
 
     @Override

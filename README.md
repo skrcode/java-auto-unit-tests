@@ -17,20 +17,23 @@
 - [ ] Click the <kbd>Watch</kbd> button on the top of the [IntelliJ Platform Plugin Template][template] to be notified about releases containing new features and fixes.
 
 <!-- Plugin description -->
-**AI-Powered Unit Tests for Java. Generate, run, and fix tests automatically inside IntelliJ.**
+**AI-Powered Unit Tests for Java — generate, run, and fix tests automatically inside IntelliJ.**
 
-*JAIPilot – One-Click Automatic Java Unit Test Generator* creates complete, context-aware tests with just a right-click.
+Stop wasting time writing boilerplate tests.  
+*JAIPilot – One-Click AI Agent for Java Unit Testing* creates complete, context-aware **JUnit tests** in seconds — right inside your IDE.
 
-- 🧠 **Understands your code** — generates tests from method logic, inputs, and edge cases
-- ⚡ **One-click generation** — right-click on any class or method to generate tests instantly
-- 🔑 **Setup** — use a JAIPilot License Key
-- 📂 **Custom test root** — choose where generated tests go (e.g., `src/test/java`)
-- 🧪 **JUnit support** — works with your existing Java projects, no custom framework required
-- 🚀 **JAIPilot Pro** — faster, more robust test generation with automatic best-model selection and pay-as-you-go pricing
+- 🧠 **Understands your code** — analyzes method logic, parameters, dependencies, and edge cases to generate meaningful tests
+- ⚡ **One-click generation** — right-click any class or method to instantly create high-coverage, runnable JUnit tests
+- 🔁 **Autonomous refinement** — automatically runs tests, detects failures, and fixes them until they pass
+- 🚀 **Optimized AI models** — dynamically picks the best AI model per class for speed and accuracy
+- 📂 **Custom test root** — choose where tests go (e.g., `src/test/java`)
+- 🧪 **Seamless JUnit integration** — works out-of-the-box with your existing Java projects
+- 💸 **Free credits on signup** — get started instantly with no credit card required
 
-Skip the boilerplate. Get reliable, high-coverage tests in seconds. Built for developers who value speed, simplicity, and real-world use.
-
+Skip the repetitive test writing. Let JAIPilot handle the heavy lifting — so you can focus on real engineering.  
+Join thousands of developers using JAIPilot to **ship faster, test smarter, and build with confidence.**
 <!-- Plugin description end -->
+
 
 
 
