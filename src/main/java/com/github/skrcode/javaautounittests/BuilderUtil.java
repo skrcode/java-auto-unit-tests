@@ -1,5 +1,7 @@
 package com.github.skrcode.javaautounittests;
 
+import com.github.javaparser.JavaParser;
+import com.github.skrcode.javaautounittests.settings.ConsolePrinter;
 import com.intellij.codeInsight.actions.ReformatCodeProcessor;
 import com.intellij.compiler.CompilerMessageImpl;
 import com.intellij.execution.ExecutionException;
@@ -15,8 +17,10 @@ import com.intellij.execution.process.ProcessHandler;
 import com.intellij.execution.runners.ExecutionEnvironment;
 import com.intellij.execution.runners.ExecutionEnvironmentBuilder;
 import com.intellij.execution.runners.ProgramRunner;
+import com.intellij.execution.ui.ConsoleView;
 import com.intellij.ide.highlighter.JavaFileType;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.compiler.CompilerManager;
 import com.intellij.openapi.compiler.CompilerMessage;
@@ -37,8 +41,7 @@ import com.intellij.psi.codeStyle.CodeStyleManager;
 import com.intellij.psi.codeStyle.JavaCodeStyleManager;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -236,36 +239,158 @@ public class BuilderUtil {
         return doc.getText(new TextRange(startOffset, endOffset)).trim();
     }
 
-    // --- Write file with cleanup ---
-    public static void write(Project project,
-                             Ref<PsiFile> testFile,
-                             PsiDirectory packageDir,
-                             String testFileName,
-                             String testSource) {
-        WriteCommandAction.runWriteCommandAction(project, () -> {
-            PsiFile existingFile = testFile.get();
-            PsiFile fileToProcess;
+    public static class TestMethod {
+        public final String methodName;
+        public final String fullImplementation;
 
-            if (existingFile != null && existingFile.isValid()) {
-                Document doc = PsiDocumentManager.getInstance(project).getDocument(existingFile);
-                if (doc != null) {
-                    doc.setText(testSource);
-                    PsiDocumentManager.getInstance(project).commitDocument(doc);
+        public TestMethod(String methodName, String fullImplementation) {
+            this.methodName = methodName;
+            this.fullImplementation = fullImplementation;
+        }
+    }
+
+
+    public static void buildAndWriteTestClass(Project project,
+                                              Ref<PsiFile> testFile,
+                                              PsiDirectory packageDir,
+                                              String testFileName,
+                                              String classSkeleton,
+                                              List<TestMethod> methods,
+                                              ConsoleView myConsole) {
+
+        PsiFile existingFile = ReadAction.compute(testFile::get);
+        boolean hasExisting = existingFile != null && existingFile.isValid();
+        boolean hasSkeleton = classSkeleton != null && !classSkeleton.isBlank();
+        boolean hasMethods  = methods != null && !methods.isEmpty();
+
+        if (!hasExisting && !hasSkeleton) {
+            System.err.println("[ERROR] Invalid: no existing test class and skeleton");
+            return;
+        }
+
+        WriteCommandAction.runWriteCommandAction(project, () -> {
+            PsiFileFactory fileFactory = PsiFileFactory.getInstance(project);
+            PsiDocumentManager psiDocMgr = PsiDocumentManager.getInstance(project);
+            PsiElementFactory elementFactory = JavaPsiFacade.getInstance(project).getElementFactory();
+
+            // ✅ Step 0: Extract old test methods *as text* before any mutation
+            List<String> oldTestMethodTexts = new ArrayList<>();
+            if (hasExisting && existingFile instanceof PsiJavaFile jf && jf.getClasses().length > 0) {
+                PsiClass existingClass = jf.getClasses()[0];
+                for (PsiMethod old : existingClass.getMethods()) {
+                    if (old.isConstructor()) continue;
+                    boolean isTestAnnotated = Arrays.stream(old.getModifierList().getAnnotations())
+                            .anyMatch(a -> a.getQualifiedName() != null && a.getQualifiedName().endsWith("Test"));
+                    boolean nameLooksLikeTest = old.getName().startsWith("test");
+                    if (isTestAnnotated || nameLooksLikeTest) {
+                        oldTestMethodTexts.add(old.getText());
+                    }
                 }
-                fileToProcess = existingFile;
-            } else {
-                PsiFile newFile = PsiFileFactory.getInstance(project).createFileFromText(
-                        testFileName, JavaFileType.INSTANCE, testSource);
-                PsiFile addedFile = (PsiFile) packageDir.add(newFile);
-                testFile.set(addedFile);
-                fileToProcess = addedFile;
             }
 
-            JavaCodeStyleManager.getInstance(project).optimizeImports(fileToProcess);
-            new ReformatCodeProcessor(project, fileToProcess, null, false).run();
-            CodeStyleManager.getInstance(project).reformat(fileToProcess);
+            PsiFile psiFile;
+
+            // ✅ Step 1: Create or overwrite skeleton
+            if (hasSkeleton) {
+                if (hasExisting) {
+                    Document doc = psiDocMgr.getDocument(existingFile);
+                    if (doc != null) {
+                        doc.setText(classSkeleton);
+                        psiDocMgr.commitDocument(doc);
+                        psiFile = existingFile;
+                    } else {
+                        psiFile = fileFactory.createFileFromText(testFileName, JavaFileType.INSTANCE, classSkeleton);
+                        psiFile = (PsiFile) packageDir.add(psiFile);
+                    }
+                } else {
+                    psiFile = fileFactory.createFileFromText(testFileName, JavaFileType.INSTANCE, classSkeleton);
+                    psiFile = (PsiFile) packageDir.add(psiFile);
+                }
+                testFile.set(psiFile);
+            } else {
+                psiFile = existingFile;
+            }
+
+            if (!(psiFile instanceof PsiJavaFile javaFile)) return;
+            if (javaFile.getClasses().length == 0) return;
+
+            PsiClass psiClass = javaFile.getClasses()[0];
+
+            // ✅ Step 2: Restore old @Test methods (avoids stale PSI)
+            Set<String> seenNames = new HashSet<>();
+            for (PsiMethod m : psiClass.getMethods()) seenNames.add(m.getName());
+            for (String text : oldTestMethodTexts) {
+                try {
+                    PsiMethod restored = elementFactory.createMethodFromText(text, psiClass);
+                    if (!seenNames.contains(restored.getName())) {
+                        psiClass.add(restored);
+                        seenNames.add(restored.getName());
+                    }
+                } catch (Exception e) {
+                    System.err.println("[WARN] Failed to re-add old test: " + e.getMessage());
+                }
+            }
+
+            // ✅ Step 3: Merge response methods (add / replace / delete)
+            if (hasMethods) {
+                Map<String, String> response = new LinkedHashMap<>();
+                Set<String> deletes = new HashSet<>();
+
+                for (TestMethod m : methods) {
+                    if (m == null || m.methodName == null) continue;
+                    String name = m.methodName.trim();
+                    String impl = m.fullImplementation == null ? "" : m.fullImplementation.trim();
+                    if (impl.isEmpty()) deletes.add(name);
+                    else response.put(name, impl);
+                }
+
+                // Delete or replace
+                for (PsiMethod existing : psiClass.getMethods()) {
+                    String name = existing.getName();
+                    if (deletes.contains(name)) {
+                        existing.delete();
+                    } else if (response.containsKey(name)) {
+                        try {
+                            PsiMethod updated = elementFactory.createMethodFromText(response.get(name), psiClass);
+                            existing.replace(updated);
+                            response.remove(name);
+                        } catch (Exception e) {
+                            System.err.println("[WARN] Replace failed for " + name + ": " + e.getMessage());
+                        }
+                    }
+                }
+
+                // Add new ones
+                for (Map.Entry<String, String> e : response.entrySet()) {
+                    try {
+                        PsiMethod newMethod = elementFactory.createMethodFromText(e.getValue(), psiClass);
+                        psiClass.add(newMethod);
+                    } catch (Exception ex) {
+                        System.err.println("[WARN] Skipping method '" + e.getKey() + "': " + ex.getMessage());
+                    }
+                }
+            }
+
+            // ✅ Step 4: Commit & validate
+            Document doc = psiDocMgr.getDocument(psiFile);
+            if (doc != null) psiDocMgr.commitDocument(doc);
+            String finalTestSource = javaFile.getText();
+
+            JavaParser parser = new JavaParser();
+            if (!parser.parse(finalTestSource).getResult().isPresent()) {
+                throw new IllegalArgumentException("Error in final test file syntax.");
+            }
+
+            JavaCodeStyleManager.getInstance(project).optimizeImports(psiFile);
+            new ReformatCodeProcessor(project, psiFile, null, false).run();
+            CodeStyleManager.getInstance(project).reformat(psiFile);
+
+            // ✅ Step 5: Log
+            ConsolePrinter.success(myConsole, "✅ Test class composed and written successfully");
+            ConsolePrinter.codeBlock(myConsole, Arrays.asList(finalTestSource));
         });
     }
+
 
     private static String joinLines(List<String> list) { if (list == null || list.isEmpty()) return ""; return String.join("\n", list); }
 }

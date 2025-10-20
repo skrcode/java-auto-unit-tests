@@ -34,6 +34,7 @@ dependencies {
     testImplementation(libs.junit)
 //    implementation("com.openai:openai-java:2.2.0")
 //    implementation("com.google.genai:google-genai:1.13.0")
+    implementation ("io.github.java-diff-utils:java-diff-utils:4.16")
     implementation ("com.github.javaparser:javaparser-symbol-solver-core:3.27.0")
 //    compileOnly("org.jacoco:org.jacoco.core:0.8.12")
 

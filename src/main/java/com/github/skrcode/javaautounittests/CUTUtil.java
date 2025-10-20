@@ -147,7 +147,6 @@ public final class CUTUtil {
             throw new RuntimeException(e);
         }
     }
-
     public static String cleanedSourceForLLM(Project project, PsiClass cut) {
 
         PsiJavaFile original = ReadAction.compute(() -> {

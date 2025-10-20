@@ -1,6 +1,5 @@
 package com.github.skrcode.javaautounittests;
 
-import com.github.javaparser.JavaParser;
 import com.github.skrcode.javaautounittests.DTOs.Content;
 import com.github.skrcode.javaautounittests.DTOs.PromptResponseOutput;
 import com.github.skrcode.javaautounittests.settings.ConsolePrinter;
@@ -22,14 +21,13 @@ import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.*;
 import com.intellij.psi.search.GlobalSearchScope;
-import org.codehaus.plexus.util.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.event.HyperlinkEvent;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.regex.Pattern;
 
 public final class TestGenerationWorker {
 
@@ -61,25 +59,27 @@ public final class TestGenerationWorker {
 
             // Add existing test class (if present) as context
             Ref<PsiFile> testFileExisting = ReadAction.compute(() -> Ref.create(packageDir.findFile(testFileName)));
+            String existingTestSource = "";
             if (ReadAction.compute(testFileExisting::get) != null) {
-                String existingTestSource = ReadAction.compute(() -> testFileExisting.get().getText());
+                existingTestSource = ReadAction.compute(() -> testFileExisting.get().getText());
                 if (existingTestSource != null && !existingTestSource.isBlank()) {
                     contents.add(JAIPilotLLM.getExistingTestClassContent(existingTestSource));
                 }
             }
             List<Content> actualContents = new ArrayList<>(contents);
+            boolean shouldRebuild = true;
             for (; ; attempt++) {
                 ConsolePrinter.section(myConsole, "Attempting");
 
                 // Check if test file already exists and run it
                 Ref<PsiFile> testFile = ReadAction.compute(() -> Ref.create(packageDir.findFile(testFileName)));
-                if (ReadAction.compute(testFile::get) != null) {
+                if (ReadAction.compute(testFile::get) != null && shouldRebuild) {
                     ConsolePrinter.info(myConsole, "Compiling Tests " + testFileName);
                     indicator.checkCanceled();
                     String errorOutput = BuilderUtil.compileJUnitClass(project, testFile);
 
                     if (errorOutput.isEmpty()) {
-                        ConsolePrinter.success(myConsole, "Compilaton Successful " + testFileName);
+                        ConsolePrinter.success(myConsole, "Compilation Successful " + testFileName);
                         ConsolePrinter.info(myConsole, "Running Tests " + testFileName);
                         indicator.checkCanceled();
                         errorOutput = BuilderUtil.runJUnitClass(project, testFile.get());
@@ -97,7 +97,7 @@ public final class TestGenerationWorker {
                         actualContents.add(JAIPilotLLM.getOutputContent(errorOutput));
                     }
                 }
-
+                shouldRebuild = false;
                 if (attempt > MAX_ATTEMPTS) {
                     ConsolePrinter.warn(myConsole, "Attempts breached. I have tried my best to compile and execute tests. Please fix the remaining tests manually. " + testFileName);
                     break;
@@ -112,49 +112,83 @@ public final class TestGenerationWorker {
                         attempt,
                         indicator
                 );
-                ConsolePrinter.info(myConsole, "Generated tests " + testFileName);
+
                 actualContents = new ArrayList<>(contents);
                 actualContents.add(output.getContent());
-                // Iterate through returned contents (can be text or function calls)
                 if (output.getContent() != null) {
                     for (Content.Part p : output.getContent().getParts()) {
-                        if (p.getText() != null && !p.getText().isBlank()) {
-                            // ✅ Normal test class candidate
-                            isLLMGeneratedAtLeastOnce = true;
-                            String testCode = stripCodeFences(p.getText());
-                            JavaParser parser = new JavaParser();
-                            if (!parser.parse(testCode).isSuccessful()) {
-                                ConsolePrinter.info(myConsole, "Improper Test File Generated.");
-                                continue;
-                            }
-                            ConsolePrinter.success(myConsole, "Test Generated");
-                            ConsolePrinter.codeBlock(myConsole, List.of(testCode.split("\n")));
-                            indicator.checkCanceled();
-                            BuilderUtil.write(project, testFile, packageDir, testFileName, testCode);
-                            ConsolePrinter.success(myConsole, "Written test to test file");
-                        }
                         if (p.getFunctionCall() != null) {
                             Content.FunctionCall fc = p.getFunctionCall();
                             String fn = fc.getName();
                             Object args = fc.getArgs();
                             switch (fn) {
+                                case "apply_test_class": {
+                                    if (args instanceof Map) {
+                                        Map<?, ?> argMap = (Map<?, ?>) args;
+                                        isLLMGeneratedAtLeastOnce = true;
+                                        try {
+                                            indicator.checkCanceled();
+                                            String classSkeleton = (String) argMap.get("classSkeleton");
+                                            // Convert methods array (if present)
+                                            List<Map<String, Object>> rawMethods = (List<Map<String, Object>>) argMap.get("methods");
+                                            List<BuilderUtil.TestMethod> methods = new ArrayList<>();
+                                            if (rawMethods != null) {
+                                                for (Map<String, Object> m : rawMethods) {
+                                                    String methodName = Objects.toString(m.get("methodName"), null);
+                                                    String fullImpl = Objects.toString(m.get("fullImplementation"), "");
+                                                    methods.add(new BuilderUtil.TestMethod(methodName, fullImpl));
+                                                }
+                                            }
+                                            BuilderUtil.buildAndWriteTestClass(
+                                                    project,testFile,
+                                                    packageDir, testFileName,
+                                                    classSkeleton,
+                                                    methods,
+                                                    myConsole
+                                            );
+                                            shouldRebuild = true;
+                                        } catch (Exception e) {
+                                            ConsolePrinter.info(myConsole, "⚠️ Error composing test class: " + e.getMessage());
+                                            continue;
+                                        }
+                                    }
+                                    break;
+                                }
                                 case "fetch_mockito_version":
                                     ConsolePrinter.info(myConsole, "Fetching mockito version");
                                     Content mockitoVersionContent = JAIPilotLLM.getMockitoVersionContent(project);
                                     actualContents.add(mockitoVersionContent);
                                     contents.add(mockitoVersionContent);
                                     break;
-                                case "get_file":
+                                case "get_file_snippets":
                                     if (args instanceof Map) {
                                         Map<?, ?> argMap = (Map<?, ?>) args;
                                         String filePath = (String) argMap.get("filePath");
-                                        ConsolePrinter.info(myConsole, "Fetching file details "+filePath);
-                                        String toolResult = getSourceCodeOfContextClasses(project, filePath);
-                                        if(StringUtils.isEmpty(toolResult)) {
-                                            ConsolePrinter.info(myConsole, "File not found "+filePath);
-                                            toolResult = filePath + " not found.";
+                                        String grepString = (String) argMap.get("grepString");
+                                        int linesBefore = 10, linesAfter = 10;
+                                        Object beforeObj = argMap.get("linesBefore"), afterObj = argMap.get("linesAfter");
+
+                                        if (beforeObj != null) {
+                                            if (beforeObj instanceof Number) linesBefore = ((Number) beforeObj).intValue();
+                                            else linesBefore = Integer.parseInt(beforeObj.toString());
                                         }
-                                        else ConsolePrinter.success(myConsole, "Fetched file details "+filePath);
+                                        if (afterObj != null) {
+                                            if (afterObj instanceof Number) linesAfter = ((Number) afterObj).intValue();
+                                            else linesAfter = Integer.parseInt(afterObj.toString());
+                                        }
+
+                                        ConsolePrinter.info(myConsole, "Fetching file details: " + filePath);
+                                        ConsolePrinter.info(myConsole, "Searching for: " + grepString);
+                                        String toolResult = getSourceCodeOfContextClasses(project, filePath, grepString, linesBefore, linesAfter);
+
+                                        if (StringUtils.isEmpty(toolResult)) {
+                                            ConsolePrinter.info(myConsole, "No matches or file not found: " + filePath);
+                                            toolResult = filePath + " not found or no matches found.";
+                                        } else {
+                                            ConsolePrinter.success(myConsole, "Snippet(s): " + toolResult);
+                                            ConsolePrinter.success(myConsole, "Fetched file snippet(s): " + filePath);
+                                        }
+
                                         actualContents.add(JAIPilotLLM.getContextSourceContent(toolResult));
                                         contents.add(JAIPilotLLM.getContextSourceContent(toolResult));
                                     }
@@ -241,36 +275,74 @@ public final class TestGenerationWorker {
         return null;
     }
 
-    public static String getSourceCodeOfContextClasses(Project project, String relativePathOrFqcn) {
+    public static String getSourceCodeOfContextClasses(Project project,
+                                                       String relativePathOrFqcn,
+                                                       String grepString,
+                                                       int linesBefore,
+                                                       int linesAfter) {
         if (relativePathOrFqcn == null || relativePathOrFqcn.isBlank()) {
             return "";
         }
 
         String normPath = relativePathOrFqcn.replace("\\", "/");
 
-        // --- Try existing project/library search ---
+        // --- Try finding file in project or libraries ---
         VirtualFile vf = findInProjectAndLibraries(project, normPath);
+        PsiFile psiFile = null;
+
         if (vf != null) {
-            PsiFile psiFile = ReadAction.compute(() -> PsiManager.getInstance(project).findFile(vf));
-            if (psiFile != null && psiFile.isValid()) {
-                return ReadAction.compute(psiFile::getText);
+            psiFile = ReadAction.compute(() -> PsiManager.getInstance(project).findFile(vf));
+        }
+
+        if ((psiFile == null || !psiFile.isValid())) {
+            // --- Fallback: try resolving as class name ---
+            JavaPsiFacade psiFacade = JavaPsiFacade.getInstance(project);
+            GlobalSearchScope scope = GlobalSearchScope.allScope(project);
+
+            PsiClass psiClass = ReadAction.compute(() ->
+                    psiFacade.findClass(relativePathOrFqcn.replace("/", ".").replace(".java", ""), scope));
+            if (psiClass != null && psiClass.isValid()) {
+                psiFile = ReadAction.compute(psiClass::getContainingFile);
             }
         }
 
-        // --- Fallback: try resolving as fully qualified class name ---
-        JavaPsiFacade psiFacade = JavaPsiFacade.getInstance(project);
-        GlobalSearchScope scope = GlobalSearchScope.allScope(project);
-
-        PsiClass psiClass = ReadAction.compute(() -> psiFacade.findClass(relativePathOrFqcn.replace("/", ".").replace(".java", ""), scope));
-        if (psiClass != null && psiClass.isValid()) {
-            PsiFile psiFile = ReadAction.compute(psiClass::getContainingFile);
-            if (psiFile != null && psiFile.isValid()) {
-                return ReadAction.compute(psiFile::getText);
-            }
+        if (psiFile == null || !psiFile.isValid()) {
+            return "";
         }
 
-        return "";
+        // --- Read entire file text safely ---
+        String text = ReadAction.compute(psiFile::getText);
+        if (StringUtils.isEmpty(text)) return "";
+
+        // --- If no grep string provided, return full file ---
+        if (grepString == null || grepString.isBlank()) {
+            return text;
+        }
+
+        // --- Split by lines ---
+        List<String> lines = Arrays.asList(text.split("\n"));
+        List<String> snippets = new ArrayList<>();
+
+        Pattern pattern = Pattern.compile(grepString);
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i);
+            if (pattern.matcher(line).find()) {   // ← regex-based grep
+                int start = Math.max(0, i - linesBefore);
+                int end = Math.min(lines.size(), i + linesAfter + 1);
+
+                StringBuilder snippet = new StringBuilder();
+                snippet.append("----- line ").append(relativePathOrFqcn).append(i + 1).append(" -----\n");
+
+                for (int j = start; j < end; j++) {
+                    snippet.append(String.format("%4d | %s%n", j + 1, lines.get(j)));
+                }
+                snippet.append("\n");
+                snippets.add(snippet.toString());
+            }
+        }
+        return String.join("\n", snippets);
     }
+
 
 
 
@@ -298,7 +370,8 @@ public final class TestGenerationWorker {
     private static String stripCodeFences(String text) {
         if (text == null) return null;
         return text
-                .replaceFirst("(?s)^```(?:java)?\\n", "")  // only at start
+                .replaceFirst("(?s)^```(?:diff)?\\n", "")  // only at start
+                .replaceFirst("(?s)^```(?:json)?\\n", "")  // only at start
                 .replaceFirst("(?s)\\n```$", "");          // only at end
     }
 

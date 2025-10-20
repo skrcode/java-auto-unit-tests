@@ -104,7 +104,7 @@ public final class JAIPilotLLM {
 
                 indicator.checkCanceled();
                 HttpRequest createJobReq = HttpRequest.newBuilder()
-                        .uri(URI.create("https://otxfylhjrlaesjagfhfi.supabase.co/functions/v1/invoke-junit-llm-stream"))
+                        .uri(URI.create("https://otxfylhjrlaesjagfhfi.supabase.co/functions/v1/invoke-junit-llm-patch"))
                         .timeout(Duration.ofSeconds(30))
                         .header("Accept", "application/json")
                         .header("Content-Type", "application/json")
@@ -164,7 +164,7 @@ public final class JAIPilotLLM {
                         long end = System.nanoTime();
                         Telemetry.genCompleted(testClassName, String.valueOf(attempt), (end - start) / 1_000_000);
                         ConsolePrinter.success(myConsole,
-                                "Generated test class");
+                                "Received model output");
                         return out;
                     } else if ("error".equalsIgnoreCase(status)) {
                         throw new RuntimeException("Job failed: " + pollJson.get("output").asText());
