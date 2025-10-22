@@ -45,7 +45,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static com.github.skrcode.javaautounittests.CUTUtil.expandAll;
-import static com.github.skrcode.javaautounittests.JAIPilotLLM.getExistingTestClassContent;
+import static com.github.skrcode.javaautounittests.JAIPilotLLM.getCombinedTestClassContent;
 
 /**
  * Compiles a JUnit test class, runs it with coverage, and returns:
@@ -257,7 +257,7 @@ public class BuilderUtil {
                                               String testFileName,
                                               String classSkeleton,
                                               List<TestMethod> methods,
-                                              ConsoleView myConsole, List<Content> contents) {
+                                              ConsoleView myConsole, List<Content> actualContents) {
 
         PsiFile existingFile = ReadAction.compute(testFile::get);
         boolean hasExisting = existingFile != null && existingFile.isValid();
@@ -383,7 +383,7 @@ public class BuilderUtil {
             if (!parser.parse(finalTestSource).getResult().isPresent()) {
                 throw new IllegalArgumentException("Error in final test file syntax.");
             }
-            contents.add(getExistingTestClassContent(finalTestSource));
+            actualContents.add(getCombinedTestClassContent(finalTestSource));
 
 
             // ✅ Step 5: Log
@@ -391,7 +391,6 @@ public class BuilderUtil {
             ConsolePrinter.codeBlock(myConsole, Arrays.asList(finalTestSource));
         });
     }
-
 
     private static String joinLines(List<String> list) { if (list == null || list.isEmpty()) return ""; return String.join("\n", list); }
 }

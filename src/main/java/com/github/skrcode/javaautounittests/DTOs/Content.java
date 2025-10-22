@@ -42,6 +42,7 @@ public class Content {
         private String thoughtSignature;
         private String text;
         private FunctionCall functionCall;
+        private FunctionResponse functionResponse;
 
         public Part() {}
 
@@ -51,6 +52,10 @@ public class Content {
 
         public Part(FunctionCall functionCall) {
             this.functionCall = functionCall;
+        }
+
+        public Part(FunctionResponse functionResponse) {
+            this.functionResponse = functionResponse;
         }
 
         public String getText() {
@@ -77,12 +82,21 @@ public class Content {
             this.thoughtSignature = thoughtSignature;
         }
 
+        public FunctionResponse getFunctionResponse() {
+            return functionResponse;
+        }
+
+        public void setFunctionResponse(FunctionResponse functionResponse) {
+            this.functionResponse = functionResponse;
+        }
+
         @Override
         public String toString() {
             return "Part{" +
                     "thoughtSignature='" + thoughtSignature + '\'' +
                     ", text='" + text + '\'' +
                     ", functionCall=" + functionCall +
+                    ", functionResponse=" + functionResponse +
                     '}';
         }
     }
@@ -123,4 +137,61 @@ public class Content {
                     '}';
         }
     }
+
+    public static class FunctionResponse {
+        private String name;
+        private FunctionResponseResult response;
+
+        public FunctionResponse() {
+        }
+
+        public FunctionResponse(String name, FunctionResponseResult response) {
+            this.name = name;
+            this.response = response;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        public Object getResponse() {
+            return response;
+        }
+
+        public void setResponse(FunctionResponseResult response) {
+            this.response = response;
+        }
+
+        @Override
+        public String toString() {
+            return "FunctionResponse{" +
+                    "name='" + name + '\'' +
+                    ", response=" + response +
+                    '}';
+        }
+    }
+
+    public static class FunctionResponseResult {
+        private String result;
+
+        public String getResult() {
+            return result;
+        }
+
+        public void setResult(String result) {
+            this.result = result;
+        }
+
+        @Override
+        public String toString() {
+            return "FunctionResponseResult{" +
+                    "result='" + result + '\'' +
+                    '}';
+        }
+    }
+
 }

@@ -34,12 +34,31 @@ public final class JAIPilotLLM {
     private JAIPilotLLM() {}
 
     public static Content getContextSourceContent(String classSource) {
-        // Explicitly wrap the CUT source string (may be used separately from context)
-        return new Content(
-                "user",
-                List.of(new Content.Part(classSource))
+        Content.FunctionResponseResult result = new Content.FunctionResponseResult();
+        result.setResult(classSource);
+
+        Content.FunctionResponse functionResponse = new Content.FunctionResponse(
+                "get_file_snippets",
+                result
         );
+
+        Content.Part part = new Content.Part(functionResponse);
+        return new Content("user", List.of(part));
     }
+
+    public static Content getCombinedTestClassContent(String finalTestSource) {
+        Content.FunctionResponseResult result = new Content.FunctionResponseResult();
+        result.setResult(finalTestSource);
+
+        Content.FunctionResponse functionResponse = new Content.FunctionResponse(
+                "apply_test_class",
+                result
+        );
+
+        Content.Part part = new Content.Part(functionResponse);
+        return new Content("model", List.of(part));
+    }
+
 
 
     public static Content getExistingTestClassContent(String existingTestSource) {
@@ -48,12 +67,25 @@ public final class JAIPilotLLM {
                 List.of(new Content.Part(existingTestSource))
         );
     }
+
     public static Content getMockitoVersionContent(Project project) {
-        return new Content(
-                "user",
-                List.of(new Content.Part("Mockito version in project: " + CUTUtil.findMockitoVersion(project)))
+        String version = CUTUtil.findMockitoVersion(project);
+
+        Content.FunctionResponseResult result = new Content.FunctionResponseResult();
+        result.setResult(version);
+
+        Content.FunctionResponse functionResponse = new Content.FunctionResponse(
+                "fetch_mockito_version",
+                result
         );
+
+        // Wrap inside a Part
+        Content.Part part = new Content.Part(functionResponse);
+
+        // Final Content object
+        return new Content("user", List.of(part));
     }
+
     public static Content getOutputContent(String output) {
         // Wrap compiler/test runner output or error messages
         return new Content(
