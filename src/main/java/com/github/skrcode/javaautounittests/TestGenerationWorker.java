@@ -331,10 +331,10 @@ public final class TestGenerationWorker {
                 int end = Math.min(lines.size(), i + linesAfter + 1);
 
                 StringBuilder snippet = new StringBuilder();
-                snippet.append("----- line ").append(relativePathOrFqcn).append(i + 1).append(" -----\n");
+//                snippet.append("----- line ").append(relativePathOrFqcn).append(i + 1).append(" -----\n");
 
                 for (int j = start; j < end; j++) {
-                    snippet.append(String.format("%4d | %s%n", j + 1, lines.get(j)));
+                    snippet.append(lines.get(j));
                 }
                 snippet.append("\n");
                 snippets.add(snippet.toString());
