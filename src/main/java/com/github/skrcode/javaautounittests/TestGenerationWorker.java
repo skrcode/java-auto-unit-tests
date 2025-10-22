@@ -112,8 +112,8 @@ public final class TestGenerationWorker {
                         attempt,
                         indicator
                 );
-                contents.add(output.getContent());
                 actualContents = new ArrayList<>(contents);
+                actualContents.add(output.getContent());
                 if (output.getContent() != null) {
                     for (Content.Part p : output.getContent().getParts()) {
                         if (p.getFunctionCall() != null) {
