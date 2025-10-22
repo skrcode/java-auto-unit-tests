@@ -1,8 +1,8 @@
 package com.github.skrcode.javaautounittests;
 
 import com.github.javaparser.JavaParser;
+import com.github.skrcode.javaautounittests.DTOs.Content;
 import com.github.skrcode.javaautounittests.settings.ConsolePrinter;
-import com.intellij.codeInsight.actions.ReformatCodeProcessor;
 import com.intellij.compiler.CompilerMessageImpl;
 import com.intellij.execution.ExecutionException;
 import com.intellij.execution.Executor;
@@ -37,14 +37,15 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.psi.*;
-import com.intellij.psi.codeStyle.CodeStyleManager;
-import com.intellij.psi.codeStyle.JavaCodeStyleManager;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+
+import static com.github.skrcode.javaautounittests.CUTUtil.expandAll;
+import static com.github.skrcode.javaautounittests.JAIPilotLLM.getExistingTestClassContent;
 
 /**
  * Compiles a JUnit test class, runs it with coverage, and returns:
@@ -256,7 +257,7 @@ public class BuilderUtil {
                                               String testFileName,
                                               String classSkeleton,
                                               List<TestMethod> methods,
-                                              ConsoleView myConsole) {
+                                              ConsoleView myConsole, List<Content> contents) {
 
         PsiFile existingFile = ReadAction.compute(testFile::get);
         boolean hasExisting = existingFile != null && existingFile.isValid();
@@ -372,6 +373,8 @@ public class BuilderUtil {
             }
 
             // ✅ Step 4: Commit & validate
+            expandAll(project, (PsiJavaFile) psiFile);
+
             Document doc = psiDocMgr.getDocument(psiFile);
             if (doc != null) psiDocMgr.commitDocument(doc);
             String finalTestSource = javaFile.getText();
@@ -380,10 +383,8 @@ public class BuilderUtil {
             if (!parser.parse(finalTestSource).getResult().isPresent()) {
                 throw new IllegalArgumentException("Error in final test file syntax.");
             }
+            contents.add(getExistingTestClassContent(finalTestSource));
 
-            JavaCodeStyleManager.getInstance(project).optimizeImports(psiFile);
-            new ReformatCodeProcessor(project, psiFile, null, false).run();
-            CodeStyleManager.getInstance(project).reformat(psiFile);
 
             // ✅ Step 5: Log
             ConsolePrinter.success(myConsole, "✅ Test class composed and written successfully");

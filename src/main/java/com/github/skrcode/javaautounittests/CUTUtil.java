@@ -46,7 +46,7 @@ public final class CUTUtil {
     /** Expands all star imports.  Call this inside your plugin before
      serialising the file for an LLM. */
     public static void expandAll(Project project, PsiJavaFile file) {
-        WriteCommandAction.runWriteCommandAction(project, () -> {
+
 
             JavaCodeStyleSettings js = CodeStyle.getSettings(file)
                     .getCustomSettings(JavaCodeStyleSettings.class);
@@ -73,7 +73,6 @@ public final class CUTUtil {
             js.NAMES_COUNT_TO_USE_IMPORT_ON_DEMAND = prevNames;
             if (prevStatic != -1) setStaticThreshold(js, prevStatic);
             restoreStarPackages(js, starPkgSnapshot);
-        });
     }
 
     /* --------------------   Reflection helpers   ------------------------- */
@@ -161,7 +160,9 @@ public final class CUTUtil {
         PsiJavaFile scratch  = (PsiJavaFile) original.copy();
 
         // 2️⃣  Expand star imports on the scratch only
-        expandAll(project, scratch);          // ← your expander from earlier
+        WriteCommandAction.runWriteCommandAction(project, () -> {
+                    expandAll(project, scratch);          // ← your expander from earlier
+                });
 
         // 3️⃣  Harvest the source and return; the scratch is GC-eligible
         return scratch.getText();

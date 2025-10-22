@@ -66,7 +66,7 @@ public final class TestGenerationWorker {
                     contents.add(JAIPilotLLM.getExistingTestClassContent(existingTestSource));
                 }
             }
-            List<Content> actualContents = new ArrayList<>(contents);
+//            List<Content> actualContents = new ArrayList<>(contents);
             boolean shouldRebuild = true;
             for (; ; attempt++) {
                 ConsolePrinter.section(myConsole, "Attempting");
@@ -85,7 +85,7 @@ public final class TestGenerationWorker {
                         errorOutput = BuilderUtil.runJUnitClass(project, testFile.get());
                         if(!errorOutput.isEmpty()) {
                             ConsolePrinter.info(myConsole, "Found tests execution errors " + testFileName);
-                            actualContents.add(JAIPilotLLM.getOutputContent(errorOutput));
+                            contents.add(JAIPilotLLM.getOutputContent(errorOutput));
                         }
                         else {
                             ConsolePrinter.success(myConsole, "Tests execution successful " + testFileName);
@@ -94,7 +94,7 @@ public final class TestGenerationWorker {
                     }
                     else {
                         ConsolePrinter.info(myConsole, "Found compilation errors " + testFileName);
-                        actualContents.add(JAIPilotLLM.getOutputContent(errorOutput));
+                        contents.add(JAIPilotLLM.getOutputContent(errorOutput));
                     }
                 }
                 shouldRebuild = false;
@@ -107,14 +107,13 @@ public final class TestGenerationWorker {
                 indicator.checkCanceled();
                 PromptResponseOutput output = JAIPilotLLM.generateContent(
                         testFileName,
-                        actualContents,
+                        contents,
                         myConsole,
                         attempt,
                         indicator
                 );
 
-                actualContents = new ArrayList<>(contents);
-                actualContents.add(output.getContent());
+                contents.add(output.getContent());
                 if (output.getContent() != null) {
                     for (Content.Part p : output.getContent().getParts()) {
                         if (p.getFunctionCall() != null) {
@@ -144,7 +143,8 @@ public final class TestGenerationWorker {
                                                     packageDir, testFileName,
                                                     classSkeleton,
                                                     methods,
-                                                    myConsole
+                                                    myConsole,
+                                                    contents
                                             );
                                             shouldRebuild = true;
                                         } catch (Exception e) {
@@ -157,7 +157,6 @@ public final class TestGenerationWorker {
                                 case "fetch_mockito_version":
                                     ConsolePrinter.info(myConsole, "Fetching mockito version");
                                     Content mockitoVersionContent = JAIPilotLLM.getMockitoVersionContent(project);
-                                    actualContents.add(mockitoVersionContent);
                                     contents.add(mockitoVersionContent);
                                     break;
                                 case "get_file_snippets":
@@ -188,8 +187,6 @@ public final class TestGenerationWorker {
                                             ConsolePrinter.success(myConsole, "Snippet(s): " + toolResult);
                                             ConsolePrinter.success(myConsole, "Fetched file snippet(s): " + filePath);
                                         }
-
-                                        actualContents.add(JAIPilotLLM.getContextSourceContent(toolResult));
                                         contents.add(JAIPilotLLM.getContextSourceContent(toolResult));
                                     }
                                     break;
