@@ -123,6 +123,16 @@ public final class TestGenerationWorker {
                             String fn = fc.getName();
                             Object args = fc.getArgs();
                             switch (fn) {
+                                case "plan_test_changes": {
+                                    if (args instanceof Map) {
+                                        Map<?, ?> argMap = (Map<?, ?>) args;
+                                        String testPlan = (String) argMap.get("testPlan");
+                                        ConsolePrinter.info(myConsole, "Fetching test plan: " + testPlan);
+                                        actualContents.add(JAIPilotLLM.getTestPlanContent(testPlan));
+                                        contents.add(JAIPilotLLM.getTestPlanContent(testPlan));
+                                    }
+                                    break;
+                                }
                                 case "apply_test_class": {
                                     if (args instanceof Map) {
                                         Map<?, ?> argMap = (Map<?, ?>) args;

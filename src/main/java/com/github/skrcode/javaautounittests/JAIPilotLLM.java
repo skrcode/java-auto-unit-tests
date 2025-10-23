@@ -46,6 +46,19 @@ public final class JAIPilotLLM {
         return new Content("user", List.of(part));
     }
 
+    public static Content getTestPlanContent(String testPlan) {
+        Content.FunctionResponseResult result = new Content.FunctionResponseResult();
+        result.setResult(testPlan);
+
+        Content.FunctionResponse functionResponse = new Content.FunctionResponse(
+                "plan_test_changes",
+                result
+        );
+
+        Content.Part part = new Content.Part(functionResponse);
+        return new Content("model", List.of(part));
+    }
+
     public static Content getCombinedTestClassContent(String finalTestSource) {
         Content.FunctionResponseResult result = new Content.FunctionResponseResult();
         result.setResult(finalTestSource);
