@@ -21,12 +21,14 @@ import com.intellij.openapi.util.Ref;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.*;
+import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.util.PsiTreeUtil;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.event.HyperlinkEvent;
+import java.nio.file.Paths;
 import java.util.*;
 
 public final class TestGenerationWorker {
@@ -280,54 +282,77 @@ public final class TestGenerationWorker {
         return null;
     }
 
+    public static String getSourceCodeOfContextClasses(Project project, String relativePathOrFqcn) {
+        if (relativePathOrFqcn == null || relativePathOrFqcn.isBlank()) {
+            return "";
+        }
+
+        String normPath = relativePathOrFqcn.replace("\\", "/");
+
+        // --- Try existing project/library search ---
+        VirtualFile vf = findInProjectAndLibraries(project, normPath);
+        if (vf != null) {
+            PsiFile psiFile = ReadAction.compute(() -> PsiManager.getInstance(project).findFile(vf));
+            if (psiFile != null && psiFile.isValid()) {
+                return ReadAction.compute(psiFile::getText);
+            }
+        }
+
+        // --- Fallback: try resolving as fully qualified class name ---
+        JavaPsiFacade psiFacade = JavaPsiFacade.getInstance(project);
+        GlobalSearchScope scope = GlobalSearchScope.allScope(project);
+
+        PsiClass psiClass = ReadAction.compute(() -> psiFacade.findClass(relativePathOrFqcn.replace("/", ".").replace(".java", ""), scope));
+        if (psiClass != null && psiClass.isValid()) {
+            PsiFile psiFile = ReadAction.compute(psiClass::getContainingFile);
+            if (psiFile != null && psiFile.isValid()) {
+                return ReadAction.compute(psiFile::getText);
+            }
+        }
+
+        return "";
+    }
+
 
     public static String stripCommentsAndMethodBodies(Project project, String relativePathOrFqcn) {
         if (relativePathOrFqcn == null || relativePathOrFqcn.isBlank()) return "";
 
-        // --- Find file in project or libraries ---
-        VirtualFile vf = findInProjectAndLibraries(project, relativePathOrFqcn);
-        if (vf == null) return "";
+        // --- Reuse existing utility to get raw source code text ---
+        String sourceText = getSourceCodeOfContextClasses(project, relativePathOrFqcn);
+        if (sourceText.isBlank()) return "";
 
-        PsiFile psiFile = PsiManager.getInstance(project).findFile(vf);
-        if (!(psiFile instanceof PsiJavaFile)) return "";
-
-        PsiJavaFile originalFile = (PsiJavaFile) psiFile;
-
-        // --- Create PSI copy (so original file remains untouched) ---
-        PsiJavaFile copy = (PsiJavaFile) PsiFileFactory.getInstance(project)
+        // --- Create temporary PSI file from text ---
+        PsiJavaFile psiFile = (PsiJavaFile) PsiFileFactory.getInstance(project)
                 .createFileFromText(
-                        originalFile.getName(),
+                        Paths.get(relativePathOrFqcn).getFileName().toString(), // fallback name
                         JavaFileType.INSTANCE,
-                        originalFile.getText()
+                        sourceText
                 );
 
         // --- Remove all comments (Javadoc, line, block) ---
-        for (PsiComment comment : PsiTreeUtil.findChildrenOfType(copy, PsiComment.class)) {
+        for (PsiComment comment : PsiTreeUtil.findChildrenOfType(psiFile, PsiComment.class)) {
             comment.delete();
         }
 
         // --- Replace all method/constructor bodies with "{}" ---
         PsiElementFactory factory = JavaPsiFacade.getInstance(project).getElementFactory();
-        for (PsiMethod method : PsiTreeUtil.findChildrenOfType(copy, PsiMethod.class)) {
+        for (PsiMethod method : PsiTreeUtil.findChildrenOfType(psiFile, PsiMethod.class)) {
             PsiCodeBlock body = method.getBody();
             if (body != null) {
                 body.replace(factory.createCodeBlock());
             }
         }
 
-        // --- Replace all class initializers (static/instance) with "{}" ---
-        for (PsiClassInitializer initializer : PsiTreeUtil.findChildrenOfType(copy, PsiClassInitializer.class)) {
+        // --- Replace all static/instance initializer bodies with "{}" ---
+        for (PsiClassInitializer initializer : PsiTreeUtil.findChildrenOfType(psiFile, PsiClassInitializer.class)) {
             PsiCodeBlock body = initializer.getBody();
             if (body != null) {
                 body.replace(factory.createCodeBlock());
             }
         }
 
-        return copy.getText();
+        return psiFile.getText();
     }
-
-
-
 
 
     /** Recursively find or create nested sub-directories like {@code org/example/service}. */
