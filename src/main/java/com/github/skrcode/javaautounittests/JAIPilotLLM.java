@@ -34,16 +34,10 @@ public final class JAIPilotLLM {
     private JAIPilotLLM() {}
 
     public static Content getContextSourceContent(String classSource) {
-        Content.FunctionResponseResult result = new Content.FunctionResponseResult();
-        result.setResult(classSource);
-
-        Content.FunctionResponse functionResponse = new Content.FunctionResponse(
-                "get_file",
-                result
+        return new Content(
+                "user",
+                List.of(new Content.Part(classSource))
         );
-
-        Content.Part part = new Content.Part(functionResponse);
-        return new Content("user", List.of(part));
     }
 
     public static Content getTestPlanContent(String testPlan) {
@@ -60,19 +54,11 @@ public final class JAIPilotLLM {
     }
 
     public static Content getCombinedTestClassContent(String finalTestSource) {
-        Content.FunctionResponseResult result = new Content.FunctionResponseResult();
-        result.setResult(finalTestSource);
-
-        Content.FunctionResponse functionResponse = new Content.FunctionResponse(
-                "apply_test_class",
-                result
+        return new Content(
+                "model",
+                List.of(new Content.Part(finalTestSource))
         );
-
-        Content.Part part = new Content.Part(functionResponse);
-        return new Content("model", List.of(part));
     }
-
-
 
     public static Content getExistingTestClassContent(String existingTestSource) {
         return new Content(
