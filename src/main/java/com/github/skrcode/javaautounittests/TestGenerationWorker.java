@@ -7,6 +7,7 @@ import com.github.skrcode.javaautounittests.settings.JAIPilotExecutionManager;
 import com.github.skrcode.javaautounittests.settings.telemetry.Telemetry;
 import com.intellij.execution.ui.ConsoleView;
 import com.intellij.ide.BrowserUtil;
+import com.intellij.ide.highlighter.JavaFileType;
 import com.intellij.notification.NotificationGroupManager;
 import com.intellij.notification.NotificationType;
 import com.intellij.openapi.application.ApplicationManager;
@@ -20,14 +21,13 @@ import com.intellij.openapi.util.Ref;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.*;
-import com.intellij.psi.search.GlobalSearchScope;
+import com.intellij.psi.util.PsiTreeUtil;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.event.HyperlinkEvent;
 import java.util.*;
-import java.util.regex.Pattern;
 
 public final class TestGenerationWorker {
 
@@ -68,6 +68,7 @@ public final class TestGenerationWorker {
             }
             List<Content> actualContents = new ArrayList<>(contents);
             boolean shouldRebuild = true;
+            Set<String> isClassPathFetched = new HashSet<>();
             for (; ; attempt++) {
                 ConsolePrinter.section(myConsole, "Attempting");
 
@@ -115,7 +116,8 @@ public final class TestGenerationWorker {
                 actualContents = new ArrayList<>(contents);
                 actualContents.add(output.getContent());
                 if (output.getContent() != null) {
-                    for (Content.Part p : output.getContent().getParts()) {
+                    for (int i=0;i<10 && i < output.getContent().getParts().size();i++) {
+                        Content.Part p = output.getContent().getParts().get(i);
                         if (p.getFunctionCall() != null) {
                             Content.FunctionCall fc = p.getFunctionCall();
                             String fn = fc.getName();
@@ -160,26 +162,19 @@ public final class TestGenerationWorker {
                                     actualContents.add(mockitoVersionContent);
                                     contents.add(mockitoVersionContent);
                                     break;
-                                case "get_file_snippets":
+                                case "get_file":
                                     if (args instanceof Map) {
                                         Map<?, ?> argMap = (Map<?, ?>) args;
                                         String filePath = (String) argMap.get("filePath");
-                                        String grepString = (String) argMap.get("grepString");
-                                        int linesBefore = 10, linesAfter = 10;
-                                        Object beforeObj = argMap.get("linesBefore"), afterObj = argMap.get("linesAfter");
-
-                                        if (beforeObj != null) {
-                                            if (beforeObj instanceof Number) linesBefore = ((Number) beforeObj).intValue();
-                                            else linesBefore = Integer.parseInt(beforeObj.toString());
-                                        }
-                                        if (afterObj != null) {
-                                            if (afterObj instanceof Number) linesAfter = ((Number) afterObj).intValue();
-                                            else linesAfter = Integer.parseInt(afterObj.toString());
-                                        }
 
                                         ConsolePrinter.info(myConsole, "Fetching file details: " + filePath);
-                                        ConsolePrinter.info(myConsole, "Searching for: " + grepString);
-                                        String toolResult = getSourceCodeOfContextClasses(project, filePath, grepString, linesBefore, linesAfter);
+
+                                        if(isClassPathFetched.contains(filePath) || filePath.endsWith(testFileName) || filePath.endsWith(cutName+".java")) {
+                                            ConsolePrinter.info(myConsole, "Duplicate file - ignoring");
+                                            continue;
+                                        }
+                                        isClassPathFetched.add(filePath);
+                                        String toolResult = stripCommentsAndMethodBodies(project, filePath);
 
                                         if (StringUtils.isEmpty(toolResult)) {
                                             ConsolePrinter.info(myConsole, "No matches or file not found: " + filePath);
@@ -275,73 +270,52 @@ public final class TestGenerationWorker {
         return null;
     }
 
-    public static String getSourceCodeOfContextClasses(Project project,
-                                                       String relativePathOrFqcn,
-                                                       String grepString,
-                                                       int linesBefore,
-                                                       int linesAfter) {
-        if (relativePathOrFqcn == null || relativePathOrFqcn.isBlank()) {
-            return "";
+
+    public static String stripCommentsAndMethodBodies(Project project, String relativePathOrFqcn) {
+        if (relativePathOrFqcn == null || relativePathOrFqcn.isBlank()) return "";
+
+        // --- Find file in project or libraries ---
+        VirtualFile vf = findInProjectAndLibraries(project, relativePathOrFqcn);
+        if (vf == null) return "";
+
+        PsiFile psiFile = PsiManager.getInstance(project).findFile(vf);
+        if (!(psiFile instanceof PsiJavaFile)) return "";
+
+        PsiJavaFile originalFile = (PsiJavaFile) psiFile;
+
+        // --- Create PSI copy (so original file remains untouched) ---
+        PsiJavaFile copy = (PsiJavaFile) PsiFileFactory.getInstance(project)
+                .createFileFromText(
+                        originalFile.getName(),
+                        JavaFileType.INSTANCE,
+                        originalFile.getText()
+                );
+
+        // --- Remove all comments (Javadoc, line, block) ---
+        for (PsiComment comment : PsiTreeUtil.findChildrenOfType(copy, PsiComment.class)) {
+            comment.delete();
         }
 
-        String normPath = relativePathOrFqcn.replace("\\", "/");
-
-        // --- Try finding file in project or libraries ---
-        VirtualFile vf = findInProjectAndLibraries(project, normPath);
-        PsiFile psiFile = null;
-
-        if (vf != null) {
-            psiFile = ReadAction.compute(() -> PsiManager.getInstance(project).findFile(vf));
-        }
-
-        if ((psiFile == null || !psiFile.isValid())) {
-            // --- Fallback: try resolving as class name ---
-            JavaPsiFacade psiFacade = JavaPsiFacade.getInstance(project);
-            GlobalSearchScope scope = GlobalSearchScope.allScope(project);
-
-            PsiClass psiClass = ReadAction.compute(() ->
-                    psiFacade.findClass(relativePathOrFqcn.replace("/", ".").replace(".java", ""), scope));
-            if (psiClass != null && psiClass.isValid()) {
-                psiFile = ReadAction.compute(psiClass::getContainingFile);
+        // --- Replace all method/constructor bodies with "{}" ---
+        PsiElementFactory factory = JavaPsiFacade.getInstance(project).getElementFactory();
+        for (PsiMethod method : PsiTreeUtil.findChildrenOfType(copy, PsiMethod.class)) {
+            PsiCodeBlock body = method.getBody();
+            if (body != null) {
+                body.replace(factory.createCodeBlock());
             }
         }
 
-        if (psiFile == null || !psiFile.isValid()) {
-            return "";
-        }
-
-        // --- Read entire file text safely ---
-        String text = ReadAction.compute(psiFile::getText);
-        if (StringUtils.isEmpty(text)) return "";
-
-        // --- If no grep string provided, return full file ---
-        if (grepString == null || grepString.isBlank()) {
-            return text;
-        }
-
-        // --- Split by lines ---
-        List<String> lines = Arrays.asList(text.split("\n"));
-        List<String> snippets = new ArrayList<>();
-
-        Pattern pattern = Pattern.compile(Pattern.quote(grepString));
-        for (int i = 0; i < lines.size(); i++) {
-            String line = lines.get(i);
-            if (pattern.matcher(line).find()) {   // ← regex-based grep
-                int start = Math.max(0, i - linesBefore);
-                int end = Math.min(lines.size(), i + linesAfter + 1);
-
-                StringBuilder snippet = new StringBuilder();
-//                snippet.append("----- line ").append(relativePathOrFqcn).append(i + 1).append(" -----\n");
-
-                for (int j = start; j < end; j++) {
-                    snippet.append(lines.get(j));
-                }
-                snippet.append("\n");
-                snippets.add(snippet.toString());
+        // --- Replace all class initializers (static/instance) with "{}" ---
+        for (PsiClassInitializer initializer : PsiTreeUtil.findChildrenOfType(copy, PsiClassInitializer.class)) {
+            PsiCodeBlock body = initializer.getBody();
+            if (body != null) {
+                body.replace(factory.createCodeBlock());
             }
         }
-        return String.join("\n", snippets);
+
+        return copy.getText();
     }
+
 
 
 
@@ -365,14 +339,6 @@ public final class TestGenerationWorker {
         } catch (Exception e) {
             throw new Exception("Incorrect tests source directory");
         }
-    }
-
-    private static String stripCodeFences(String text) {
-        if (text == null) return null;
-        return text
-                .replaceFirst("(?s)^```(?:diff)?\\n", "")  // only at start
-                .replaceFirst("(?s)^```(?:json)?\\n", "")  // only at start
-                .replaceFirst("(?s)\\n```$", "");          // only at end
     }
 
     private TestGenerationWorker() {} // no-instantiation

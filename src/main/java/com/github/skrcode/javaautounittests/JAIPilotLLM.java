@@ -38,7 +38,7 @@ public final class JAIPilotLLM {
         result.setResult(classSource);
 
         Content.FunctionResponse functionResponse = new Content.FunctionResponse(
-                "get_file_snippets",
+                "get_file",
                 result
         );
 
