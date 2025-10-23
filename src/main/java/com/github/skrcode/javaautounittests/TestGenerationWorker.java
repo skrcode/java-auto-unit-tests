@@ -71,9 +71,10 @@ public final class TestGenerationWorker {
             List<Content> actualContents = new ArrayList<>(contents);
             boolean shouldRebuild = true;
             Set<String> isClassPathFetched = new HashSet<>();
+            String newTestSource = null;
             for (; ; attempt++) {
                 ConsolePrinter.section(myConsole, "Attempting");
-
+                if(newTestSource != null) actualContents.add(JAIPilotLLM.getCombinedTestClassContent(newTestSource));
                 // Check if test file already exists and run it
                 Ref<PsiFile> testFile = ReadAction.compute(() -> Ref.create(packageDir.findFile(testFileName)));
                 if (ReadAction.compute(testFile::get) != null && shouldRebuild) {
@@ -152,13 +153,12 @@ public final class TestGenerationWorker {
                                                     methods.add(new BuilderUtil.TestMethod(methodName, fullImpl));
                                                 }
                                             }
-                                            BuilderUtil.buildAndWriteTestClass(
+                                            newTestSource = BuilderUtil.buildAndWriteTestClass(
                                                     project,testFile,
                                                     packageDir, testFileName,
                                                     classSkeleton,
                                                     methods,
-                                                    myConsole,
-                                                    actualContents
+                                                    myConsole
                                             );
                                             shouldRebuild = true;
                                         } catch (Exception e) {
