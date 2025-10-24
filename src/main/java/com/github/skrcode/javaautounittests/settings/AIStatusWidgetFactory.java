@@ -1,5 +1,6 @@
 package com.github.skrcode.javaautounittests.settings;
 
+import com.github.skrcode.javaautounittests.settings.telemetry.Telemetry;
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.options.ShowSettingsUtil;
 import com.intellij.openapi.project.Project;
@@ -50,6 +51,7 @@ public class AIStatusWidgetFactory implements StatusBarWidgetFactory {
 
             MouseAdapter clicker = new MouseAdapter() {
                 @Override public void mouseClicked(MouseEvent e) {
+                    Telemetry.uiClick("settings");
                     ShowSettingsUtil.getInstance().showSettingsDialog(project, AISettingsConfigurable.class);
                     refresh();
                 }

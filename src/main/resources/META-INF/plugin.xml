@@ -66,17 +66,6 @@
                 id="JAIPilot - One-Click AI Agent for Java Unit Testing Feedback"
                 displayType="BALLOON"
                 isLogByDefault="false"/>
-
-        <!-- ✅ Correct place for dependencySupport -->
-        <dependencySupport kind="java"
-                           coordinate="org.junit:junit"
-                           displayName="JUnit"/>
-        <dependencySupport kind="java"
-                           coordinate="org.junit.jupiter:junit-jupiter-api"
-                           displayName="JUnit Jupiter"/>
-        <dependencySupport kind="java"
-                           coordinate="org.testng:testng"
-                           displayName="TestNG"/>
     </extensions>
 
     <resource-bundle>messages.MyBundle</resource-bundle>

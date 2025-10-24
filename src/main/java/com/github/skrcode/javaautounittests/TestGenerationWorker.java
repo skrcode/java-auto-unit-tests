@@ -1,6 +1,5 @@
 package com.github.skrcode.javaautounittests;
 
-import com.github.javaparser.JavaParser;
 import com.github.skrcode.javaautounittests.DTOs.Content;
 import com.github.skrcode.javaautounittests.DTOs.PromptResponseOutput;
 import com.github.skrcode.javaautounittests.settings.ConsolePrinter;
@@ -8,6 +7,7 @@ import com.github.skrcode.javaautounittests.settings.JAIPilotExecutionManager;
 import com.github.skrcode.javaautounittests.settings.telemetry.Telemetry;
 import com.intellij.execution.ui.ConsoleView;
 import com.intellij.ide.BrowserUtil;
+import com.intellij.ide.highlighter.JavaFileType;
 import com.intellij.notification.NotificationGroupManager;
 import com.intellij.notification.NotificationType;
 import com.intellij.openapi.application.ApplicationManager;
@@ -22,14 +22,14 @@ import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.*;
 import com.intellij.psi.search.GlobalSearchScope;
-import org.codehaus.plexus.util.StringUtils;
+import com.intellij.psi.util.PsiTreeUtil;
+import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.event.HyperlinkEvent;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.nio.file.Paths;
+import java.util.*;
 
 public final class TestGenerationWorker {
 
@@ -61,25 +61,29 @@ public final class TestGenerationWorker {
 
             // Add existing test class (if present) as context
             Ref<PsiFile> testFileExisting = ReadAction.compute(() -> Ref.create(packageDir.findFile(testFileName)));
+            String existingTestSource = "";
             if (ReadAction.compute(testFileExisting::get) != null) {
-                String existingTestSource = ReadAction.compute(() -> testFileExisting.get().getText());
+                existingTestSource = ReadAction.compute(() -> testFileExisting.get().getText());
                 if (existingTestSource != null && !existingTestSource.isBlank()) {
                     contents.add(JAIPilotLLM.getExistingTestClassContent(existingTestSource));
                 }
             }
             List<Content> actualContents = new ArrayList<>(contents);
+            boolean shouldRebuild = true;
+            Set<String> isClassPathFetched = new HashSet<>();
+            String newTestSource = null;
             for (; ; attempt++) {
                 ConsolePrinter.section(myConsole, "Attempting");
-
+                if(newTestSource != null) actualContents.add(JAIPilotLLM.getCombinedTestClassContent(newTestSource));
                 // Check if test file already exists and run it
                 Ref<PsiFile> testFile = ReadAction.compute(() -> Ref.create(packageDir.findFile(testFileName)));
-                if (ReadAction.compute(testFile::get) != null) {
+                if (ReadAction.compute(testFile::get) != null && shouldRebuild) {
                     ConsolePrinter.info(myConsole, "Compiling Tests " + testFileName);
                     indicator.checkCanceled();
                     String errorOutput = BuilderUtil.compileJUnitClass(project, testFile);
 
                     if (errorOutput.isEmpty()) {
-                        ConsolePrinter.success(myConsole, "Compilaton Successful " + testFileName);
+                        ConsolePrinter.success(myConsole, "Compilation Successful " + testFileName);
                         ConsolePrinter.info(myConsole, "Running Tests " + testFileName);
                         indicator.checkCanceled();
                         errorOutput = BuilderUtil.runJUnitClass(project, testFile.get());
@@ -97,7 +101,7 @@ public final class TestGenerationWorker {
                         actualContents.add(JAIPilotLLM.getOutputContent(errorOutput));
                     }
                 }
-
+                shouldRebuild = false;
                 if (attempt > MAX_ATTEMPTS) {
                     ConsolePrinter.warn(myConsole, "Attempts breached. I have tried my best to compile and execute tests. Please fix the remaining tests manually. " + testFileName);
                     break;
@@ -112,32 +116,58 @@ public final class TestGenerationWorker {
                         attempt,
                         indicator
                 );
-                ConsolePrinter.info(myConsole, "Generated tests " + testFileName);
                 actualContents = new ArrayList<>(contents);
                 actualContents.add(output.getContent());
-                // Iterate through returned contents (can be text or function calls)
                 if (output.getContent() != null) {
-                    for (Content.Part p : output.getContent().getParts()) {
-                        if (p.getText() != null && !p.getText().isBlank()) {
-                            // ✅ Normal test class candidate
-                            isLLMGeneratedAtLeastOnce = true;
-                            String testCode = stripCodeFences(p.getText());
-                            JavaParser parser = new JavaParser();
-                            if (!parser.parse(testCode).isSuccessful()) {
-                                ConsolePrinter.info(myConsole, "Improper Test File Generated.");
-                                continue;
-                            }
-                            ConsolePrinter.success(myConsole, "Test Generated");
-                            ConsolePrinter.codeBlock(myConsole, List.of(testCode.split("\n")));
-                            indicator.checkCanceled();
-                            BuilderUtil.write(project, testFile, packageDir, testFileName, testCode);
-                            ConsolePrinter.success(myConsole, "Written test to test file");
-                        }
+                    for (int i=0;i<10 && i < output.getContent().getParts().size();i++) {
+                        Content.Part p = output.getContent().getParts().get(i);
                         if (p.getFunctionCall() != null) {
                             Content.FunctionCall fc = p.getFunctionCall();
                             String fn = fc.getName();
                             Object args = fc.getArgs();
                             switch (fn) {
+                                case "plan_test_changes": {
+                                    if (args instanceof Map) {
+                                        Map<?, ?> argMap = (Map<?, ?>) args;
+                                        String testPlan = (String) argMap.get("testPlan");
+                                        ConsolePrinter.info(myConsole, "Fetching test plan: \n" + testPlan);
+                                        actualContents.add(JAIPilotLLM.getTestPlanContent(testPlan));
+                                        contents.add(JAIPilotLLM.getTestPlanContent(testPlan));
+                                    }
+                                    break;
+                                }
+                                case "apply_test_class": {
+                                    if (args instanceof Map) {
+                                        Map<?, ?> argMap = (Map<?, ?>) args;
+                                        isLLMGeneratedAtLeastOnce = true;
+                                        try {
+                                            indicator.checkCanceled();
+                                            String classSkeleton = (String) argMap.get("classSkeleton");
+                                            // Convert methods array (if present)
+                                            List<Map<String, Object>> rawMethods = (List<Map<String, Object>>) argMap.get("methods");
+                                            List<BuilderUtil.TestMethod> methods = new ArrayList<>();
+                                            if (rawMethods != null) {
+                                                for (Map<String, Object> m : rawMethods) {
+                                                    String methodName = Objects.toString(m.get("methodName"), null);
+                                                    String fullImpl = Objects.toString(m.get("fullImplementation"), "");
+                                                    methods.add(new BuilderUtil.TestMethod(methodName, fullImpl));
+                                                }
+                                            }
+                                            newTestSource = BuilderUtil.buildAndWriteTestClass(
+                                                    project,testFile,
+                                                    packageDir, testFileName,
+                                                    classSkeleton,
+                                                    methods,
+                                                    myConsole
+                                            );
+                                            shouldRebuild = true;
+                                        } catch (Exception e) {
+                                            ConsolePrinter.info(myConsole, "⚠️ Error composing test class: " + e.getMessage());
+                                            continue;
+                                        }
+                                    }
+                                    break;
+                                }
                                 case "fetch_mockito_version":
                                     ConsolePrinter.info(myConsole, "Fetching mockito version");
                                     Content mockitoVersionContent = JAIPilotLLM.getMockitoVersionContent(project);
@@ -148,13 +178,24 @@ public final class TestGenerationWorker {
                                     if (args instanceof Map) {
                                         Map<?, ?> argMap = (Map<?, ?>) args;
                                         String filePath = (String) argMap.get("filePath");
-                                        ConsolePrinter.info(myConsole, "Fetching file details "+filePath);
-                                        String toolResult = getSourceCodeOfContextClasses(project, filePath);
-                                        if(StringUtils.isEmpty(toolResult)) {
-                                            ConsolePrinter.info(myConsole, "File not found "+filePath);
-                                            toolResult = filePath + " not found.";
+
+                                        ConsolePrinter.info(myConsole, "Fetching file details: " + filePath);
+
+                                        if(isClassPathFetched.contains(filePath) || filePath.endsWith(testFileName) || filePath.endsWith(cutName+".java")) {
+                                            ConsolePrinter.info(myConsole, "Duplicate file - ignoring");
+                                            continue;
                                         }
-                                        else ConsolePrinter.success(myConsole, "Fetched file details "+filePath);
+                                        isClassPathFetched.add(filePath);
+                                        String toolResult = stripCommentsAndMethodBodies(project, filePath);
+
+                                        if (StringUtils.isEmpty(toolResult)) {
+                                            ConsolePrinter.info(myConsole, "No matches or file not found: " + filePath);
+                                            toolResult = filePath + " not found or no matches found.";
+                                        } else {
+                                            ConsolePrinter.success(myConsole, "Snippet(s): " + toolResult);
+                                            ConsolePrinter.success(myConsole, "Fetched file snippet(s): " + filePath);
+                                        }
+
                                         actualContents.add(JAIPilotLLM.getContextSourceContent(toolResult));
                                         contents.add(JAIPilotLLM.getContextSourceContent(toolResult));
                                     }
@@ -273,6 +314,46 @@ public final class TestGenerationWorker {
     }
 
 
+    public static String stripCommentsAndMethodBodies(Project project, String relativePathOrFqcn) {
+        if (relativePathOrFqcn == null || relativePathOrFqcn.isBlank()) return "";
+
+        // --- Reuse existing utility to get raw source code text ---
+        String sourceText = getSourceCodeOfContextClasses(project, relativePathOrFqcn);
+        if (sourceText.isBlank()) return "";
+
+        // --- Create temporary PSI file from text ---
+        PsiJavaFile psiFile = (PsiJavaFile) PsiFileFactory.getInstance(project)
+                .createFileFromText(
+                        Paths.get(relativePathOrFqcn).getFileName().toString(), // fallback name
+                        JavaFileType.INSTANCE,
+                        sourceText
+                );
+
+        // --- Remove all comments (Javadoc, line, block) ---
+        for (PsiComment comment : PsiTreeUtil.findChildrenOfType(psiFile, PsiComment.class)) {
+            comment.delete();
+        }
+
+        // --- Replace all method/constructor bodies with "{}" ---
+        PsiElementFactory factory = JavaPsiFacade.getInstance(project).getElementFactory();
+        for (PsiMethod method : PsiTreeUtil.findChildrenOfType(psiFile, PsiMethod.class)) {
+            PsiCodeBlock body = method.getBody();
+            if (body != null) {
+                body.replace(factory.createCodeBlock());
+            }
+        }
+
+        // --- Replace all static/instance initializer bodies with "{}" ---
+        for (PsiClassInitializer initializer : PsiTreeUtil.findChildrenOfType(psiFile, PsiClassInitializer.class)) {
+            PsiCodeBlock body = initializer.getBody();
+            if (body != null) {
+                body.replace(factory.createCodeBlock());
+            }
+        }
+
+        return psiFile.getText();
+    }
+
 
     /** Recursively find or create nested sub-directories like {@code org/example/service}. */
     private static @Nullable PsiDirectory getOrCreateSubdirectoryPath(Project project,
@@ -293,13 +374,6 @@ public final class TestGenerationWorker {
         } catch (Exception e) {
             throw new Exception("Incorrect tests source directory");
         }
-    }
-
-    private static String stripCodeFences(String text) {
-        if (text == null) return null;
-        return text
-                .replaceFirst("(?s)^```(?:java)?\\n", "")  // only at start
-                .replaceFirst("(?s)\\n```$", "");          // only at end
     }
 
     private TestGenerationWorker() {} // no-instantiation

@@ -34,13 +34,31 @@ public final class JAIPilotLLM {
     private JAIPilotLLM() {}
 
     public static Content getContextSourceContent(String classSource) {
-        // Explicitly wrap the CUT source string (may be used separately from context)
         return new Content(
                 "user",
                 List.of(new Content.Part(classSource))
         );
     }
 
+    public static Content getTestPlanContent(String testPlan) {
+        Content.FunctionResponseResult result = new Content.FunctionResponseResult();
+        result.setResult(testPlan);
+
+        Content.FunctionResponse functionResponse = new Content.FunctionResponse(
+                "plan_test_changes",
+                result
+        );
+
+        Content.Part part = new Content.Part(functionResponse);
+        return new Content("model", List.of(part));
+    }
+
+    public static Content getCombinedTestClassContent(String finalTestSource) {
+        return new Content(
+                "model",
+                List.of(new Content.Part(finalTestSource))
+        );
+    }
 
     public static Content getExistingTestClassContent(String existingTestSource) {
         return new Content(
@@ -48,12 +66,25 @@ public final class JAIPilotLLM {
                 List.of(new Content.Part(existingTestSource))
         );
     }
+
     public static Content getMockitoVersionContent(Project project) {
-        return new Content(
-                "user",
-                List.of(new Content.Part("Mockito version in project: " + CUTUtil.findMockitoVersion(project)))
+        String version = CUTUtil.findMockitoVersion(project);
+
+        Content.FunctionResponseResult result = new Content.FunctionResponseResult();
+        result.setResult(version);
+
+        Content.FunctionResponse functionResponse = new Content.FunctionResponse(
+                "fetch_mockito_version",
+                result
         );
+
+        // Wrap inside a Part
+        Content.Part part = new Content.Part(functionResponse);
+
+        // Final Content object
+        return new Content("user", List.of(part));
     }
+
     public static Content getOutputContent(String output) {
         // Wrap compiler/test runner output or error messages
         return new Content(
@@ -104,7 +135,7 @@ public final class JAIPilotLLM {
 
                 indicator.checkCanceled();
                 HttpRequest createJobReq = HttpRequest.newBuilder()
-                        .uri(URI.create("https://otxfylhjrlaesjagfhfi.supabase.co/functions/v1/invoke-junit-llm-stream"))
+                        .uri(URI.create("https://otxfylhjrlaesjagfhfi.supabase.co/functions/v1/invoke-junit-llm-patch"))
                         .timeout(Duration.ofSeconds(30))
                         .header("Accept", "application/json")
                         .header("Content-Type", "application/json")
@@ -164,7 +195,7 @@ public final class JAIPilotLLM {
                         long end = System.nanoTime();
                         Telemetry.genCompleted(testClassName, String.valueOf(attempt), (end - start) / 1_000_000);
                         ConsolePrinter.success(myConsole,
-                                "Generated test class");
+                                "Received model output");
                         return out;
                     } else if ("error".equalsIgnoreCase(status)) {
                         throw new RuntimeException("Job failed: " + pollJson.get("output").asText());
