@@ -130,7 +130,7 @@ public final class TestGenerationWorker {
                                     if (args instanceof Map) {
                                         Map<?, ?> argMap = (Map<?, ?>) args;
                                         String testPlan = (String) argMap.get("testPlan");
-                                        ConsolePrinter.info(myConsole, "Fetching test plan: " + testPlan);
+                                        ConsolePrinter.info(myConsole, "Fetching test plan: \n" + testPlan);
                                         actualContents.add(JAIPilotLLM.getTestPlanContent(testPlan));
                                         contents.add(JAIPilotLLM.getTestPlanContent(testPlan));
                                     }

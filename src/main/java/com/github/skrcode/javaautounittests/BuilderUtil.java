@@ -2,6 +2,7 @@ package com.github.skrcode.javaautounittests;
 
 import com.github.javaparser.JavaParser;
 import com.github.skrcode.javaautounittests.settings.ConsolePrinter;
+import com.intellij.codeInsight.actions.ReformatCodeProcessor;
 import com.intellij.compiler.CompilerMessageImpl;
 import com.intellij.execution.ExecutionException;
 import com.intellij.execution.Executor;
@@ -36,6 +37,7 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.psi.*;
+import com.intellij.psi.codeStyle.CodeStyleManager;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
@@ -383,6 +385,8 @@ public class BuilderUtil {
 
                 // ✅ Step 4: Commit & validate
                 expandAll(project, (PsiJavaFile) psiFile);
+                new ReformatCodeProcessor(project, psiFile, null, false).run();
+                CodeStyleManager.getInstance(project).reformat(psiFile);
 
                 Document doc = psiDocMgr.getDocument(psiFile);
                 if (doc != null) psiDocMgr.commitDocument(doc);

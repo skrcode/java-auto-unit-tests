@@ -10,9 +10,7 @@ import org.jetbrains.annotations.Nullable;
 public class AISettings implements PersistentStateComponent<AISettings.State> {
 
     public static class State {
-//        public String openAiKey = "";       // Free API Key
-        public String proKey = "";          // Pro API Key
-//        public String mode = "Pro";
+        public String proKey = "";
         public boolean telemetryEnabled = true;
     }
 
@@ -35,14 +33,6 @@ public class AISettings implements PersistentStateComponent<AISettings.State> {
         this.state = state;
     }
 
-//    public String getOpenAiKey() {
-//        return state.openAiKey;
-//    }
-//
-//    public void setOpenAiKey(String key) {
-//        state.openAiKey = key;
-//    }
-
     public String getProKey() {
         return state.proKey;
     }
@@ -50,14 +40,6 @@ public class AISettings implements PersistentStateComponent<AISettings.State> {
     public void setProKey(String key) {
         state.proKey = key;
     }
-
-//    public String getMode() {
-//        return state.mode;
-//    }
-//
-//    public void setMode(String mode) {
-//        state.mode = mode;
-//    }
 
     public boolean isTelemetryEnabled() { return state.telemetryEnabled; }
     public void setTelemetryEnabled(boolean v) { state.telemetryEnabled = v; }
