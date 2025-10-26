@@ -9,6 +9,9 @@ public final class Telemetry {
     public static void uiClick(String trigger) {
         svc().log("ui_generate_clicked", trigger, null); // a=toolbar|context_menu
     }
+    public static void uiSettingsFailureClick(String trigger) {
+        svc().log("ui_incorrect_settings_clicked", trigger, null); // a=toolbar|context_menu
+    }
     public static void allGenBegin(String className) {
         svc().log("all_generation_started", className, null);
     }

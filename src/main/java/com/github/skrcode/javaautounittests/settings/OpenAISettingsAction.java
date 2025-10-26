@@ -14,7 +14,7 @@ public class OpenAISettingsAction extends AnAction {
 
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
-        Telemetry.uiClick("settings");
+        Telemetry.uiClick("settings right-click");
         Project project = e.getProject();
         ShowSettingsUtil.getInstance().showSettingsDialog(project, "JAIPilot - One-Click AI Agent for Java Unit Testing");
     }

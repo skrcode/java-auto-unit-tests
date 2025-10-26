@@ -51,7 +51,7 @@ public class AIStatusWidgetFactory implements StatusBarWidgetFactory {
 
             MouseAdapter clicker = new MouseAdapter() {
                 @Override public void mouseClicked(MouseEvent e) {
-                    Telemetry.uiClick("settings");
+                    Telemetry.uiClick("settings - widget");
                     ShowSettingsUtil.getInstance().showSettingsDialog(project, AISettingsConfigurable.class);
                     refresh();
                 }

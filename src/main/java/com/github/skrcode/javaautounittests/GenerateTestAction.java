@@ -2,6 +2,7 @@ package com.github.skrcode.javaautounittests;
 
 import com.github.skrcode.javaautounittests.settings.AIProjectSettings;
 import com.github.skrcode.javaautounittests.settings.AISettings;
+import com.github.skrcode.javaautounittests.settings.telemetry.Telemetry;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.LangDataKeys;
@@ -32,15 +33,23 @@ public class GenerateTestAction extends AnAction implements DumbAware {
 
         List<PsiClass> classes = collectClasses(elements);
         if (classes.isEmpty()) {
+            Telemetry.uiSettingsFailureClick("classes empty");
             Messages.showErrorDialog(project, "No Java classes found in selection.", "JAIPilot");
             return;
         }
         if (classes.size() > 1) {
+            Telemetry.uiSettingsFailureClick("multiple classes selected");
             Messages.showErrorDialog(project, "Please select only single java class.", "JAIPilot");
             return;
         }
-        if (AISettings.getInstance().getProKey().isEmpty() || AIProjectSettings.getInstance(project).getTestDirectory().isEmpty()) {
-            Messages.showErrorDialog(project, "Please configure details in settings.", "JAIPilot");
+        if (AISettings.getInstance().getProKey().isEmpty()) {
+            Telemetry.uiSettingsFailureClick("license key not configured in settings");
+            Messages.showErrorDialog(project, "Please configure license key in settings.", "JAIPilot");
+            return;
+        }
+        if (AIProjectSettings.getInstance(project).getTestDirectory().isEmpty()) {
+            Telemetry.uiSettingsFailureClick("test directory not configured in settings");
+            Messages.showErrorDialog(project, "Please configure test directory in settings.", "JAIPilot");
             return;
         }
 
