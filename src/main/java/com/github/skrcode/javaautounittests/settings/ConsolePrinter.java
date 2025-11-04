@@ -9,6 +9,7 @@ import com.intellij.execution.ui.ConsoleView;
 import com.intellij.execution.ui.ConsoleViewContentType;
 import com.intellij.openapi.application.ApplicationManager;
 
+import java.awt.*;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -29,6 +30,10 @@ public class ConsolePrinter {
                 impl.scrollToEnd();
             }
         });
+    }
+
+    public static void feedback(ConsoleView consoleView) {
+        consoleView.getComponent().add(new FeedbackPanel(), BorderLayout.SOUTH);
     }
 
     // --- Section headers ---

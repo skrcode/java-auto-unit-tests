@@ -9,6 +9,7 @@
     <depends>com.intellij.modules.java</depends>
     <depends>JUnit</depends>
 
+
     <!-- Description -->
     <description><![CDATA[
     <p><strong>AI-Powered Unit Tests for Java — generate, run, and fix tests automatically inside IntelliJ.</strong></p>
@@ -39,7 +40,9 @@
                text="JAIPilot – One-Click AI Agent for Java Unit Testing">
             <add-to-group group-id="EditorPopupMenu" anchor="first"/>
             <add-to-group group-id="ProjectViewPopupMenu" anchor="first"/>
-
+            <action id="SupabaseSignInAction"
+                    class="com.github.skrcode.javaautounittests.settings.auth.SupabaseSignInAction"
+                    text="Generate Tests"/>
             <action id="GenerateTestsAction"
                     class="com.github.skrcode.javaautounittests.GenerateTestAction"
                     text="Generate Tests"/>
@@ -47,8 +50,11 @@
             <action id="OpenSettingsAction"
                     class="com.github.skrcode.javaautounittests.settings.OpenAISettingsAction"
                     text="Settings"/>
+
+            <separator/>
         </group>
     </actions>
+
 
     <!-- Extensions -->
     <extensions defaultExtensionNs="com.intellij">

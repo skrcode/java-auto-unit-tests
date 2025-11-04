@@ -8,6 +8,7 @@ import com.github.skrcode.javaautounittests.DTOs.Content;
 import com.github.skrcode.javaautounittests.DTOs.PromptResponseOutput;
 import com.github.skrcode.javaautounittests.settings.ConsolePrinter;
 import com.github.skrcode.javaautounittests.settings.JAIPilotExecutionManager;
+import com.github.skrcode.javaautounittests.settings.auth.SupabaseAuthDialog;
 import com.github.skrcode.javaautounittests.settings.telemetry.Telemetry;
 import com.intellij.execution.ui.ConsoleView;
 import com.intellij.ide.BrowserUtil;
@@ -42,6 +43,25 @@ public final class TestGenerationWorker {
     public static void process(Project project, PsiClass cut, @NotNull ConsoleView myConsole, PsiDirectory testRoot, @NotNull ProgressIndicator indicator) {
         int attempt = 1;
         try {
+
+            String SUPABASE_URL = "https://www.google.com";
+            String SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                SupabaseAuthDialog dialog = new SupabaseAuthDialog();
+                dialog.showAndGet();
+//                if (dialog.showAndGet()) {
+//                    String jwt = dialog.getJwtToken();
+//                    if (jwt != null) {
+//                        System.out.println("✅ Supabase JWT: " + jwt);
+//                        // Save or send it to your backend
+//                    } else {
+//                        System.out.println("❌ No token captured");
+//                    }
+//                }
+            });
+
+
 
             long start = System.nanoTime();
 
@@ -78,6 +98,9 @@ public final class TestGenerationWorker {
             String newTestSource = null;
             for (; ; attempt++) {
                 ConsolePrinter.section(myConsole, "Attempting");
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    ConsolePrinter.feedback(myConsole);
+                });
                 if(newTestSource != null) actualContents.add(JAIPilotLLM.getCombinedTestClassContent(newTestSource));
                 // Check if test file already exists and run it
                 Ref<PsiFile> testFile = ReadAction.compute(() -> Ref.create(packageDir.findFile(testFileName)));
@@ -106,7 +129,7 @@ public final class TestGenerationWorker {
                     }
                 }
                 shouldRebuild = false;
-                if (attempt > MAX_ATTEMPTS) {
+                if (attempt > - 1) {
                     ConsolePrinter.warn(myConsole, "Attempts breached. I have tried my best to compile and execute tests. Please fix the remaining tests manually. " + testFileName);
                     break;
                 }
