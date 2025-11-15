@@ -6,14 +6,13 @@ package com.github.skrcode.javaautounittests;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.skrcode.javaautounittests.DTOs.Content;
+import com.github.skrcode.javaautounittests.DTOs.Message;
 import com.github.skrcode.javaautounittests.DTOs.PromptResponseOutput;
 import com.github.skrcode.javaautounittests.settings.AISettings;
 import com.github.skrcode.javaautounittests.settings.ConsolePrinter;
 import com.github.skrcode.javaautounittests.settings.telemetry.Telemetry;
 import com.intellij.execution.ui.ConsoleView;
 import com.intellij.openapi.progress.ProgressIndicator;
-import com.intellij.openapi.project.Project;
 import org.jetbrains.annotations.NotNull;
 
 import java.net.URI;
@@ -22,6 +21,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,80 +34,29 @@ public final class JAIPilotLLM {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final int MAX_RETRIES = 10;
+    public static final String USER_ROLE = "user", MODEL_ROLE = "assistant";
 
     private JAIPilotLLM() {}
 
-    public static Content getContextSourceContent(String classSource) {
-        return new Content(
-                "user",
-                List.of(new Content.Part(classSource))
-        );
+
+    public static Message.MessageContent getMessageToolResultContent(String toolUseId, String content, boolean useCache) {
+        // simple text input from user
+        Map<String, String> cacheControl = new HashMap<>();
+        cacheControl.put("type", "ephemeral");
+        return Message.MessageContent.toolResult(toolUseId, content, useCache?cacheControl:null);
     }
 
-    public static Content getTestPlanContent(String testPlan) {
-        Content.FunctionResponseResult result = new Content.FunctionResponseResult();
-        result.setResult(testPlan);
-
-        Content.FunctionResponse functionResponse = new Content.FunctionResponse(
-                "plan_test_changes",
-                result
-        );
-
-        Content.Part part = new Content.Part(functionResponse);
-        return new Content("model", List.of(part));
+    public static Message getMessage(String role, String content) {
+        return new Message(role, content == null ? "": content);
     }
 
-    public static Content getCombinedTestClassContent(String finalTestSource) {
-        return new Content(
-                "model",
-                List.of(new Content.Part(finalTestSource))
-        );
-    }
-
-    public static Content getExistingTestClassContent(String existingTestSource) {
-        return new Content(
-                "user",
-                List.of(new Content.Part(existingTestSource))
-        );
-    }
-
-    public static Content getMockitoVersionContent(Project project) {
-        String version = CUTUtil.findMockitoVersion(project);
-
-        Content.FunctionResponseResult result = new Content.FunctionResponseResult();
-        result.setResult(version);
-
-        Content.FunctionResponse functionResponse = new Content.FunctionResponse(
-                "fetch_mockito_version",
-                result
-        );
-
-        // Wrap inside a Part
-        Content.Part part = new Content.Part(functionResponse);
-
-        // Final Content object
-        return new Content("user", List.of(part));
-    }
-
-    public static Content getOutputContent(String output) {
-        // Wrap compiler/test runner output or error messages
-        return new Content(
-                "user",
-                List.of(new Content.Part(output == null ? "" : output))
-        );
-    }
-
-    public static Content getInputClassContent(String classSource) {
-        // Explicitly wrap the CUT source string (may be used separately from context)
-        return new Content(
-                "user",
-                List.of(new Content.Part(classSource))
-        );
+    public static Message getMessageToolResult(String role, List<Message.MessageContent> messageContents) {
+        return new Message(role, messageContents);
     }
 
     public static PromptResponseOutput generateContent(
             String testClassName,
-            List<Content> contents,
+            List<Message> messages,
             ConsoleView myConsole,
             int attempt
             , @NotNull ProgressIndicator indicator
@@ -123,7 +72,7 @@ public final class JAIPilotLLM {
                 // --- 1. Create Job ---
                 Map<String, Object> body = new LinkedHashMap<>();
                 body.put("attemptNumber", attempt);
-                body.put("contents", contents);
+                body.put("messages", messages);
                 String requestJson = MAPPER.writeValueAsString(body);
 
                 // Select key based on mode
@@ -139,7 +88,7 @@ public final class JAIPilotLLM {
 
                 indicator.checkCanceled();
                 HttpRequest createJobReq = HttpRequest.newBuilder()
-                        .uri(URI.create("https://otxfylhjrlaesjagfhfi.supabase.co/functions/v1/invoke-junit-llm-patch"))
+                        .uri(URI.create("https://otxfylhjrlaesjagfhfi.supabase.co/functions/v1/invoke-junit-llm"))
                         .timeout(Duration.ofSeconds(30))
                         .header("Accept", "application/json")
                         .header("Content-Type", "application/json")

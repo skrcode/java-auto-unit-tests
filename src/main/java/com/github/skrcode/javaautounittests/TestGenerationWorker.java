@@ -4,11 +4,11 @@
 
 package com.github.skrcode.javaautounittests;
 
-import com.github.skrcode.javaautounittests.DTOs.Content;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.skrcode.javaautounittests.DTOs.Message;
 import com.github.skrcode.javaautounittests.DTOs.PromptResponseOutput;
 import com.github.skrcode.javaautounittests.settings.ConsolePrinter;
 import com.github.skrcode.javaautounittests.settings.JAIPilotExecutionManager;
-import com.github.skrcode.javaautounittests.settings.auth.SupabaseAuthDialog;
 import com.github.skrcode.javaautounittests.settings.telemetry.Telemetry;
 import com.intellij.execution.ui.ConsoleView;
 import com.intellij.ide.BrowserUtil;
@@ -39,29 +39,12 @@ import java.util.*;
 public final class TestGenerationWorker {
 
     private static final int MAX_ATTEMPTS = 100;
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     public static void process(Project project, PsiClass cut, @NotNull ConsoleView myConsole, PsiDirectory testRoot, @NotNull ProgressIndicator indicator) {
         int attempt = 1;
+        boolean isCacheUsedTestPlan = false, isCacheUsedApply = false;
         try {
-
-            String SUPABASE_URL = "https://www.google.com";
-            String SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
-
-            ApplicationManager.getApplication().invokeLater(() -> {
-                SupabaseAuthDialog dialog = new SupabaseAuthDialog();
-                dialog.showAndGet();
-//                if (dialog.showAndGet()) {
-//                    String jwt = dialog.getJwtToken();
-//                    if (jwt != null) {
-//                        System.out.println("✅ Supabase JWT: " + jwt);
-//                        // Save or send it to your backend
-//                    } else {
-//                        System.out.println("❌ No token captured");
-//                    }
-//                }
-            });
-
-
 
             long start = System.nanoTime();
 
@@ -79,9 +62,9 @@ public final class TestGenerationWorker {
             boolean isLLMGeneratedAtLeastOnce = false;
 
             JAIPilotExecutionManager.reset();
-            List<Content> contents = new ArrayList<>();
+            List<Message> messages = new ArrayList<>();
             String cutSource = CUTUtil.cleanedSourceForLLM(project, cut);
-            contents.add(JAIPilotLLM.getInputClassContent(cutSource));
+            messages.add(JAIPilotLLM.getMessage(JAIPilotLLM.USER_ROLE,cutSource));
 
             // Add existing test class (if present) as context
             Ref<PsiFile> testFileExisting = ReadAction.compute(() -> Ref.create(packageDir.findFile(testFileName)));
@@ -89,19 +72,13 @@ public final class TestGenerationWorker {
             if (ReadAction.compute(testFileExisting::get) != null) {
                 existingTestSource = ReadAction.compute(() -> testFileExisting.get().getText());
                 if (existingTestSource != null && !existingTestSource.isBlank()) {
-                    contents.add(JAIPilotLLM.getExistingTestClassContent(existingTestSource));
+                    messages.add(JAIPilotLLM.getMessage(JAIPilotLLM.USER_ROLE,existingTestSource));
                 }
             }
-            List<Content> actualContents = new ArrayList<>(contents);
             boolean shouldRebuild = true;
             Set<String> isClassPathFetched = new HashSet<>();
-            String newTestSource = null;
             for (; ; attempt++) {
                 ConsolePrinter.section(myConsole, "Attempting");
-                ApplicationManager.getApplication().invokeLater(() -> {
-                    ConsolePrinter.feedback(myConsole);
-                });
-                if(newTestSource != null) actualContents.add(JAIPilotLLM.getCombinedTestClassContent(newTestSource));
                 // Check if test file already exists and run it
                 Ref<PsiFile> testFile = ReadAction.compute(() -> Ref.create(packageDir.findFile(testFileName)));
                 if (ReadAction.compute(testFile::get) != null && shouldRebuild) {
@@ -116,7 +93,7 @@ public final class TestGenerationWorker {
                         errorOutput = BuilderUtil.runJUnitClass(project, testFile.get());
                         if(!errorOutput.isEmpty()) {
                             ConsolePrinter.info(myConsole, "Found tests execution errors " + testFileName);
-                            actualContents.add(JAIPilotLLM.getOutputContent(errorOutput));
+                            messages.add(JAIPilotLLM.getMessage(JAIPilotLLM.USER_ROLE,errorOutput));
                         }
                         else {
                             ConsolePrinter.success(myConsole, "Tests execution successful " + testFileName);
@@ -125,11 +102,11 @@ public final class TestGenerationWorker {
                     }
                     else {
                         ConsolePrinter.info(myConsole, "Found compilation errors " + testFileName);
-                        actualContents.add(JAIPilotLLM.getOutputContent(errorOutput));
+                        messages.add(JAIPilotLLM.getMessage(JAIPilotLLM.USER_ROLE,errorOutput));
                     }
                 }
                 shouldRebuild = false;
-                if (attempt > - 1) {
+                if (attempt > MAX_ATTEMPTS) {
                     ConsolePrinter.warn(myConsole, "Attempts breached. I have tried my best to compile and execute tests. Please fix the remaining tests manually. " + testFileName);
                     break;
                 }
@@ -138,28 +115,28 @@ public final class TestGenerationWorker {
                 indicator.checkCanceled();
                 PromptResponseOutput output = JAIPilotLLM.generateContent(
                         testFileName,
-                        actualContents,
+                        messages,
                         myConsole,
                         attempt,
                         indicator
                 );
-                actualContents = new ArrayList<>(contents);
-                actualContents.add(output.getContent());
-                if (output.getContent() != null) {
-                    for (int i=0;i<10 && i < output.getContent().getParts().size();i++) {
-                        Content.Part p = output.getContent().getParts().get(i);
-                        if (p.getFunctionCall() != null) {
-                            Content.FunctionCall fc = p.getFunctionCall();
-                            String fn = fc.getName();
-                            Object args = fc.getArgs();
+                messages.add(output.getMessage());
+                if (output.getMessage().getContentAsList() != null) {
+                    List<Message.MessageContent> messageContents = new ArrayList<>();
+                    for (int i=0;i<10 && i < output.getMessage().getContentAsList().size();i++) {
+                        Message.MessageContent messageContent = MAPPER.convertValue(output.getMessage().getContentAsList().get(i),Message.MessageContent.class);
+                        if (messageContent.getType().equals("tool_use")) {
+                            String fn = messageContent.getName();
+                            Object args = messageContent.getInput();
+                            String toolUseId = messageContent.getId();
                             switch (fn) {
                                 case "plan_test_changes": {
                                     if (args instanceof Map) {
                                         Map<?, ?> argMap = (Map<?, ?>) args;
                                         String testPlan = (String) argMap.get("testPlan");
                                         ConsolePrinter.info(myConsole, "Fetching test plan: \n" + testPlan);
-                                        actualContents.add(JAIPilotLLM.getTestPlanContent(testPlan));
-                                        contents.add(JAIPilotLLM.getTestPlanContent(testPlan));
+                                        messageContents.add(JAIPilotLLM.getMessageToolResultContent(toolUseId, testPlan, !isCacheUsedTestPlan));
+                                        isCacheUsedTestPlan = true;
                                     }
                                     break;
                                 }
@@ -170,23 +147,19 @@ public final class TestGenerationWorker {
                                         try {
                                             indicator.checkCanceled();
                                             String classSkeleton = (String) argMap.get("classSkeleton");
-                                            // Convert methods array (if present)
-                                            List<Map<String, Object>> rawMethods = (List<Map<String, Object>>) argMap.get("methods");
                                             List<BuilderUtil.TestMethod> methods = new ArrayList<>();
-                                            if (rawMethods != null) {
-                                                for (Map<String, Object> m : rawMethods) {
-                                                    String methodName = Objects.toString(m.get("methodName"), null);
-                                                    String fullImpl = Objects.toString(m.get("fullImplementation"), "");
+                                            Object rawMethods = argMap.get("methods");
+                                            if (rawMethods instanceof Map<?, ?> methodsMap) {
+                                                for (Map.Entry<?, ?> entry : methodsMap.entrySet()) {
+                                                    String methodName = Objects.toString(entry.getKey(), null);
+                                                    String fullImpl = Objects.toString(entry.getValue(), "");
                                                     methods.add(new BuilderUtil.TestMethod(methodName, fullImpl));
                                                 }
                                             }
-                                            newTestSource = BuilderUtil.buildAndWriteTestClass(
-                                                    project,testFile,
-                                                    packageDir, testFileName,
-                                                    classSkeleton,
-                                                    methods,
-                                                    myConsole
-                                            );
+                                            // Build and write the test class
+                                            String newTestSource = BuilderUtil.buildAndWriteTestClass(project, testFile, packageDir, testFileName, classSkeleton, methods, myConsole);
+                                            messageContents.add(JAIPilotLLM.getMessageToolResultContent(toolUseId, newTestSource, !isCacheUsedApply));
+                                            isCacheUsedApply=true;
                                             shouldRebuild = true;
                                         } catch (Exception e) {
                                             ConsolePrinter.info(myConsole, "⚠️ Error composing test class: " + e.getMessage());
@@ -195,11 +168,10 @@ public final class TestGenerationWorker {
                                     }
                                     break;
                                 }
+
                                 case "fetch_mockito_version":
                                     ConsolePrinter.info(myConsole, "Fetching mockito version");
-                                    Content mockitoVersionContent = JAIPilotLLM.getMockitoVersionContent(project);
-                                    actualContents.add(mockitoVersionContent);
-                                    contents.add(mockitoVersionContent);
+                                    messageContents.add(JAIPilotLLM.getMessageToolResultContent(toolUseId,  CUTUtil.findMockitoVersion(project),false) );
                                     break;
                                 case "get_file":
                                     if (args instanceof Map) {
@@ -210,6 +182,7 @@ public final class TestGenerationWorker {
 
                                         if(isClassPathFetched.contains(filePath) || filePath.endsWith(testFileName) || filePath.endsWith(cutName+".java")) {
                                             ConsolePrinter.info(myConsole, "Duplicate file - ignoring");
+                                            messageContents.add(JAIPilotLLM.getMessageToolResultContent(toolUseId,  "Duplicate file - ignoring", false));
                                             continue;
                                         }
                                         isClassPathFetched.add(filePath);
@@ -222,9 +195,7 @@ public final class TestGenerationWorker {
                                             ConsolePrinter.success(myConsole, "Snippet(s): " + toolResult);
                                             ConsolePrinter.success(myConsole, "Fetched file snippet(s): " + filePath);
                                         }
-
-                                        actualContents.add(JAIPilotLLM.getContextSourceContent(toolResult));
-                                        contents.add(JAIPilotLLM.getContextSourceContent(toolResult));
+                                        messageContents.add(JAIPilotLLM.getMessageToolResultContent(toolUseId,  toolResult, false));
                                     }
                                     break;
                                 case "terminate_call":
@@ -234,6 +205,7 @@ public final class TestGenerationWorker {
                             }
                         }
                     }
+                    messages.add(JAIPilotLLM.getMessageToolResult(JAIPilotLLM.USER_ROLE,messageContents));
                 }
 
                 // Server stop condition

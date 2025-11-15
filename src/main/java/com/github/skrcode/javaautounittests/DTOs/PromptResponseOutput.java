@@ -5,24 +5,25 @@
 package com.github.skrcode.javaautounittests.DTOs;
 
 public class PromptResponseOutput {
-    private Content content;
+    private Message message;
     private int errorCode;
     private String errorBody;
 
-    public String getErrorBody() {
-        return errorBody;
+    public PromptResponseOutput() {
     }
 
-    public void setErrorBody(String errorBody) {
+    public PromptResponseOutput(Message message, int errorCode, String errorBody) {
+        this.message = message;
+        this.errorCode = errorCode;
         this.errorBody = errorBody;
     }
 
-    public Content getContent() {
-        return content;
+    public Message getMessage() {
+        return message;
     }
 
-    public void setContent(Content content) {
-        this.content = content;
+    public void setMessage(Message message) {
+        this.message = message;
     }
 
     public int getErrorCode() {
@@ -31,5 +32,13 @@ public class PromptResponseOutput {
 
     public void setErrorCode(int errorCode) {
         this.errorCode = errorCode;
+    }
+
+    public String getErrorBody() {
+        return errorBody;
+    }
+
+    public void setErrorBody(String errorBody) {
+        this.errorBody = errorBody;
     }
 }

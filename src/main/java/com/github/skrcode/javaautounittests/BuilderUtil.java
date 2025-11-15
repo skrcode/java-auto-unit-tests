@@ -334,6 +334,7 @@ public class BuilderUtil {
 
                 // ✅ Step 2: Restore old @Test methods (avoids stale PSI)
                 Set<String> seenNames = new HashSet<>();
+
                 for (PsiMethod m : psiClass.getMethods()) seenNames.add(m.getName());
                 for (String text : oldTestMethodTexts) {
                     try {
