@@ -158,7 +158,7 @@ public final class TestGenerationWorker {
                                             }
                                             // Build and write the test class
                                             String newTestSource = BuilderUtil.buildAndWriteTestClass(project, testFile, packageDir, testFileName, classSkeleton, methods, myConsole);
-                                            messageContents.add(JAIPilotLLM.getMessageToolResultContent(toolUseId, newTestSource, !isCacheUsedApply));
+                                            messageContents.add(JAIPilotLLM.getMessageToolResultContent(toolUseId, "applied", !isCacheUsedApply));
                                             isCacheUsedApply=true;
                                             shouldRebuild = true;
                                         } catch (Exception e) {
