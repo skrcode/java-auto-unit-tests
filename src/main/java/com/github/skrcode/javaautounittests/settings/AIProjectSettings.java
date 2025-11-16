@@ -19,6 +19,8 @@ public final class AIProjectSettings implements PersistentStateComponent<AIProje
 
     public static final class State {
         public String testDirectory = "";
+        public boolean autoCorrectEnabled = false;
+        public boolean optimizeClassEnabled = false;
     }
 
     private State state = new State();
@@ -27,8 +29,8 @@ public final class AIProjectSettings implements PersistentStateComponent<AIProje
         return project.getService(AIProjectSettings.class);
     }
 
-    @Nullable @Override
-    public State getState() { return state; }
+    @Override
+    public @Nullable State getState() { return state; }
 
     @Override
     public void loadState(@NotNull State state) { this.state = state; }
@@ -36,4 +38,12 @@ public final class AIProjectSettings implements PersistentStateComponent<AIProje
     public String getTestDirectory() { return state.testDirectory; }
 
     public void setTestDirectory(String dir) { state.testDirectory = dir; }
+
+    public boolean getAutoCorrectEnabled() { return state.autoCorrectEnabled; }
+
+    public void setAutoCorrectEnabled(boolean enabled) { state.autoCorrectEnabled = enabled; }
+
+    public boolean getOptimizeClassEnabled() { return state.optimizeClassEnabled; }
+
+    public void setOptimizeClassEnabled(boolean enabled) { state.optimizeClassEnabled = enabled; }
 }

@@ -40,14 +40,25 @@
                text="JAIPilot – One-Click AI Agent for Java Unit Testing">
             <add-to-group group-id="EditorPopupMenu" anchor="first"/>
             <add-to-group group-id="ProjectViewPopupMenu" anchor="first"/>
-            <action id="SupabaseSignInAction"
-                    class="com.github.skrcode.javaautounittests.settings.auth.SupabaseSignInAction"
-                    text="Generate Tests"/>
             <action id="GenerateTestsAction"
                     class="com.github.skrcode.javaautounittests.GenerateTestAction"
+                    icon="AllIcons.Actions.Execute"
                     text="Generate Tests"/>
+            <separator/>
+
+
+            <action id="AutoCorrectToggleAction"
+                    class="com.github.skrcode.javaautounittests.settings.actions.AutoCorrectCodeAction"
+                    text="Auto-correct code"/>
+
+            <action id="OptimizeToggleAction"
+                    class="com.github.skrcode.javaautounittests.settings.actions.OptimizeClassAction"
+                    text="Simplify class"/>
+
+            <separator/>
 
             <action id="OpenSettingsAction"
+                    icon="AllIcons.Actions.InlayGear"
                     class="com.github.skrcode.javaautounittests.settings.OpenAISettingsAction"
                     text="Settings"/>
 

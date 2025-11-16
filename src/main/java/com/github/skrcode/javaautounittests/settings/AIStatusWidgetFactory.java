@@ -41,8 +41,6 @@ public class AIStatusWidgetFactory implements StatusBarWidgetFactory {
         private final JPanel root = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
         private final JLabel text = new JLabel("JAIPilot");
         private final JLabel icon = new JLabel();
-        private final JLabel creditLabel = new JLabel("—");
-        private final Timer timer;
 
         private Widget(Project project) {
             this.project = project;
@@ -50,7 +48,6 @@ public class AIStatusWidgetFactory implements StatusBarWidgetFactory {
             text.setBorder(new EmptyBorder(0, 4, 0, 0));
             root.add(text);
             root.add(icon);
-            root.add(creditLabel);
 
             MouseAdapter clicker = new MouseAdapter() {
                 @Override public void mouseClicked(MouseEvent e) {
@@ -62,12 +59,8 @@ public class AIStatusWidgetFactory implements StatusBarWidgetFactory {
             root.addMouseListener(clicker);
             text.addMouseListener(clicker);
             icon.addMouseListener(clicker);
-            creditLabel.addMouseListener(clicker);
 
             refreshSetupIcon();
-            fetchAndUpdateCredits(); // initial call
-            timer = new Timer(30000, e -> fetchAndUpdateCredits());
-            timer.start();
         }
 
         @Override public @NotNull String ID() { return "AIStatusWidget"; }
@@ -76,7 +69,7 @@ public class AIStatusWidgetFactory implements StatusBarWidgetFactory {
 
         @Override public JComponent getComponent() { return root; }
 
-        @Override public void dispose() { timer.stop(); }
+        @Override public void dispose() {  }
 
         private void refreshSetupIcon() {
             boolean ok = isConfigured();
@@ -91,40 +84,6 @@ public class AIStatusWidgetFactory implements StatusBarWidgetFactory {
             AIProjectSettings ps = AIProjectSettings.getInstance(project);
             if (ps.getTestDirectory() == null || ps.getTestDirectory().isEmpty()) return false;
             return s.getProKey() != null && !s.getProKey().isBlank();
-        }
-
-        private void fetchAndUpdateCredits() {
-            SwingUtilities.invokeLater(() -> creditLabel.setText(fetchCreditsText()));
-            if (statusBar != null) statusBar.updateWidget(ID());
-        }
-
-        private String fetchCreditsText() {
-//            try {
-                return " " + batteryEmoji(45) + " $" + 45 + "%";
-//                URL url = new URL("https://api.jaipilot.com/user/credit_percent"); // replace with real endpoint
-//                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-//                conn.setConnectTimeout(3000);
-//                conn.setReadTimeout(3000);
-//                conn.setRequestMethod("GET");
-//
-//                if (conn.getResponseCode() == 200) {
-//                    try (Scanner sc = new Scanner(conn.getInputStream())) {
-//                        String val = sc.nextLine().trim();
-//                        int percent = Integer.parseInt(val);
-//                        return " " + batteryEmoji(percent) + " $" + percent + "%";
-//                    }
-//                }
-//            } catch (Exception e) {
-//                return " ⚡ $—";
-//            }
-//            return " ⚡ $—";
-        }
-
-        private String batteryEmoji(int percent) {
-            if (percent >= 80) return "🔋";
-            if (percent >= 40) return "🔋";
-            if (percent >= 10) return "🪫";
-            return "⚡";
         }
     }
 }
