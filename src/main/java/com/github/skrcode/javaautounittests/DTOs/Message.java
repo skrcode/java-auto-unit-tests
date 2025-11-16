@@ -18,6 +18,10 @@ public class Message {
 
     public Message() {}
 
+    public Message(String role) {
+        this.role = role;
+    }
+
     public Message(String role, String textContent) {
         this.role = role;
         this.content = textContent;

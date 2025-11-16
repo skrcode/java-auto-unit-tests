@@ -43,7 +43,7 @@ public final class TestGenerationWorker {
 
     public static void process(Project project, PsiClass cut, @NotNull ConsoleView myConsole, PsiDirectory testRoot, @NotNull ProgressIndicator indicator) {
         int attempt = 1;
-        boolean isCacheUsedTestPlan = false, isCacheUsedApply = false;
+        boolean isCacheUsedTestPlan = false;
         try {
 
             long start = System.nanoTime();
@@ -75,10 +75,13 @@ public final class TestGenerationWorker {
                     messages.add(JAIPilotLLM.getMessage(JAIPilotLLM.USER_ROLE,existingTestSource));
                 }
             }
+            List<Message> actualMessages = new ArrayList<>(messages);
             boolean shouldRebuild = true;
             Set<String> isClassPathFetched = new HashSet<>();
+            String newTestSource = null;
             for (; ; attempt++) {
                 ConsolePrinter.section(myConsole, "Attempting");
+                if(newTestSource != null) actualMessages.add(JAIPilotLLM.getMessage(JAIPilotLLM.USER_ROLE,newTestSource));
                 // Check if test file already exists and run it
                 Ref<PsiFile> testFile = ReadAction.compute(() -> Ref.create(packageDir.findFile(testFileName)));
                 if (ReadAction.compute(testFile::get) != null && shouldRebuild) {
@@ -93,7 +96,7 @@ public final class TestGenerationWorker {
                         errorOutput = BuilderUtil.runJUnitClass(project, testFile.get());
                         if(!errorOutput.isEmpty()) {
                             ConsolePrinter.info(myConsole, "Found tests execution errors " + testFileName);
-                            messages.add(JAIPilotLLM.getMessage(JAIPilotLLM.USER_ROLE,errorOutput));
+                            actualMessages.add(JAIPilotLLM.getMessage(JAIPilotLLM.USER_ROLE,errorOutput));
                         }
                         else {
                             ConsolePrinter.success(myConsole, "Tests execution successful " + testFileName);
@@ -102,7 +105,7 @@ public final class TestGenerationWorker {
                     }
                     else {
                         ConsolePrinter.info(myConsole, "Found compilation errors " + testFileName);
-                        messages.add(JAIPilotLLM.getMessage(JAIPilotLLM.USER_ROLE,errorOutput));
+                        actualMessages.add(JAIPilotLLM.getMessage(JAIPilotLLM.USER_ROLE,errorOutput));
                     }
                 }
                 shouldRebuild = false;
@@ -115,12 +118,27 @@ public final class TestGenerationWorker {
                 indicator.checkCanceled();
                 PromptResponseOutput output = JAIPilotLLM.generateContent(
                         testFileName,
-                        messages,
+                        actualMessages,
                         myConsole,
                         attempt,
                         indicator
                 );
-                messages.add(output.getMessage());
+                actualMessages = new ArrayList<>(messages);
+
+                List<Message.MessageContent> filtered = new ArrayList<>();
+                for (int i=0;i<output.getMessage().getContentAsList().size();i++) {
+                    Message.MessageContent messageContent = MAPPER.convertValue(output.getMessage().getContentAsList().get(i),Message.MessageContent.class);
+                    if (messageContent.getType().equals("tool_use")) {
+                        if(!messageContent.getName().equals("apply_test_class"))
+                            filtered.add(messageContent);
+                    }
+                }
+
+                if(!filtered.isEmpty()) {
+                    messages.add(new Message(JAIPilotLLM.MODEL_ROLE, filtered));
+                    actualMessages.add(new Message(JAIPilotLLM.MODEL_ROLE, filtered));
+                }
+//                messages.add(output.getMessage());
                 if (output.getMessage().getContentAsList() != null) {
                     List<Message.MessageContent> messageContents = new ArrayList<>();
                     for (int i=0;i<10 && i < output.getMessage().getContentAsList().size();i++) {
@@ -157,9 +175,8 @@ public final class TestGenerationWorker {
                                                 }
                                             }
                                             // Build and write the test class
-                                            String newTestSource = BuilderUtil.buildAndWriteTestClass(project, testFile, packageDir, testFileName, classSkeleton, methods, myConsole);
-                                            messageContents.add(JAIPilotLLM.getMessageToolResultContent(toolUseId, newTestSource, !isCacheUsedApply));
-                                            isCacheUsedApply=true;
+                                            newTestSource = BuilderUtil.buildAndWriteTestClass(project, testFile, packageDir, testFileName, classSkeleton, methods, myConsole).stripTrailing();
+//                                            messageContents.add(JAIPilotLLM.getMessageToolResultContent(toolUseId, newTestSource, !isCacheUsedApply));
                                             shouldRebuild = true;
                                         } catch (Exception e) {
                                             ConsolePrinter.info(myConsole, "⚠️ Error composing test class: " + e.getMessage());
@@ -205,7 +222,10 @@ public final class TestGenerationWorker {
                             }
                         }
                     }
-                    messages.add(JAIPilotLLM.getMessageToolResult(JAIPilotLLM.USER_ROLE,messageContents));
+                    if(!messageContents.isEmpty()) {
+                        messages.add(JAIPilotLLM.getMessageToolResult(JAIPilotLLM.USER_ROLE, messageContents));
+                        actualMessages.add(JAIPilotLLM.getMessageToolResult(JAIPilotLLM.USER_ROLE, messageContents));
+                    }
                 }
 
                 // Server stop condition
