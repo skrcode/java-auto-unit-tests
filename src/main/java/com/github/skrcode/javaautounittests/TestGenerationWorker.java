@@ -74,38 +74,15 @@ public final class TestGenerationWorker {
                 if (existingTestSource != null && !existingTestSource.isBlank()) {
                     messages.add(JAIPilotLLM.getMessage(JAIPilotLLM.USER_ROLE,existingTestSource));
                 }
+                String errorOutput = buildAndRunTests(myConsole, testFileExisting, indicator, testFileName, project, isLLMGeneratedAtLeastOnce);
+                if(errorOutput != null) messages.add(JAIPilotLLM.getMessage(JAIPilotLLM.USER_ROLE,errorOutput));
             }
-            boolean shouldRebuild = true;
             Set<String> isClassPathFetched = new HashSet<>();
-            for (; ; attempt++) {
+            boolean completed = false;
+            for (; completed == false ; attempt++) {
                 ConsolePrinter.section(myConsole, "Attempting");
                 // Check if test file already exists and run it
                 Ref<PsiFile> testFile = ReadAction.compute(() -> Ref.create(packageDir.findFile(testFileName)));
-                if (ReadAction.compute(testFile::get) != null && shouldRebuild) {
-                    ConsolePrinter.info(myConsole, "Compiling Tests " + testFileName);
-                    indicator.checkCanceled();
-                    String errorOutput = BuilderUtil.compileJUnitClass(project, testFile);
-
-                    if (errorOutput.isEmpty()) {
-                        ConsolePrinter.success(myConsole, "Compilation Successful " + testFileName);
-                        ConsolePrinter.info(myConsole, "Running Tests " + testFileName);
-                        indicator.checkCanceled();
-                        errorOutput = BuilderUtil.runJUnitClass(project, testFile.get());
-                        if(!errorOutput.isEmpty()) {
-                            ConsolePrinter.info(myConsole, "Found tests execution errors " + testFileName);
-                            messages.add(JAIPilotLLM.getMessage(JAIPilotLLM.USER_ROLE,errorOutput));
-                        }
-                        else {
-                            ConsolePrinter.success(myConsole, "Tests execution successful " + testFileName);
-                            if(isLLMGeneratedAtLeastOnce) break;
-                        }
-                    }
-                    else {
-                        ConsolePrinter.info(myConsole, "Found compilation errors " + testFileName);
-                        messages.add(JAIPilotLLM.getMessage(JAIPilotLLM.USER_ROLE,errorOutput));
-                    }
-                }
-                shouldRebuild = false;
                 if (attempt > MAX_ATTEMPTS) {
                     ConsolePrinter.warn(myConsole, "Attempts breached. I have tried my best to compile and execute tests. Please fix the remaining tests manually. " + testFileName);
                     break;
@@ -158,9 +135,14 @@ public final class TestGenerationWorker {
                                             }
                                             // Build and write the test class
                                             String newTestSource = BuilderUtil.buildAndWriteTestClass(project, testFile, packageDir, testFileName, classSkeleton, methods, myConsole);
-                                            messageContents.add(JAIPilotLLM.getMessageToolResultContent(toolUseId, "applied", !isCacheUsedApply));
+                                            String errorOutput = buildAndRunTests(myConsole, testFile, indicator, testFileName, project, isLLMGeneratedAtLeastOnce);
+                                            if(errorOutput == null) {
+                                                completed = true;
+                                                break;
+                                            }
+                                            messageContents.add(JAIPilotLLM.getMessageToolResultContent(toolUseId, errorOutput, !isCacheUsedApply));
                                             isCacheUsedApply=true;
-                                            shouldRebuild = true;
+
                                         } catch (Exception e) {
                                             ConsolePrinter.info(myConsole, "⚠️ Error composing test class: " + e.getMessage());
                                             continue;
@@ -372,6 +354,32 @@ public final class TestGenerationWorker {
             });
         } catch (Exception e) {
             throw new Exception("Incorrect tests source directory");
+        }
+    }
+
+    private static String buildAndRunTests(ConsoleView myConsole, Ref<PsiFile> testFile, ProgressIndicator indicator, String testFileName, Project project, boolean isLLMGeneratedAtLeastOnce) throws Exception {
+
+        ConsolePrinter.info(myConsole, "Compiling Tests " + testFileName);
+        indicator.checkCanceled();
+        String errorOutput = BuilderUtil.compileJUnitClass(project, testFile);
+
+        if (errorOutput.isEmpty()) {
+            ConsolePrinter.success(myConsole, "Compilation Successful " + testFileName);
+            ConsolePrinter.info(myConsole, "Running Tests " + testFileName);
+            indicator.checkCanceled();
+            errorOutput = BuilderUtil.runJUnitClass(project, testFile.get());
+            if(!errorOutput.isEmpty()) {
+                ConsolePrinter.info(myConsole, "Found tests execution errors " + testFileName);
+                return errorOutput;
+            }
+            else {
+                ConsolePrinter.success(myConsole, "Tests execution successful " + testFileName);
+                return null;
+            }
+        }
+        else {
+            ConsolePrinter.info(myConsole, "Found compilation errors " + testFileName);
+            return errorOutput;
         }
     }
 
