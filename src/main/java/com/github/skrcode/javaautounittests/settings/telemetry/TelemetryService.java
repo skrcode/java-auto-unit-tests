@@ -26,7 +26,7 @@ public final class TelemetryService {
     // resolve once and cache
     private final String appVersion;
 
-    public TelemetryService() {
+    public static String getAppVersion() {
         String ver = "unknown";
         try {
             var plugin = PluginManagerCore.getPlugin(
@@ -38,7 +38,11 @@ public final class TelemetryService {
         } catch (Exception e) {
             LOG.warn("Unable to resolve plugin version", e);
         }
-        this.appVersion = ver;
+        return ver;
+    }
+
+    public TelemetryService() {
+        this.appVersion = getAppVersion();
     }
 
     public void log(String event, String a, String b) {

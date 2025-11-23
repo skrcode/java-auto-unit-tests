@@ -7,6 +7,7 @@ package com.github.skrcode.javaautounittests;
 import com.github.skrcode.javaautounittests.DTOs.Content;
 import com.github.skrcode.javaautounittests.DTOs.PromptResponseOutput;
 import com.github.skrcode.javaautounittests.DTOs.QuotaResponse;
+import com.github.skrcode.javaautounittests.settings.AISettings;
 import com.github.skrcode.javaautounittests.settings.ConsolePrinter;
 import com.github.skrcode.javaautounittests.settings.JAIPilotExecutionManager;
 import com.github.skrcode.javaautounittests.settings.QuotaUtil;
@@ -34,8 +35,14 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.event.HyperlinkEvent;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.file.Paths;
 import java.util.*;
+
+import static com.github.skrcode.javaautounittests.settings.telemetry.TelemetryService.getAppVersion;
 
 public final class TestGenerationWorker {
 
@@ -238,18 +245,38 @@ public final class TestGenerationWorker {
 
             ConsolePrinter.section(myConsole, "Summary");
             ConsolePrinter.success(myConsole, "Successfully generated Test Class " + testFileName);
-
             NotificationGroupManager.getInstance()
                     .getNotificationGroup("JAIPilot - One-Click AI Agent for Java Unit Testing Feedback")
                     .createNotification(
                             "All tests generated!",
-                            "If JAIPilot helped you, please <a href=\"https://plugins.jetbrains.com/plugin/27706-jaipilot--ai-unit-test-generator/edit/reviews/new\">leave a review</a> and ⭐️ rate it - it helps a lot!",
+                            """
+                            If JAIPilot helped you, please <a href="review">leave a review</a> ⭐️<br><br>
+                            Quick feedback: <a href="good">👍</a> &nbsp;&nbsp; <a href="bad">👎</a>
+                            """,
                             NotificationType.INFORMATION
                     )
                     .setListener((notification, event) -> {
-                        if (event.getEventType() == HyperlinkEvent.EventType.ACTIVATED) {
-                            BrowserUtil.browse(event.getURL().toString());
-                            notification.expire();
+                        if (event.getEventType() != HyperlinkEvent.EventType.ACTIVATED) {
+                            return;
+                        }
+
+                        String link = event.getDescription();
+
+                        switch (link) {
+                            case "review" -> {
+                                BrowserUtil.browse("https://plugins.jetbrains.com/plugin/27706-jaipilot--ai-unit-test-generator/edit/reviews/new");
+                                notification.expire();
+                            }
+                            case "good" -> {
+                                sendFeedback(AISettings.getInstance().getProKey(), 5, getAppVersion());
+                                showThanks(project);
+                                notification.expire();
+                            }
+                            case "bad" -> {
+                                sendFeedback(AISettings.getInstance().getProKey(), 1, getAppVersion());
+                                showThanks(project);
+                                notification.expire();
+                            }
                         }
                     })
                     .notify(project);
@@ -264,6 +291,36 @@ public final class TestGenerationWorker {
             );
         }
     }
+
+    private static void sendFeedback(String usageKey, int rating, String version) {
+        ApplicationManager.getApplication().executeOnPooledThread(() -> {
+            try {
+                String body = """
+                {
+                  "usage_key": "%s",
+                  "rating": %d,
+                  "app_version": "%s"
+                }
+                """.formatted(usageKey, rating, version);
+
+                HttpRequest req = HttpRequest.newBuilder()
+                        .uri(URI.create("https://otxfylhjrlaesjagfhfi.supabase.co/functions/v1/give-feedback"))
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(body))
+                        .build();
+
+                HttpClient.newHttpClient().send(req, HttpResponse.BodyHandlers.discarding());
+            } catch (Exception ignored) {}
+        });
+    }
+
+    private static void showThanks(Project project) {
+        NotificationGroupManager.getInstance()
+                .getNotificationGroup("JAIPilot - One-Click AI Agent for Java Unit Testing Feedback")
+                .createNotification("Thanks for your feedback!", NotificationType.INFORMATION)
+                .notify(project);
+    }
+
 
 
     private static @Nullable PsiDirectory resolveTestPackageDir(Project project,
