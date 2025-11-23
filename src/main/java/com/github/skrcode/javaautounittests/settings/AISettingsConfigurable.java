@@ -2,9 +2,9 @@
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 // If a copy of the MPL was not distributed with this file, you can obtain one at https://mozilla.org/MPL/2.0/.
 
-// JAIPilot Settings — with “How to use” box at top
 package com.github.skrcode.javaautounittests.settings;
 
+import com.github.skrcode.javaautounittests.DTOs.QuotaResponse;
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory;
 import com.intellij.openapi.options.Configurable;
 import com.intellij.openapi.project.Project;
@@ -38,10 +38,11 @@ public class AISettingsConfigurable implements Configurable {
     private JPanel modeCards;
     private CardLayout cardLayout;
 
+    private JLabel creditsLabel;
+
     private JBPasswordField jaipilotKeyField;
     private TextFieldWithBrowseButton testDirField;
 
-    // Common
     private JCheckBox telemetryCheck;
 
     private static final int GAP_BETWEEN_BLOCKS = 8;
@@ -90,10 +91,6 @@ public class AISettingsConfigurable implements Configurable {
         contentPanel.add(header);
         contentPanel.add(Box.createVerticalStrut(6));
 
-        // ===== Mode toggle =====
-        JPanel togglePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-        togglePanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-
         // ===== Common Settings =====
         JPanel commonPanel = new JPanel();
         commonPanel.setLayout(new BoxLayout(commonPanel, BoxLayout.Y_AXIS));
@@ -106,7 +103,7 @@ public class AISettingsConfigurable implements Configurable {
         contentPanel.add(commonPanel);
         contentPanel.add(Box.createVerticalStrut(8));
 
-        // Test dir chooser
+        // ===== Test Directory =====
         Dimension fieldSize = new Dimension(520, 30);
         testDirField = new TextFieldWithBrowseButton();
         sizeBrowse(testDirField, fieldSize);
@@ -116,7 +113,7 @@ public class AISettingsConfigurable implements Configurable {
         addFormBlock(contentPanel, "Select Test Root (e.g., src/test/java):", testDirField);
         contentPanel.add(Box.createVerticalStrut(8));
 
-        // ===== Cards =====
+        // ===== Mode Cards =====
         cardLayout = new CardLayout();
         modeCards = new JPanel(cardLayout);
         modeCards.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -145,6 +142,7 @@ public class AISettingsConfigurable implements Configurable {
         accountCtaRow.add(openAccountBtn);
         addFormBlock(jaipilotPanel, null, accountCtaRow);
 
+        // ===== License Key Input =====
         jaipilotKeyField = new JBPasswordField();
         sizeField(jaipilotKeyField, fieldSize);
         JPanel keyRow = new JPanel();
@@ -159,9 +157,10 @@ public class AISettingsConfigurable implements Configurable {
 
         addFormBlock(jaipilotPanel, "JAIPilot License Key:", keyRow);
 
+        // Tip / link
         JLabel tip = new JLabel(
                 "<html><div style='width:520px; color:#888;'>"
-                        + "Tip: You can always reopen <a href='" + ACCOUNT_URL + "'>jaipilot.com/account</a> to manage your key.<br>"
+                        + "Tip: You can always reopen <a href='" + ACCOUNT_URL + "'>https://www.jaipilot.com/account</a> to manage your key.<br>"
                         + "Signup is free – you’ll always start with trial credits."
                         + "</div></html>"
         );
@@ -170,6 +169,33 @@ public class AISettingsConfigurable implements Configurable {
             @Override public void mouseClicked(java.awt.event.MouseEvent e) { open(ACCOUNT_URL); }
         });
         addFormBlock(jaipilotPanel, null, tip);
+
+// ===== Ultra Minimal Credits Line =====
+        creditsLabel = new JLabel("[Credits] Request Attempts remaining: – ");
+        creditsLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        creditsLabel.setForeground(new Color(200, 200, 200));
+        creditsLabel.setBorder(new EmptyBorder(4, 0, 0, 0));
+        creditsLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        creditsLabel.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                String text = creditsLabel.getText();
+
+                java.util.regex.Matcher m =
+                        java.util.regex.Pattern.compile("href=['\"](https?://[^'\"]+)['\"]")
+                                .matcher(text);
+
+                if (m.find()) {
+                    try {
+                        Desktop.getDesktop().browse(new URI(m.group(1)));
+                    } catch (Exception ignored) {}
+                }
+            }
+        });
+
+
+        addFormBlock(jaipilotPanel, null, creditsLabel);
+
 
         modeCards.add(jaipilotPanel, "JAIPilot");
         contentPanel.add(modeCards);
@@ -187,7 +213,52 @@ public class AISettingsConfigurable implements Configurable {
             testDirField.setText(projectTestDir);
         }
 
+        // Async quota fetch
+        fetchAndPopulateQuotaAsync();
+
         return rootPanel;
+    }
+
+    private void fetchAndPopulateQuotaAsync() {
+        String key = jaipilotKeyField.getText();
+        if (StringUtil.isEmptyOrSpaces(key)) {
+            creditsLabel.setText("Credits remaining: Enter license key to fetch credits.");
+            creditsLabel.setForeground(new Color(200, 200, 200));
+            return;
+        }
+
+        new Thread(() -> {
+            try {
+                QuotaResponse quota = QuotaUtil.fetchQuota();
+
+                SwingUtilities.invokeLater(() -> {
+                    StringBuilder sb = new StringBuilder("<html>");
+                    sb.append("[Credits] Request Attempts remaining: – ").append(quota.quotaRemaining);
+
+                    if (quota.message != null && !quota.message.isEmpty()) {
+                        String htmlMsg = quota.message.replaceAll(
+                                "(https?://[^ ]+)",
+                                "<a href='$1'>$1</a>"
+                        );
+
+                        sb.append("<br>").append(htmlMsg);
+                        creditsLabel.setForeground(new Color(200, 200, 200));
+                    }
+
+                    sb.append("</html>");
+                    creditsLabel.setText(sb.toString());
+                });
+
+
+
+
+            } catch (Exception ex) {
+                SwingUtilities.invokeLater(() -> {
+                    creditsLabel.setText("Credits remaining: Unable to fetch credits.");
+                    creditsLabel.setForeground(new Color(150, 0, 0));
+                });
+            }
+        }).start();
     }
 
     private void addFormBlock(JPanel panel, String label, JComponent control) {
@@ -202,8 +273,15 @@ public class AISettingsConfigurable implements Configurable {
         panel.add(control);
     }
 
-    private void sizeField(JTextField field, Dimension d) { field.setPreferredSize(d); field.setMaximumSize(d); }
-    private void sizeBrowse(TextFieldWithBrowseButton b, Dimension d) { b.setPreferredSize(d); b.setMaximumSize(d); }
+    private void sizeField(JTextField field, Dimension d) {
+        field.setPreferredSize(d);
+        field.setMaximumSize(d);
+    }
+
+    private void sizeBrowse(TextFieldWithBrowseButton b, Dimension d) {
+        b.setPreferredSize(d);
+        b.setMaximumSize(d);
+    }
 
     private String detectTestRoot(Project project) {
         for (VirtualFile root : ProjectRootManager.getInstance(project).getContentSourceRoots()) {
@@ -247,10 +325,12 @@ public class AISettingsConfigurable implements Configurable {
     private void open(String url) {
         try { Desktop.getDesktop().browse(new URI(url)); } catch (Exception ignored) {}
     }
+
     private void setReveal(JPasswordField f, boolean reveal) {
         if (reveal) {
-            if (f.getClientProperty("echoBackup") == null) f.putClientProperty("echoBackup", f.getEchoChar());
-            f.setEchoChar((char)0);
+            if (f.getClientProperty("echoBackup") == null)
+                f.putClientProperty("echoBackup", f.getEchoChar());
+            f.setEchoChar((char) 0);
         } else {
             Object b = f.getClientProperty("echoBackup");
             if (b instanceof Character) f.setEchoChar((Character) b);
