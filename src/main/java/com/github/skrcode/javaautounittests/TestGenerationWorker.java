@@ -6,8 +6,10 @@ package com.github.skrcode.javaautounittests;
 
 import com.github.skrcode.javaautounittests.DTOs.Content;
 import com.github.skrcode.javaautounittests.DTOs.PromptResponseOutput;
+import com.github.skrcode.javaautounittests.DTOs.QuotaResponse;
 import com.github.skrcode.javaautounittests.settings.ConsolePrinter;
 import com.github.skrcode.javaautounittests.settings.JAIPilotExecutionManager;
+import com.github.skrcode.javaautounittests.settings.QuotaUtil;
 import com.github.skrcode.javaautounittests.settings.telemetry.Telemetry;
 import com.intellij.execution.ui.ConsoleView;
 import com.intellij.ide.BrowserUtil;
@@ -42,7 +44,12 @@ public final class TestGenerationWorker {
     public static void process(Project project, PsiClass cut, @NotNull ConsoleView myConsole, PsiDirectory testRoot, @NotNull ProgressIndicator indicator) {
         int attempt = 1;
         try {
-
+            try {
+                QuotaResponse quotaResponse = QuotaUtil.fetchQuota();
+                if(quotaResponse.message != null)
+                    ConsolePrinter.warn(myConsole, quotaResponse.message);
+            }
+            catch (Exception e) {}
             long start = System.nanoTime();
 
             PsiDirectory packageDir = resolveTestPackageDir(project, testRoot, cut);
@@ -231,6 +238,7 @@ public final class TestGenerationWorker {
 
             ConsolePrinter.section(myConsole, "Summary");
             ConsolePrinter.success(myConsole, "Successfully generated Test Class " + testFileName);
+
             NotificationGroupManager.getInstance()
                     .getNotificationGroup("JAIPilot - One-Click AI Agent for Java Unit Testing Feedback")
                     .createNotification(
