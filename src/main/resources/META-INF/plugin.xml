@@ -69,4 +69,5 @@
     </extensions>
 
     <resource-bundle>messages.MyBundle</resource-bundle>
+    <idea-version since-build="231" until-build="999.*"/>
 </idea-plugin>
