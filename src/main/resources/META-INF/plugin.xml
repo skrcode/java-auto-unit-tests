@@ -2,7 +2,7 @@
 <idea-plugin>
     <id>com.github.skrcode.javaautounittests</id>
     <name>JAIPilot – One-Click AI Agent for Java Unit Testing</name>
-    <vendor email="surajkrajan95@gmail.com" url="https://skrcode.github.io">Suraj Krishnan Rajan</vendor>
+    <vendor email="suraj@jaipilot.com" url="https://skrcode.github.io">Suraj Rajan</vendor>
 
     <!-- Dependencies -->
     <depends>com.intellij.modules.platform</depends>
