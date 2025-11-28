@@ -21,13 +21,13 @@
 
 *JAIPilot – One-Click AI Agent for Java Unit Testing* creates complete, context-aware **JUnit tests** in seconds — right inside your IDE.
 
-- 🧠 **Understands your code** — analyzes method logic, parameters, dependencies, and edge cases to generate meaningful tests
-- ⚡ **One-click generation** — right-click any class or method to instantly create high-coverage, runnable JUnit tests
-- 🔁 **Autonomous refinement** — automatically runs tests, detects failures, and fixes them until they pass
-- 🚀 **Optimized AI models** — dynamically picks the best AI model per class for speed and accuracy
-- 📂 **Custom test root** — choose where tests go (e.g., `src/test/java`)
-- 🧪 **Seamless JUnit integration** — works out-of-the-box with your existing Java projects
-- 💸 **Free credits on signup** — get started instantly with no credit card required
+-  **Understands your code** — analyzes method logic, parameters, dependencies, and edge cases to generate meaningful tests
+-  **One-click generation** — right-click any class or method to instantly create high-coverage, runnable JUnit tests
+-  **Autonomous refinement** — automatically runs tests, detects failures, and fixes them until they pass
+-  **Optimized AI models** — dynamically picks the best AI model per class for speed and accuracy
+-  **Custom test root** — choose where tests go (e.g., `src/test/java`)
+-  **Seamless JUnit integration** — works out-of-the-box with your existing Java projects
+-  **Free credits on signup** — get started instantly with no credit card required
 
 Skip the repetitive test writing. Let JAIPilot handle the heavy lifting — so you can focus on real engineering.  
 Join other developers using JAIPilot to **ship faster, test smarter, and build with confidence.**
