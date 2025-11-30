@@ -2,7 +2,7 @@
 <idea-plugin>
     <id>com.github.skrcode.javaautounittests</id>
     <name>JAIPilot – One-Click AI Agent for Java Unit Testing</name>
-    <vendor email="surajkrajan95@gmail.com" url="https://skrcode.github.io">Suraj Krishnan Rajan</vendor>
+    <vendor email="suraj@jaipilot.com" url="https://skrcode.github.io">Suraj Rajan</vendor>
 
     <!-- Dependencies -->
     <depends>com.intellij.modules.platform</depends>
@@ -16,13 +16,13 @@
     <em>JAIPilot – One-Click AI Agent for Java Unit Testing</em> creates complete, context-aware <strong>JUnit tests</strong> in seconds — right inside your IDE.</p>
 
     <ul>
-      <li>🧠 <strong>Understands your code</strong> — analyzes method logic, parameters, dependencies, and edge cases to generate meaningful tests</li>
-      <li>⚡ <strong>One-click generation</strong> — right-click any class or method to instantly create high-coverage, runnable JUnit tests</li>
-      <li>🔁 <strong>Autonomous refinement</strong> — automatically runs tests, detects failures, and fixes them until they pass</li>
-      <li>🚀 <strong>Optimized AI models</strong> — dynamically picks the best AI model per class for speed and accuracy</li>
-      <li>📂 <strong>Custom test root</strong> — choose where tests go (e.g., <code>src/test/java</code>)</li>
-      <li>🧪 <strong>Seamless JUnit integration</strong> — works out-of-the-box with your existing Java projects</li>
-      <li>💸 <strong>Free credits on signup</strong> — get started instantly with no credit card required</li>
+      <li><strong>Understands your code</strong> — analyzes method logic, parameters, dependencies, and edge cases to generate meaningful tests</li>
+      <li><strong>One-click generation</strong> — right-click any class or method to instantly create high-coverage, runnable JUnit tests</li>
+      <li><strong>Autonomous refinement</strong> — automatically runs tests, detects failures, and fixes them until they pass</li>
+      <li><strong>Optimized AI models</strong> — dynamically picks the best AI model per class for speed and accuracy</li>
+      <li><strong>Custom test root</strong> — choose where tests go (e.g., <code>src/test/java</code>)</li>
+      <li><strong>Seamless JUnit integration</strong> — works out-of-the-box with your existing Java projects</li>
+      <li><strong>Free credits on signup</strong> — get started instantly with no credit card required</li>
     </ul>
 
     <p>Skip the repetitive test writing. Let JAIPilot handle the heavy lifting — so you can focus on real engineering.<br/>
@@ -69,4 +69,5 @@
     </extensions>
 
     <resource-bundle>messages.MyBundle</resource-bundle>
+    <idea-version since-build="231"/>
 </idea-plugin>
