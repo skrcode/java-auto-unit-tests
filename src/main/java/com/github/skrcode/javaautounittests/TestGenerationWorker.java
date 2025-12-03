@@ -7,6 +7,10 @@ package com.github.skrcode.javaautounittests;
 import com.github.skrcode.javaautounittests.DTOs.Content;
 import com.github.skrcode.javaautounittests.DTOs.PromptResponseOutput;
 import com.github.skrcode.javaautounittests.DTOs.QuotaResponse;
+import com.github.skrcode.javaautounittests.diff.JaipilotDiffResult;
+import com.github.skrcode.javaautounittests.diff.JaipilotDiffService;
+import com.github.skrcode.javaautounittests.diff.JaipilotHunk;
+import com.github.skrcode.javaautounittests.llm.JAIPilotLLM;
 import com.github.skrcode.javaautounittests.settings.AISettings;
 import com.github.skrcode.javaautounittests.settings.ConsolePrinter;
 import com.github.skrcode.javaautounittests.settings.JAIPilotExecutionManager;
@@ -49,8 +53,9 @@ public final class TestGenerationWorker {
     private static final int MAX_ATTEMPTS = 100;
 
     public static void process(Project project, PsiClass cut, @NotNull ConsoleView myConsole, PsiDirectory testRoot, @NotNull ProgressIndicator indicator) {
-        int attempt = 1;
+        int attempt = 0;
         try {
+
             try {
                 QuotaResponse quotaResponse = QuotaUtil.fetchQuota();
                 if(quotaResponse.message != null)
@@ -76,6 +81,85 @@ public final class TestGenerationWorker {
             List<Content> contents = new ArrayList<>();
             String cutSource = CUTUtil.cleanedSourceForLLM(project, cut);
             contents.add(JAIPilotLLM.getInputClassContent(cutSource));
+
+            String originalSource = """
+public class Calculator {
+
+    public int add(int a, int b) {
+        // legacy slow impl
+        int sum = 0;
+        sum = a;
+        sum = sum + b;
+        return sum;
+    }
+
+    public int multiply(int a, int b) {
+        int result = 0;
+        for (int i = 0; i < b; i++) {
+            result = result + a; // slow impl
+        }
+        return result;
+    }
+}
+""";
+
+
+            String improvedSource = """
+public class Calculator {
+
+    public int add(int a, int b) {
+        return a + b; // optimized
+    }
+
+    public int multiply(int a, int b) {
+        return a * b; // optimized
+    }
+}
+""";
+
+
+            List<JaipilotHunk> hunksFromLLM = List.of(
+                    new JaipilotHunk(
+                            48,   // start offset of add() slow impl
+                            147,  // end offset of slow impl block
+                            """
+                            // legacy slow impl
+                            int sum = 0;
+                            sum = a;
+                            sum = sum + b;
+                            return sum;
+                            """,
+                            """
+                            return a + b; // optimized
+                            """,
+                            "Replaced slow multi-step accumulation with direct arithmetic addition."
+                    ),
+                    new JaipilotHunk(
+                            169,  // start offset of multiply() slow loop
+                            272,  // end offset
+                            """
+                            int result = 0;
+                            for (int i = 0; i < b; i++) {
+                                result = result + a; // slow impl
+                            }
+                            return result;
+                            """,
+                            """
+                            return a * b; // optimized
+                            """,
+                            "Replaced loop-based multiplication with direct multiplication operator."
+                    )
+            );
+
+
+            JaipilotDiffResult result = new JaipilotDiffResult(
+                    originalSource,
+                    improvedSource,
+                    hunksFromLLM
+            );
+
+            JaipilotDiffService.showDiffDialog(project, cut.getContainingFile(), result);
+
 
             // Add existing test class (if present) as context
             Ref<PsiFile> testFileExisting = ReadAction.compute(() -> Ref.create(packageDir.findFile(testFileName)));

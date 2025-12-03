@@ -2,10 +2,11 @@
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 // If a copy of the MPL was not distributed with this file, you can obtain one at https://mozilla.org/MPL/2.0/.
 
-package com.github.skrcode.javaautounittests;
+package com.github.skrcode.javaautounittests.llm;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.skrcode.javaautounittests.CUTUtil;
 import com.github.skrcode.javaautounittests.DTOs.Content;
 import com.github.skrcode.javaautounittests.DTOs.PromptResponseOutput;
 import com.github.skrcode.javaautounittests.settings.AISettings;

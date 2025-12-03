@@ -3,6 +3,7 @@
     <id>com.github.skrcode.javaautounittests</id>
     <name>JAIPilot – One-Click AI Agent for Java Unit Testing</name>
     <vendor email="suraj@jaipilot.com" url="https://skrcode.github.io">Suraj Rajan</vendor>
+    <update-url>https://jaipilot.com/updates/updates.xml</update-url>
 
     <!-- Dependencies -->
     <depends>com.intellij.modules.platform</depends>
@@ -41,12 +42,27 @@
             <add-to-group group-id="ProjectViewPopupMenu" anchor="first"/>
 
             <action id="GenerateTestsAction"
-                    class="com.github.skrcode.javaautounittests.GenerateTestAction"
+                    class="com.github.skrcode.javaautounittests.actions.GenerateTestAction"
+                    icon="AllIcons.Actions.Execute"
                     text="Generate Tests"/>
 
+            <action id="TestInlineInlayAction"
+                    class="com.github.skrcode.javaautounittests.actions.ReviewApplyCodeAction"
+                    icon="AllIcons.Actions.IntentionBulb"
+                    text="Review and Suggest Improvements"/>
+
+            <action id="ExplainCodeAction"
+                    class="com.github.skrcode.javaautounittests.explain.ExplainClassAction"
+                    icon="AllIcons.Actions.Preview"
+                    text="Explain"/>
+
+            <separator/>
+
             <action id="OpenSettingsAction"
+                    icon="AllIcons.Actions.InlayGear"
                     class="com.github.skrcode.javaautounittests.settings.OpenAISettingsAction"
                     text="Settings"/>
+            <separator/>
         </group>
     </actions>
 
@@ -58,6 +74,13 @@
                 factoryClass="com.github.skrcode.javaautounittests.settings.TestGenerationToolWindowFactory"
                 icon="/icons/jaipilot.svg"
                 canCloseContents="false"/>
+        <toolWindow
+                id="JAIPilot Explain"
+                anchor="right"
+                factoryClass="com.github.skrcode.javaautounittests.explain.ExplainToolWindowFactory"
+                icon="/icons/jaipilot.svg"
+                canCloseContents="false"/>
+
 
         <applicationService serviceImplementation="com.github.skrcode.javaautounittests.settings.AISettings"/>
         <projectConfigurable instance="com.github.skrcode.javaautounittests.settings.AISettingsConfigurable"/>

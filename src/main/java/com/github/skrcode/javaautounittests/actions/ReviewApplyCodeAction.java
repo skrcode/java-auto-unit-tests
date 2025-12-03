@@ -1,9 +1,11 @@
-// Copyright © 2025 Suraj Rajan / JAIPilot
-// This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
-// If a copy of the MPL was not distributed with this file, you can obtain one at https://mozilla.org/MPL/2.0/.
+/*
+ * Copyright © 2025 Suraj Rajan / JAIPilot
+ * This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+ * If a copy of the MPL was not distributed with this file, you can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+package com.github.skrcode.javaautounittests.actions;
 
-package com.github.skrcode.javaautounittests;
-
+import com.github.skrcode.javaautounittests.BulkGeneratorService;
 import com.github.skrcode.javaautounittests.settings.AIProjectSettings;
 import com.github.skrcode.javaautounittests.settings.AISettings;
 import com.github.skrcode.javaautounittests.settings.telemetry.Telemetry;
@@ -26,7 +28,7 @@ import java.util.List;
 /**
  * Entry‑point action – collects one or many classes/directories and delegates to the worker service.
  */
-public class GenerateTestAction extends AnAction implements DumbAware {
+public class ReviewApplyCodeAction extends AnAction implements DumbAware {
 
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
