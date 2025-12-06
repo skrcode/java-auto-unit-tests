@@ -74,18 +74,10 @@ JAIPilot:
 ### How long does test generation take?
 
 Typical generation time:
-- **Simple classes**: 5-15 seconds
-- **Medium complexity**: 15-30 seconds
-- **Complex classes**: 30-60 seconds
-- **Large classes**: 1-2 minutes
-
-### Can I generate tests for a single method?
-
-Yes! Place your cursor inside the method, right-click, and select "Generate Tests with JAIPilot". Only that method will be tested.
-
-### Can I generate tests for multiple classes at once?
-
-Yes! Select multiple files in the Project view, right-click, and choose "Generate Tests with JAIPilot". They'll be processed sequentially.
+- **Simple classes**: < 2 minutes
+- **Medium complexity**: 2-5 minutes
+- **Complex classes**: 5-10 minutes
+- **Large classes**: >10 minutes
 
 ### What if tests fail after generation?
 
@@ -113,8 +105,7 @@ JAIPilot supports:
 - ✅ Parameterized tests
 - ✅ Test lifecycle methods (@Before, @BeforeEach, etc.)
 - ✅ Mock dependencies (basic mocking)
-- ⏳ Advanced mocking (Mockito) - coming soon
-- ⏳ Integration tests - coming soon
+- ✅ Advanced mocking (Mockito) - coming soon
 
 ## Compatibility & Integration
 
@@ -134,25 +125,9 @@ Yes! JAIPilot can generate tests for Spring Boot applications, including:
 - Utility classes
 - Repositories (with some limitations)
 
-**Note**: Advanced Spring features (context loading, autowiring) may require manual test adjustments.
-
-### Can I use JAIPilot with Android projects?
-
-JAIPilot works with Android projects in IntelliJ IDEA or Android Studio, but:
-- Best for pure Java/Kotlin logic
-- Android-specific components may need manual adjustments
-- Robolectric/Android Test support is limited
-
 ### Does JAIPilot support Kotlin?
 
 Currently, JAIPilot is optimized for **Java**. Kotlin support is planned for a future release.
-
-### What about other test frameworks (TestNG, Spock)?
-
-Currently, only JUnit 4 and JUnit 5 are supported. Other frameworks are on the roadmap:
-- TestNG - planned
-- Spock - under consideration
-- Cucumber - under consideration
 
 ## Troubleshooting
 
@@ -163,7 +138,7 @@ Common issues:
 2. **No JUnit dependency**: Add JUnit to `pom.xml` or `build.gradle`
 3. **Compilation errors**: Fix errors in source code first
 4. **No credits remaining**: Check credits at [jaipilot.com/account](https://jaipilot.com/account) and top up if needed
-5. **Wrong test directory**: Configure in Settings → Tools → JAIPilot
+5. **Wrong test directory**: Configure in Settings → JAIPilot
 
 ### Generated tests don't compile
 
@@ -180,15 +155,6 @@ Check these:
 2. **JUnit in classpath**: Verify test dependencies
 3. **Test runner**: Use IntelliJ's built-in JUnit runner
 4. **Module structure**: Ensure tests are in correct module
-
-### Plugin is slow or unresponsive
-
-Performance tips:
-1. **Close unnecessary projects**: Only keep active project open
-2. **Increase IDE memory**: Adjust Xmx in Help → Edit Custom VM Options
-3. **Use Fast AI model**: For simpler classes
-4. **Update IntelliJ**: Ensure latest version
-5. **Check system resources**: Close other memory-heavy applications
 
 ### License key not working
 
@@ -220,7 +186,6 @@ JAIPilot collects:
 JAIPilot does NOT collect:
 - Personal information beyond email
 - Full source code files
-- Sensitive business logic
 - API keys or secrets from your code
 
 ### Is my code secure?
@@ -230,7 +195,7 @@ Yes:
 - Code used **only** for test generation
 - Not stored permanently on servers
 - Not used for model training
-- Not shared with third parties
+- Not shared with third parties apart from LLM - Google Gemini
 
 See our [Security Policy](../../SECURITY.md) for details.
 
@@ -246,7 +211,7 @@ Yes! JAIPilot is designed for commercial use:
 **Do not report security issues publicly.**
 
 Instead:
-- Email: security@skrcode.com
+- Email: support@jaipilot.com
 - GitHub Security Advisory
 - See [Security Policy](../../SECURITY.md) for details
 
@@ -277,16 +242,6 @@ The JAIPilot plugin itself is licensed under **Mozilla Public License 2.0** (MPL
 Unused credits can be refunded within 30 days of purchase. Contact support with your request.
 
 ## Features & Roadmap
-
-### What features are planned?
-
-Upcoming features:
-- **Mockito integration**: Advanced mocking support
-- **Test coverage metrics**: Display coverage in IDE
-- **Batch generation**: Generate tests for entire packages
-- **Custom templates**: Configure test generation patterns
-- **TestNG support**: Alternative test framework
-- **Kotlin support**: Generate tests for Kotlin code
 
 ### Can I request a feature?
 
@@ -337,6 +292,7 @@ Yes! Join our community:
 - [GitHub Discussions](https://github.com/skrcode/java-auto-unit-tests/discussions)
 - [JetBrains Marketplace Reviews](https://plugins.jetbrains.com/plugin/27706-jaipilot--one-click-ai-agent-for-java-unit-testing/reviews)
 - Star the project on [GitHub](https://github.com/skrcode/java-auto-unit-tests)
+- Join us [Discord](https://discord.gg/BE579j7mKH)
 
 ## Comparison with Other Tools
 
@@ -356,29 +312,9 @@ JAIPilot advantages:
 - ✅ AI-powered (understands context)
 - ✅ Automatic test fixing
 - ✅ One-click integration
-- ✅ Meaningful test names
+- ✅ Meaningful test cases
 - ✅ Comprehensive coverage
 
-Other tools:
-- Often template-based (less intelligent)
-- Require manual fixing
-- May produce brittle tests
-
-### Should I use JAIPilot or write tests manually?
-
-**Use JAIPilot for**:
-- Initial test coverage
-- Legacy code testing
-- Regression test suites
-- Time-sensitive projects
-
-**Write manually for**:
-- Specific test scenarios
-- Complex business logic tests
-- Integration tests
-- Acceptance tests
-
-**Best approach**: Combine both! Let JAIPilot create baseline coverage, then add specialized tests manually.
 
 ## Still Have Questions?
 
@@ -389,4 +325,4 @@ Other tools:
 
 ---
 
-**Last Updated**: December 2024
+**Last Updated**: December 2025

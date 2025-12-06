@@ -1,6 +1,7 @@
 # Quick Start Guide
 
 Get started with JAIPilot and generate your first unit test in under 5 minutes.
+- 📚 [Examples](../examples/simple-class.md) - See examples
 
 ## Prerequisites
 
@@ -28,7 +29,7 @@ Before generating tests, you need to create an account and activate your license
 3. **Paste your license key** in the License Key field
 4. Click **OK** to save
 
-> **Important:** You must activate your license key before you can generate tests. Keep your license key safe - you'll need it if you reinstall the plugin or use it on another machine.
+> **Important:** Keep your license key safe - you'll need it if you reinstall the plugin or use it on another machine.
 
 ## Step 2: Generate Your First Test
 
@@ -81,9 +82,8 @@ JAIPilot will:
 2. 🧪 **Generate** comprehensive test cases
 3. ✅ **Run** the generated tests automatically
 4. 🔧 **Fix** any failing tests (if needed)
-5. 📄 **Open** the test file for your review
 
-**This usually takes 10-30 seconds.**
+**This usually takes a few minutes.**
 
 ## Step 3: Review Generated Tests
 
@@ -163,30 +163,17 @@ Notice that JAIPilot:
 - ✅ Included **setup code** (@BeforeEach)
 - ✅ Tests **compile and pass** without manual editing
 
-## Step 4: Run and Verify Tests
-
-### Run All Tests
-
-1. **Right-click** on the test file or class name
-2. Select **"Run 'CalculatorTest'"**
-3. View results in the **Run** tool window
-
-### Run Individual Tests
-
-1. Click the **green arrow** (▶) next to any test method
-2. Or right-click a test method and select **"Run"**
-
 ### View Test Results
 
 In the Run window, you'll see:
 - ✅ Green checkmarks for passing tests
 - ❌ Red X marks for failing tests (rare with JAIPilot)
 - Test execution time
-- Code coverage (if enabled)
+- Code coverage (once run with coverage after test generation)
 
 ## Step 5: Handling Test Failures
 
-If a test fails (rare but possible), JAIPilot can fix it automatically.
+If a test fails, JAIPilot can fix it automatically.
 
 ### Automatic Fixing
 
@@ -211,30 +198,13 @@ If you want to review or customize tests:
 
 ## Common Use Cases
 
-### Testing a Single Method
-
-**Want to test just one method instead of the whole class?**
-
-1. **Place cursor** inside the method you want to test
-2. **Right-click** and select **"Generate Tests with JAIPilot"**
-3. JAIPilot will generate tests **only for that method**
-
 ### Regenerating Tests
 
 **Need to regenerate tests after code changes?**
 
 1. Make your code changes
-2. **Right-click** the class or method
+2. **Right-click** the class
 3. Select **"Generate Tests with JAIPilot"** again
-4. Choose to **overwrite** existing tests or **merge** with them
-
-### Testing Multiple Classes
-
-**Want to generate tests for multiple classes at once?**
-
-1. Select multiple files in the **Project** tool window
-2. **Right-click** and select **"Generate Tests with JAIPilot"**
-3. JAIPilot will process each class sequentially
 
 ## Tips for Best Results
 
@@ -251,15 +221,6 @@ If you want to review or customize tests:
 - **Don't test empty methods** - add implementation first
 - **Don't expect tests for untestable code** - refactor legacy code
 - **Don't generate tests in production code** - use proper test directories
-
-## Next Steps
-
-Now that you've generated your first test, explore more features:
-
-- 📖 [Configuration Guide](configuration.md) - Customize JAIPilot settings
-- 🧪 [Generating Tests Guide](../guides/generating-tests.md) - Advanced test generation
-- 🔧 [Best Practices](../guides/best-practices.md) - Get the most out of JAIPilot
-- 📚 [Examples](../examples/simple-class.md) - See more examples
 
 ## Troubleshooting
 
