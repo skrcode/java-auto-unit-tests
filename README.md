@@ -54,11 +54,10 @@ JAIPilot is an AI-powered IntelliJ IDEA plugin that:
 ### 🤖 AI-Powered Test Generation
 - **Context-aware analysis** — understands method logic, parameters, dependencies, and edge cases
 - **Intelligent test creation** — generates meaningful test cases with proper assertions
-- **Multiple test frameworks** — supports JUnit 4 and JUnit 5
+- **Multiple test frameworks** — supports all JUnit version
 
 ### ⚡ One-Click Automation
-- **Right-click any class or method** to instantly generate comprehensive test suites
-- **Batch generation** — create tests for multiple classes at once
+- **Right-click any class** to instantly generate comprehensive test suites
 - **Custom test locations** — specify your preferred test root directory (e.g., `src/test/java`)
 
 ### 🔄 Autonomous Test Refinement
@@ -69,7 +68,6 @@ JAIPilot is an AI-powered IntelliJ IDEA plugin that:
 
 ### 🎯 Optimized Performance
 - **Dynamic model selection** — chooses the best AI model per class for speed and accuracy
-- **Fast generation** — creates tests in seconds, not minutes
 - **Resource efficient** — minimal impact on IDE performance
 
 ### 🔗 Seamless Integration
@@ -82,13 +80,12 @@ JAIPilot is an AI-powered IntelliJ IDEA plugin that:
 - **40 request attempts free on signup** (~4 classes worth of test generation)
 - **No credit card required** — start generating tests immediately
 - **Pay-as-you-go billing** — top up credits after free tier
-- **License key activation** — simple setup via email after registration
 
 ---
 
 ## 📦 Installation
 
-### Option 1: Install from JetBrains Marketplace (Recommended)
+### Install from JetBrains Marketplace (Recommended)
 
 1. Open IntelliJ IDEA
 2. Go to **Settings/Preferences** → **Plugins** → **Marketplace**
@@ -100,13 +97,6 @@ JAIPilot is an AI-powered IntelliJ IDEA plugin that:
     <img src="https://img.shields.io/badge/Install_from-JetBrains_Marketplace-000000?style=for-the-badge&logo=jetbrains" alt="Install from JetBrains Marketplace">
   </a>
 </div>
-
-### Option 2: Install from Disk
-
-1. Download the [latest release](https://github.com/skrcode/java-auto-unit-tests/releases/latest)
-2. Open IntelliJ IDEA
-3. Go to **Settings/Preferences** → **Plugins** → **⚙️** → **Install Plugin from Disk...**
-4. Select the downloaded `.zip` file and restart your IDE
 
 ---
 
@@ -194,26 +184,13 @@ Configure JAIPilot settings in **Settings/Preferences** → **Tools** → **JAIP
 
 - **License Key** — enter your license key from email or account page to activate the plugin
 - **Test Root Directory** — specify where tests should be generated (default: `src/test/java`)
-- **Test Framework** — choose between JUnit 4 and JUnit 5
-- **AI Model Selection** — automatic (recommended) or manual model selection
 
 > **Important:** You must activate your license key before generating tests. After signing up at [jaipilot.com](https://jaipilot.com), you'll receive a license key via email. Paste this key in the plugin settings to start using JAIPilot.
 
-### Supported Features
-
-| Feature | JUnit 4 | JUnit 5 |
-|---------|---------|---------|
-| Basic test generation | ✅ | ✅ |
-| Parameterized tests | ✅ | ✅ |
-| Exception testing | ✅ | ✅ |
-| Mock dependencies | ✅ | ✅ |
-| Test lifecycle hooks | ✅ | ✅ |
 
 ### Requirements
 
 - **IntelliJ IDEA** 2023.1 or later (Community or Ultimate)
-- **Java** 8 or later
-- **JUnit** 4.x or 5.x in your project dependencies
 
 ### Troubleshooting
 

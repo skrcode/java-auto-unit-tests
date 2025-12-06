@@ -19,7 +19,7 @@ We appreciate the security community's efforts in responsibly disclosing vulnera
 
 Instead, please report security vulnerabilities by:
 
-1. **Email:** Send details to [security@skrcode.com](mailto:security@skrcode.com) (if this email is not available, use the repository owner's email)
+1. **Email:** Send details to [support@jaipilot.com](mailto:support@jaipilot.com) (if this email is not available, use the repository owner's email)
 2. **GitHub Security Advisory:** Use the [GitHub Security Advisory](https://github.com/skrcode/java-auto-unit-tests/security/advisories/new) feature
 
 ### What to Include
@@ -144,11 +144,11 @@ JAIPilot is committed to:
 ## Questions?
 
 If you have questions about this security policy, please contact:
-- **Email:** security@skrcode.com
+- **Email:** support@jaipilot.com
 - **GitHub Discussions:** [Security Category](https://github.com/skrcode/java-auto-unit-tests/discussions/categories/security)
 
 ---
 
-**Last Updated:** December 6, 2024
+**Last Updated:** December 6, 2025
 
 Thank you for helping keep JAIPilot and its users safe!
