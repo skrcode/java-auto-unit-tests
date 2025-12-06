@@ -1,0 +1,34 @@
+# Configuration for Pull Request Labeler
+# Add labels to PRs based on changed files
+
+'documentation':
+  - '**/*.md'
+  - 'docs/**/*'
+
+'dependencies':
+  - 'build.gradle.kts'
+  - 'gradle.properties'
+  - 'gradle/**/*'
+
+'github-actions':
+  - '.github/workflows/**/*'
+  - '.github/**/*.yml'
+
+'tests':
+  - 'src/test/**/*'
+  - '**/*Test.java'
+
+'core':
+  - 'src/main/**/*.java'
+  - 'src/main/**/*.kt'
+
+'configuration':
+  - '**/*.properties'
+  - '**/*.xml'
+  - '**/*.yml'
+  - '**/*.yaml'
+
+'build':
+  - 'build.gradle.kts'
+  - 'settings.gradle.kts'
+  - 'gradlew*'
