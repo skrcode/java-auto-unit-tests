@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: GitHub Discussions
+    url: https://github.com/skrcode/java-auto-unit-tests/discussions
+    about: Ask questions and discuss JAIPilot with the community
+  - name: Documentation
+    url: https://github.com/skrcode/java-auto-unit-tests/wiki
+    about: Check our documentation for guides and tutorials
+  - name: JetBrains Marketplace
+    url: https://plugins.jetbrains.com/plugin/27706-jaipilot--one-click-ai-agent-for-java-unit-testing
+    about: View plugin details and leave a review
