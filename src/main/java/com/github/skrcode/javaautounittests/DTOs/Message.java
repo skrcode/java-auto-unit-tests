@@ -80,7 +80,7 @@ public class Message {
         private String tool_use_id; // when type == "tool_result"
         private String content; // tool_result payload
         private String name; // optional, when type == "tool_use"
-        private Object input; // optional structured input for tool_use
+        private Input input; // optional structured input for tool_use
         private String id; // when type == "tool_use"
         Map<String, String> cache_control;
 
@@ -93,6 +93,15 @@ public class Message {
             mc.tool_use_id = toolUseId;
             mc.content = content;
             mc.cache_control = cacheControl;
+            return mc;
+        }
+
+        public static MessageContent toolRequest(String toolUseId, String name, Input input) {
+            MessageContent mc = new MessageContent();
+            mc.type = "tool_use";
+            mc.id = toolUseId;
+            mc.name = name;
+            mc.input = input;
             return mc;
         }
 
@@ -136,11 +145,11 @@ public class Message {
             this.name = name;
         }
 
-        public Object getInput() {
+        public Input getInput() {
             return input;
         }
 
-        public void setInput(Object input) {
+        public void setInput(Input input) {
             this.input = input;
         }
 
@@ -150,6 +159,93 @@ public class Message {
 
         public void setId(String id) {
             this.id = id;
+        }
+
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        public static class Input {
+            private String command;
+            private String old_str;
+            private String new_str;
+            private String path;
+            private String filePath;
+            private String testPlan;
+            private String file_text;
+
+            public Input() {
+            }
+
+            public Input(String filePath) {
+                this.filePath = filePath;
+            }
+
+            public Input(String command, String old_str, String new_str, String path) {
+                this.command = command;
+                this.old_str = old_str;
+                this.new_str = new_str;
+                this.path = path;
+            }
+
+            public Input(String command, String path, String file_text) {
+                this.command = command;
+                this.path = path;
+                this.file_text = file_text;
+            }
+
+            public String getCommand() {
+                return command;
+            }
+
+            public void setCommand(String command) {
+                this.command = command;
+            }
+
+            public String getOld_str() {
+                return old_str;
+            }
+
+            public void setOld_str(String old_str) {
+                this.old_str = old_str;
+            }
+
+            public String getNew_str() {
+                return new_str;
+            }
+
+            public void setNew_str(String new_str) {
+                this.new_str = new_str;
+            }
+
+            public String getPath() {
+                return path;
+            }
+
+            public void setPath(String path) {
+                this.path = path;
+            }
+
+            public String getFilePath() {
+                return filePath;
+            }
+
+            public void setFilePath(String filePath) {
+                this.filePath = filePath;
+            }
+
+            public String getTestPlan() {
+                return testPlan;
+            }
+
+            public void setTestPlan(String testPlan) {
+                this.testPlan = testPlan;
+            }
+
+            public String getFile_text() {
+                return file_text;
+            }
+
+            public void setFile_text(String file_text) {
+                this.file_text = file_text;
+            }
         }
     }
 }

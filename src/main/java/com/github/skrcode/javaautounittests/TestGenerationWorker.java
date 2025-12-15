@@ -4,12 +4,11 @@
 
 package com.github.skrcode.javaautounittests;
 
-import com.github.skrcode.javaautounittests.DTOs.Content;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.skrcode.javaautounittests.DTOs.Message;
 import com.github.skrcode.javaautounittests.DTOs.PromptResponseOutput;
 import com.github.skrcode.javaautounittests.DTOs.QuotaResponse;
-import com.github.skrcode.javaautounittests.diff.JaipilotDiffResult;
-import com.github.skrcode.javaautounittests.diff.JaipilotDiffService;
-import com.github.skrcode.javaautounittests.diff.JaipilotHunk;
+import com.github.skrcode.javaautounittests.DTOs.TestWriteResult;
 import com.github.skrcode.javaautounittests.llm.JAIPilotLLM;
 import com.github.skrcode.javaautounittests.settings.AISettings;
 import com.github.skrcode.javaautounittests.settings.ConsolePrinter;
@@ -46,16 +45,18 @@ import java.net.http.HttpResponse;
 import java.nio.file.Paths;
 import java.util.*;
 
+import static com.github.skrcode.javaautounittests.llm.JAIPilotLLM.*;
 import static com.github.skrcode.javaautounittests.settings.telemetry.TelemetryService.getAppVersion;
 
 public final class TestGenerationWorker {
 
     private static final int MAX_ATTEMPTS = 100;
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     public static void process(Project project, PsiClass cut, @NotNull ConsoleView myConsole, PsiDirectory testRoot, @NotNull ProgressIndicator indicator) {
-        int attempt = 0;
+        int attempt = 1;
+        boolean isCacheUsedTestPlan = false;
         try {
-
             try {
                 QuotaResponse quotaResponse = QuotaUtil.fetchQuota();
                 if(quotaResponse.message != null)
@@ -78,105 +79,28 @@ public final class TestGenerationWorker {
             boolean isLLMGeneratedAtLeastOnce = false;
 
             JAIPilotExecutionManager.reset();
-            List<Content> contents = new ArrayList<>();
+            List<Message> messages = new ArrayList<>();
             String cutSource = CUTUtil.cleanedSourceForLLM(project, cut);
-            contents.add(JAIPilotLLM.getInputClassContent(cutSource));
-
-            String originalSource = """
-public class Calculator {
-
-    public int add(int a, int b) {
-        // legacy slow impl
-        int sum = 0;
-        sum = a;
-        sum = sum + b;
-        return sum;
-    }
-
-    public int multiply(int a, int b) {
-        int result = 0;
-        for (int i = 0; i < b; i++) {
-            result = result + a; // slow impl
-        }
-        return result;
-    }
-}
-""";
-
-
-            String improvedSource = """
-public class Calculator {
-
-    public int add(int a, int b) {
-        return a + b; // optimized
-    }
-
-    public int multiply(int a, int b) {
-        return a * b; // optimized
-    }
-}
-""";
-
-
-            List<JaipilotHunk> hunksFromLLM = List.of(
-                    new JaipilotHunk(
-                            48,   // start offset of add() slow impl
-                            147,  // end offset of slow impl block
-                            """
-                            // legacy slow impl
-                            int sum = 0;
-                            sum = a;
-                            sum = sum + b;
-                            return sum;
-                            """,
-                            """
-                            return a + b; // optimized
-                            """,
-                            "Replaced slow multi-step accumulation with direct arithmetic addition."
-                    ),
-                    new JaipilotHunk(
-                            169,  // start offset of multiply() slow loop
-                            272,  // end offset
-                            """
-                            int result = 0;
-                            for (int i = 0; i < b; i++) {
-                                result = result + a; // slow impl
-                            }
-                            return result;
-                            """,
-                            """
-                            return a * b; // optimized
-                            """,
-                            "Replaced loop-based multiplication with direct multiplication operator."
-                    )
-            );
-
-
-            JaipilotDiffResult result = new JaipilotDiffResult(
-                    originalSource,
-                    improvedSource,
-                    hunksFromLLM
-            );
-
-            JaipilotDiffService.showDiffDialog(project, cut.getContainingFile(), result);
-
-
+            messages.add(JAIPilotLLM.getMessage(JAIPilotLLM.USER_ROLE,testFileName));
+            messages.add(JAIPilotLLM.getMessageTool(JAIPilotLLM.MODEL_ROLE,Arrays.asList(getMessageToolRequestContent("toolu_1","get_file",new Message.MessageContent.Input(getRelativePath(cut)+"/"+cutName+".java")))));
+            messages.add(JAIPilotLLM.getMessageTool(JAIPilotLLM.USER_ROLE,Arrays.asList(getMessageToolResultContent("toolu_1",cutSource,false)))); // get cut tool
+            messages.add(JAIPilotLLM.getMessageTool(JAIPilotLLM.MODEL_ROLE,Arrays.asList(getMessageToolRequestContent("toolu_2","fetch_mockito_version", new Message.MessageContent.Input())))); // get mockito tool
+            messages.add(JAIPilotLLM.getMessageTool(JAIPilotLLM.USER_ROLE,Arrays.asList(getMessageToolResultContent("toolu_2",CUTUtil.findMockitoVersion(project),false))));
             // Add existing test class (if present) as context
             Ref<PsiFile> testFileExisting = ReadAction.compute(() -> Ref.create(packageDir.findFile(testFileName)));
+            messages.add(JAIPilotLLM.getMessageTool(JAIPilotLLM.MODEL_ROLE,Arrays.asList(getMessageToolRequestContent("toolu_4","str_replace_based_edit_tool", new Message.MessageContent.Input("view",getTestRelativePath(cut)+"/"+testFileName,null))))); // view test file
             String existingTestSource = "";
             if (ReadAction.compute(testFileExisting::get) != null) {
                 existingTestSource = ReadAction.compute(() -> testFileExisting.get().getText());
-                if (existingTestSource != null && !existingTestSource.isBlank()) {
-                    contents.add(JAIPilotLLM.getExistingTestClassContent(existingTestSource));
-                }
             }
-            List<Content> actualContents = new ArrayList<>(contents);
+            messages.add(JAIPilotLLM.getMessageTool(USER_ROLE,Arrays.asList(getMessageToolResultContent("toolu_4",existingTestSource, false))));
+            List<Message> actualMessages = new ArrayList<>(messages);
             boolean shouldRebuild = true;
             Set<String> isClassPathFetched = new HashSet<>();
-            String newTestSource = null;
+            TestWriteResult testWriteResult = null;
             for (; ; attempt++) {
                 ConsolePrinter.section(myConsole, "Attempting");
-                if(newTestSource != null) actualContents.add(JAIPilotLLM.getCombinedTestClassContent(newTestSource));
+                if(testWriteResult != null && testWriteResult.source != null) actualMessages.add(JAIPilotLLM.getMessage(MODEL_ROLE,testWriteResult.source));
                 // Check if test file already exists and run it
                 Ref<PsiFile> testFile = ReadAction.compute(() -> Ref.create(packageDir.findFile(testFileName)));
                 if (ReadAction.compute(testFile::get) != null && shouldRebuild) {
@@ -191,7 +115,7 @@ public class Calculator {
                         errorOutput = BuilderUtil.runJUnitClass(project, testFile.get());
                         if(!errorOutput.isEmpty()) {
                             ConsolePrinter.info(myConsole, "Found tests execution errors " + testFileName);
-                            actualContents.add(JAIPilotLLM.getOutputContent(errorOutput));
+                            actualMessages.add(JAIPilotLLM.getMessage(USER_ROLE,errorOutput));
                         }
                         else {
                             ConsolePrinter.success(myConsole, "Tests execution successful " + testFileName);
@@ -200,7 +124,7 @@ public class Calculator {
                     }
                     else {
                         ConsolePrinter.info(myConsole, "Found compilation errors " + testFileName);
-                        actualContents.add(JAIPilotLLM.getOutputContent(errorOutput));
+                        actualMessages.add(JAIPilotLLM.getMessage(USER_ROLE,errorOutput));
                     }
                 }
                 shouldRebuild = false;
@@ -213,94 +137,87 @@ public class Calculator {
                 indicator.checkCanceled();
                 PromptResponseOutput output = JAIPilotLLM.generateContent(
                         testFileName,
-                        actualContents,
+                        actualMessages,
                         myConsole,
                         attempt,
                         indicator
                 );
-                actualContents = new ArrayList<>(contents);
-                actualContents.add(output.getContent());
-                if (output.getContent() != null) {
-                    for (int i=0;i<10 && i < output.getContent().getParts().size();i++) {
-                        Content.Part p = output.getContent().getParts().get(i);
-                        if (p.getFunctionCall() != null) {
-                            Content.FunctionCall fc = p.getFunctionCall();
-                            String fn = fc.getName();
-                            Object args = fc.getArgs();
+                actualMessages = new ArrayList<>(messages);
+                if (output.getMessage() != null) {
+                    for (int i=0;i<10 && i < output.getMessage().getContentAsList().size();i++) {
+                        Message.MessageContent messageContent = MAPPER.convertValue(output.getMessage().getContentAsList().get(i),Message.MessageContent.class);
+                        if (messageContent.getType().equals("tool_use")) {
+                            String fn = messageContent.getName();
+                            Message.MessageContent.Input args = messageContent.getInput();
+                            String toolUseId = messageContent.getId();
                             switch (fn) {
                                 case "plan_test_changes": {
-                                    if (args instanceof Map) {
-                                        Map<?, ?> argMap = (Map<?, ?>) args;
-                                        String testPlan = (String) argMap.get("testPlan");
-                                        ConsolePrinter.info(myConsole, "Fetching test plan: \n" + testPlan);
-                                        actualContents.add(JAIPilotLLM.getTestPlanContent(testPlan));
-                                        contents.add(JAIPilotLLM.getTestPlanContent(testPlan));
-                                    }
+                                    String testPlan = args.getTestPlan();
+                                    ConsolePrinter.info(myConsole, "Fetching test plan: \n" + testPlan);
+                                    messages.add(JAIPilotLLM.getMessageTool(MODEL_ROLE,Arrays.asList(getMessageToolRequestContent(toolUseId, fn, args))));
+                                    messages.add(JAIPilotLLM.getMessageTool(USER_ROLE,Arrays.asList(getMessageToolResultContent(toolUseId, testPlan, !isCacheUsedTestPlan))));
+                                    actualMessages.add(JAIPilotLLM.getMessageTool(MODEL_ROLE,Arrays.asList(getMessageToolRequestContent(toolUseId, fn, args))));
+                                    actualMessages.add(JAIPilotLLM.getMessageTool(USER_ROLE,Arrays.asList(getMessageToolResultContent(toolUseId, testPlan, !isCacheUsedTestPlan))));
+                                    isCacheUsedTestPlan = true;
                                     break;
                                 }
-                                case "apply_test_class": {
-                                    if (args instanceof Map) {
-                                        Map<?, ?> argMap = (Map<?, ?>) args;
-                                        isLLMGeneratedAtLeastOnce = true;
-                                        try {
+                                case "str_replace_based_edit_tool": {
+                                    isLLMGeneratedAtLeastOnce = true;
+                                    try {
+                                        if(args.getCommand().equals("str_replace")) {
                                             indicator.checkCanceled();
-                                            String classSkeleton = (String) argMap.get("classSkeleton");
-                                            // Convert methods array (if present)
-                                            List<Map<String, Object>> rawMethods = (List<Map<String, Object>>) argMap.get("methods");
-                                            List<BuilderUtil.TestMethod> methods = new ArrayList<>();
-                                            if (rawMethods != null) {
-                                                for (Map<String, Object> m : rawMethods) {
-                                                    String methodName = Objects.toString(m.get("methodName"), null);
-                                                    String fullImpl = Objects.toString(m.get("fullImplementation"), "");
-                                                    methods.add(new BuilderUtil.TestMethod(methodName, fullImpl));
-                                                }
-                                            }
-                                            newTestSource = BuilderUtil.buildAndWriteTestClass(
-                                                    project,testFile,
-                                                    packageDir, testFileName,
-                                                    classSkeleton,
-                                                    methods,
+                                            testWriteResult = BuilderUtil.buildAndWriteTestClass(
+                                                    project, testFile, packageDir, testFileName, args.getOld_str(), args.getNew_str(),null,
                                                     myConsole
                                             );
                                             shouldRebuild = true;
-                                        } catch (Exception e) {
-                                            ConsolePrinter.info(myConsole, "⚠️ Error composing test class: " + e.getMessage());
-                                            continue;
+                                            if(testWriteResult.error != null) {
+                                                actualMessages.add(JAIPilotLLM.getMessageTool(MODEL_ROLE,Arrays.asList(getMessageToolRequestContent(toolUseId, fn, args))));
+                                                actualMessages.add(JAIPilotLLM.getMessageTool(USER_ROLE,Arrays.asList(getMessageToolResultContent(toolUseId, testWriteResult.error, false))));
+                                            }
                                         }
+                                        if(args.getCommand().equals("create")) {
+                                            indicator.checkCanceled();
+                                            testWriteResult = BuilderUtil.buildAndWriteTestClass(
+                                                    project, testFile, packageDir, testFileName,null,null,args.getFile_text(),
+                                                    myConsole
+                                            );
+                                            shouldRebuild = true;
+                                            if(testWriteResult.error != null) {
+                                                actualMessages.add(JAIPilotLLM.getMessageTool(MODEL_ROLE,Arrays.asList(getMessageToolRequestContent(toolUseId, fn, args))));
+                                                actualMessages.add(JAIPilotLLM.getMessageTool(USER_ROLE,Arrays.asList(getMessageToolResultContent(toolUseId, testWriteResult.error, false))));
+                                            }
+                                        }
+                                    } catch (Exception e) {
+                                        ConsolePrinter.info(myConsole, "⚠️ Error composing test class: " + e.getMessage());
+                                        continue;
                                     }
                                     break;
                                 }
-                                case "fetch_mockito_version":
-                                    ConsolePrinter.info(myConsole, "Fetching mockito version");
-                                    Content mockitoVersionContent = JAIPilotLLM.getMockitoVersionContent(project);
-                                    actualContents.add(mockitoVersionContent);
-                                    contents.add(mockitoVersionContent);
-                                    break;
                                 case "get_file":
-                                    if (args instanceof Map) {
-                                        Map<?, ?> argMap = (Map<?, ?>) args;
-                                        String filePath = (String) argMap.get("filePath");
+                                    String filePath = args.getFilePath();
 
-                                        ConsolePrinter.info(myConsole, "Fetching file details: " + filePath);
+                                    ConsolePrinter.info(myConsole, "Fetching file details: " + filePath);
 
-                                        if(isClassPathFetched.contains(filePath) || filePath.endsWith(testFileName) || filePath.endsWith(cutName+".java")) {
-                                            ConsolePrinter.info(myConsole, "Duplicate file - ignoring");
-                                            continue;
-                                        }
-                                        isClassPathFetched.add(filePath);
-                                        String toolResult = stripCommentsAndMethodBodies(project, filePath);
-
-                                        if (StringUtils.isEmpty(toolResult)) {
-                                            ConsolePrinter.info(myConsole, "No matches or file not found: " + filePath);
-                                            toolResult = filePath + " not found or no matches found.";
-                                        } else {
-                                            ConsolePrinter.success(myConsole, "Snippet(s): " + toolResult);
-                                            ConsolePrinter.success(myConsole, "Fetched file snippet(s): " + filePath);
-                                        }
-
-                                        actualContents.add(JAIPilotLLM.getContextSourceContent(toolResult));
-                                        contents.add(JAIPilotLLM.getContextSourceContent(toolResult));
+                                    if(isClassPathFetched.contains(filePath) || filePath.endsWith(testFileName) || filePath.endsWith(cutName+".java")) {
+                                        ConsolePrinter.info(myConsole, "Duplicate file - ignoring");
+                                        continue;
                                     }
+                                    isClassPathFetched.add(filePath);
+                                    String toolResult = stripCommentsAndMethodBodies(project, filePath);
+
+                                    if (StringUtils.isEmpty(toolResult)) {
+                                        ConsolePrinter.info(myConsole, "No matches or file not found: " + filePath);
+                                        toolResult = filePath + " not found or no matches found.";
+                                    } else {
+                                        ConsolePrinter.success(myConsole, "Snippet(s): " + toolResult);
+                                        ConsolePrinter.success(myConsole, "Fetched file snippet(s): " + filePath);
+                                    }
+
+                                    messages.add(JAIPilotLLM.getMessageTool(MODEL_ROLE,Arrays.asList(getMessageToolRequestContent(toolUseId, fn, args))));
+                                    messages.add(JAIPilotLLM.getMessageTool(USER_ROLE,Arrays.asList(getMessageToolResultContent(toolUseId, toolResult, false))));
+                                    actualMessages.add(JAIPilotLLM.getMessageTool(MODEL_ROLE,Arrays.asList(getMessageToolRequestContent(toolUseId, fn, args))));
+                                    actualMessages.add(JAIPilotLLM.getMessageTool(USER_ROLE,Arrays.asList(getMessageToolResultContent(toolUseId, toolResult, false))));
                                     break;
                                 case "terminate_call":
                                     ConsolePrinter.warn(myConsole, "Attempts breached. I have tried my best to compile and execute tests. Please fix the remaining tests manually. ");
@@ -410,14 +327,26 @@ public class Calculator {
     private static @Nullable PsiDirectory resolveTestPackageDir(Project project,
                                                                 PsiDirectory testRoot,
                                                                 PsiClass cut) throws Exception {
+        String relPath = getTestRelativePath(cut);
+        return getOrCreateSubdirectoryPath(project, testRoot, relPath);
+    }
+
+    private static @Nullable String getTestRelativePath(PsiClass cut) {
         PsiPackage cutPkg = ReadAction.compute(() ->
                 JavaDirectoryService.getInstance().getPackage(cut.getContainingFile().getContainingDirectory())
         );
         if (cutPkg == null) return null;
-
-        String relPath = ReadAction.compute(() -> cutPkg.getQualifiedName().replace('.', '/'));
-        return getOrCreateSubdirectoryPath(project, testRoot, relPath);
+        return ReadAction.compute(() -> cutPkg.getQualifiedName().replace('.', '/'));
     }
+
+    private static @Nullable String getRelativePath(
+            PsiClass cut
+    ) {
+        return JavaDirectoryService.getInstance().getPackage(
+                cut.getContainingFile().getContainingDirectory()
+        ).getQualifiedName().replace('.', '/');
+    }
+
 
     private static VirtualFile findInProjectAndLibraries(Project project, String relativePath) {
         // 1. Search in content + source roots
