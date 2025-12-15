@@ -331,9 +331,9 @@ public final class TestGenerationWorker {
     private static @Nullable String getRelativePath(
             PsiClass cut
     ) {
-        return JavaDirectoryService.getInstance().getPackage(
+        return ReadAction.compute(() ->JavaDirectoryService.getInstance().getPackage(
                 cut.getContainingFile().getContainingDirectory()
-        ).getQualifiedName().replace('.', '/');
+        ).getQualifiedName().replace('.', '/'));
     }
 
 
