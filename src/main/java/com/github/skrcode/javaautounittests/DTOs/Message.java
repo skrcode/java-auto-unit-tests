@@ -164,12 +164,19 @@ public class Message {
         @JsonInclude(JsonInclude.Include.NON_NULL)
         public static class Input {
             private String command;
-            private String old_str;
-            private String new_str;
-            private String path;
             private String filePath;
             private String testPlan;
-            private String file_text;
+            private String classSkeleton;
+            private Object methods;
+
+            public Input(String classSkeleton, Object methods) {
+                this.classSkeleton = classSkeleton;
+                this.methods = methods;
+            }
+
+            public Input(Object methods) {
+                this.methods = methods;
+            }
 
             public Input() {
             }
@@ -178,49 +185,12 @@ public class Message {
                 this.filePath = filePath;
             }
 
-            public Input(String command, String old_str, String new_str, String path) {
-                this.command = command;
-                this.old_str = old_str;
-                this.new_str = new_str;
-                this.path = path;
-            }
-
-            public Input(String command, String path, String file_text) {
-                this.command = command;
-                this.path = path;
-                this.file_text = file_text;
-            }
-
             public String getCommand() {
                 return command;
             }
 
             public void setCommand(String command) {
                 this.command = command;
-            }
-
-            public String getOld_str() {
-                return old_str;
-            }
-
-            public void setOld_str(String old_str) {
-                this.old_str = old_str;
-            }
-
-            public String getNew_str() {
-                return new_str;
-            }
-
-            public void setNew_str(String new_str) {
-                this.new_str = new_str;
-            }
-
-            public String getPath() {
-                return path;
-            }
-
-            public void setPath(String path) {
-                this.path = path;
             }
 
             public String getFilePath() {
@@ -239,12 +209,20 @@ public class Message {
                 this.testPlan = testPlan;
             }
 
-            public String getFile_text() {
-                return file_text;
+            public String getClassSkeleton() {
+                return classSkeleton;
             }
 
-            public void setFile_text(String file_text) {
-                this.file_text = file_text;
+            public void setClassSkeleton(String classSkeleton) {
+                this.classSkeleton = classSkeleton;
+            }
+
+            public Object getMethods() {
+                return methods;
+            }
+
+            public void setMethods(Object methods) {
+                this.methods = methods;
             }
         }
     }

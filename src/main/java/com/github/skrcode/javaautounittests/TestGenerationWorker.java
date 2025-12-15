@@ -8,7 +8,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.skrcode.javaautounittests.DTOs.Message;
 import com.github.skrcode.javaautounittests.DTOs.PromptResponseOutput;
 import com.github.skrcode.javaautounittests.DTOs.QuotaResponse;
-import com.github.skrcode.javaautounittests.DTOs.TestWriteResult;
 import com.github.skrcode.javaautounittests.llm.JAIPilotLLM;
 import com.github.skrcode.javaautounittests.settings.AISettings;
 import com.github.skrcode.javaautounittests.settings.ConsolePrinter;
@@ -88,7 +87,7 @@ public final class TestGenerationWorker {
             messages.add(JAIPilotLLM.getMessageTool(JAIPilotLLM.USER_ROLE,Arrays.asList(getMessageToolResultContent("toolu_2",CUTUtil.findMockitoVersion(project),false))));
             // Add existing test class (if present) as context
             Ref<PsiFile> testFileExisting = ReadAction.compute(() -> Ref.create(packageDir.findFile(testFileName)));
-            messages.add(JAIPilotLLM.getMessageTool(JAIPilotLLM.MODEL_ROLE,Arrays.asList(getMessageToolRequestContent("toolu_4","str_replace_based_edit_tool", new Message.MessageContent.Input("view",getTestRelativePath(cut)+"/"+testFileName,null))))); // view test file
+            messages.add(JAIPilotLLM.getMessageTool(JAIPilotLLM.MODEL_ROLE,Arrays.asList(getMessageToolRequestContent("toolu_4","get_file", new Message.MessageContent.Input(getTestRelativePath(cut)+"/"+testFileName))))); // view test file
             String existingTestSource = "";
             if (ReadAction.compute(testFileExisting::get) != null) {
                 existingTestSource = ReadAction.compute(() -> testFileExisting.get().getText());
@@ -97,10 +96,10 @@ public final class TestGenerationWorker {
             List<Message> actualMessages = new ArrayList<>(messages);
             boolean shouldRebuild = true;
             Set<String> isClassPathFetched = new HashSet<>();
-            TestWriteResult testWriteResult = null;
+            String newTestSource = null;
             for (; ; attempt++) {
                 ConsolePrinter.section(myConsole, "Attempting");
-                if(testWriteResult != null && testWriteResult.source != null) actualMessages.add(JAIPilotLLM.getMessage(MODEL_ROLE,testWriteResult.source));
+                if(newTestSource != null) actualMessages.add(JAIPilotLLM.getMessage(MODEL_ROLE,newTestSource));
                 // Check if test file already exists and run it
                 Ref<PsiFile> testFile = ReadAction.compute(() -> Ref.create(packageDir.findFile(testFileName)));
                 if (ReadAction.compute(testFile::get) != null && shouldRebuild) {
@@ -161,33 +160,23 @@ public final class TestGenerationWorker {
                                     isCacheUsedTestPlan = true;
                                     break;
                                 }
-                                case "str_replace_based_edit_tool": {
+                                case "apply_test_class": {
                                     isLLMGeneratedAtLeastOnce = true;
                                     try {
-                                        if(args.getCommand().equals("str_replace")) {
-                                            indicator.checkCanceled();
-                                            testWriteResult = BuilderUtil.buildAndWriteTestClass(
-                                                    project, testFile, packageDir, testFileName, args.getOld_str(), args.getNew_str(),null,
-                                                    myConsole
-                                            );
-                                            shouldRebuild = true;
-                                            if(testWriteResult.error != null) {
-                                                actualMessages.add(JAIPilotLLM.getMessageTool(MODEL_ROLE,Arrays.asList(getMessageToolRequestContent(toolUseId, fn, args))));
-                                                actualMessages.add(JAIPilotLLM.getMessageTool(USER_ROLE,Arrays.asList(getMessageToolResultContent(toolUseId, testWriteResult.error, false))));
+                                        indicator.checkCanceled();
+                                        String classSkeleton = args.getClassSkeleton();
+                                        List<BuilderUtil.TestMethod> methods = new ArrayList<>();
+                                        Object rawMethods = args.getMethods();
+                                        if (rawMethods instanceof Map<?, ?> methodsMap) {
+                                            for (Map.Entry<?, ?> entry : methodsMap.entrySet()) {
+                                                String methodName = Objects.toString(entry.getKey(), null);
+                                                String fullImpl = Objects.toString(entry.getValue(), "");
+                                                methods.add(new BuilderUtil.TestMethod(methodName, fullImpl));
                                             }
                                         }
-                                        if(args.getCommand().equals("create")) {
-                                            indicator.checkCanceled();
-                                            testWriteResult = BuilderUtil.buildAndWriteTestClass(
-                                                    project, testFile, packageDir, testFileName,null,null,args.getFile_text(),
-                                                    myConsole
-                                            );
-                                            shouldRebuild = true;
-                                            if(testWriteResult.error != null) {
-                                                actualMessages.add(JAIPilotLLM.getMessageTool(MODEL_ROLE,Arrays.asList(getMessageToolRequestContent(toolUseId, fn, args))));
-                                                actualMessages.add(JAIPilotLLM.getMessageTool(USER_ROLE,Arrays.asList(getMessageToolResultContent(toolUseId, testWriteResult.error, false))));
-                                            }
-                                        }
+                                        // Build and write the test class
+                                        newTestSource = BuilderUtil.buildAndWriteTestClass(project, testFile, packageDir, testFileName, classSkeleton, methods, myConsole).stripTrailing();
+                                        shouldRebuild = true;
                                     } catch (Exception e) {
                                         ConsolePrinter.info(myConsole, "⚠️ Error composing test class: " + e.getMessage());
                                         continue;
