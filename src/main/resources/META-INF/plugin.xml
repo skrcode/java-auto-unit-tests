@@ -8,6 +8,7 @@
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.java</depends>
     <depends>JUnit</depends>
+    <version>0.0.0</version>
 
     <!-- Description -->
     <description><![CDATA[

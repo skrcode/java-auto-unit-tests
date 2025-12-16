@@ -20,6 +20,7 @@ import com.intellij.notification.NotificationType;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.command.WriteCommandAction;
+import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.ProjectRootManager;
@@ -86,6 +87,10 @@ public final class TestGenerationWorker {
                     contents.add(JAIPilotLLM.getExistingTestClassContent(existingTestSource));
                 }
             }
+            ConsolePrinter.info(myConsole, "Fetching mockito version");
+            Content mockitoVersionContent = JAIPilotLLM.getMockitoVersionContent(project);
+            contents.add(mockitoVersionContent);
+
             List<Content> actualContents = new ArrayList<>(contents);
             boolean shouldRebuild = true;
             Set<String> isClassPathFetched = new HashSet<>();
@@ -179,6 +184,9 @@ public final class TestGenerationWorker {
                                                     myConsole
                                             );
                                             shouldRebuild = true;
+
+                                            // update jaipilot cache.
+                                            List<String> files = (List<String>) argMap.get("filesUsed");
                                         } catch (Exception e) {
                                             ConsolePrinter.info(myConsole, "⚠️ Error composing test class: " + e.getMessage());
                                             continue;
@@ -186,12 +194,6 @@ public final class TestGenerationWorker {
                                     }
                                     break;
                                 }
-                                case "fetch_mockito_version":
-                                    ConsolePrinter.info(myConsole, "Fetching mockito version");
-                                    Content mockitoVersionContent = JAIPilotLLM.getMockitoVersionContent(project);
-                                    actualContents.add(mockitoVersionContent);
-                                    contents.add(mockitoVersionContent);
-                                    break;
                                 case "get_file":
                                     if (args instanceof Map) {
                                         Map<?, ?> argMap = (Map<?, ?>) args;
@@ -291,6 +293,78 @@ public final class TestGenerationWorker {
             );
         }
     }
+
+    private static @Nullable PsiDirectory getCacheRoot(Project project, PsiDirectory testRoot) {
+        return WriteCommandAction.writeCommandAction(project).compute(() -> {
+            PsiDirectory cache = testRoot.findSubdirectory(".jaipilotcache");
+            if (cache == null) {
+                cache = testRoot.createSubdirectory(".jaipilotcache");
+            }
+            return cache;
+        });
+    }
+
+    private static PsiDirectory getOrCreateCachePackageDir(
+            Project project,
+            PsiDirectory cacheRoot,
+            PsiClass cut
+    ) {
+        String pkg = ReadAction.compute(() ->
+                JavaDirectoryService.getInstance()
+                        .getPackage(cut.getContainingFile().getContainingDirectory())
+                        .getQualifiedName()
+        );
+
+        return WriteCommandAction.writeCommandAction(project).compute(() -> {
+            PsiDirectory current = cacheRoot;
+            for (String part : pkg.split("\\.")) {
+                PsiDirectory next = current.findSubdirectory(part);
+                if (next == null) next = current.createSubdirectory(part);
+                current = next;
+            }
+            return current;
+        });
+    }
+
+    private static PsiFile getOrCreateCacheFile(
+            Project project,
+            PsiDirectory pkgDir,
+            String testClassName
+    ) {
+        String fileName = testClassName + ".json";
+        return WriteCommandAction.writeCommandAction(project).compute(() -> {
+            PsiFile existing = pkgDir.findFile(fileName);
+            if (existing != null) return existing;
+
+            return PsiFileFactory.getInstance(project)
+                    .createFileFromText(
+                            fileName,
+                            JavaFileType.INSTANCE,
+                            "{\n" +
+                                    "  \"class\": \"" + testClassName + "\",\n" +
+                                    "  \"createdAt\": \"" + now() + "\",\n" +
+                                    "  \"updatedAt\": \"" + now() + "\",\n" +
+                                    "  \"files\": []\n" +
+                                    "}\n"
+                    );
+        });
+    }
+    private static String now() {
+        return java.time.OffsetDateTime.now().toString();
+    }
+
+    private static String readJson(PsiFile file) {
+        return ReadAction.compute(file::getText);
+    }
+
+    private static void writeJson(Project project, PsiFile file, String json) {
+        WriteCommandAction.runWriteCommandAction(project, () -> {
+            Document doc = PsiDocumentManager.getInstance(project).getDocument(file);
+            if (doc != null) doc.setText(json);
+        });
+    }
+
+
 
     private static void sendFeedback(String usageKey, int rating, String version) {
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
