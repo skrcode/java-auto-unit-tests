@@ -4,6 +4,7 @@
 
 package com.github.skrcode.javaautounittests;
 
+import com.github.skrcode.javaautounittests.DTOs.CacheDTO;
 import com.github.skrcode.javaautounittests.DTOs.Content;
 import com.github.skrcode.javaautounittests.DTOs.PromptResponseOutput;
 import com.github.skrcode.javaautounittests.DTOs.QuotaResponse;
@@ -12,6 +13,7 @@ import com.github.skrcode.javaautounittests.settings.ConsolePrinter;
 import com.github.skrcode.javaautounittests.settings.JAIPilotExecutionManager;
 import com.github.skrcode.javaautounittests.settings.QuotaUtil;
 import com.github.skrcode.javaautounittests.settings.telemetry.Telemetry;
+import com.github.skrcode.javaautounittests.util.CacheJsonUtil;
 import com.intellij.execution.ui.ConsoleView;
 import com.intellij.ide.BrowserUtil;
 import com.intellij.ide.highlighter.JavaFileType;
@@ -31,6 +33,7 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.*;
 import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.util.PsiTreeUtil;
+import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -69,6 +72,13 @@ public final class TestGenerationWorker {
 
             String cutName = ReadAction.compute(() -> cut.isValid() ? cut.getName() : "<invalid>");
             String testFileName = cutName + "Test.java";
+
+            PsiDirectory cacheRoot = getCacheRoot(project, testRoot);
+            PsiDirectory cachePkg = getOrCreateCachePackageDir(project, cacheRoot, cut);
+            PsiFile cacheFile = getOrCreateCacheFile(project, cachePkg, testFileName.replace(".java", ""));
+            CacheDTO entry = CacheJsonUtil.read(cacheFile);
+            List<String> cachedPaths = entry.files;
+
             Telemetry.allGenBegin(testFileName);
 
             boolean isLLMGeneratedAtLeastOnce = false;
@@ -91,9 +101,27 @@ public final class TestGenerationWorker {
             Content mockitoVersionContent = JAIPilotLLM.getMockitoVersionContent(project);
             contents.add(mockitoVersionContent);
 
+            // cache get
+            Set<String> isClassPathFetched = new HashSet<>();
+            for(String cachedFilePath: cachedPaths) {
+                ConsolePrinter.info(myConsole, "Fetching file details from cache: " + cachedFilePath);
+                if(isClassPathFetched.contains(cachedFilePath) || cachedFilePath.endsWith(testFileName) || cachedFilePath.endsWith(cutName+".java")) {
+                    ConsolePrinter.info(myConsole, "Duplicate file - ignoring");
+                    continue;
+                }
+                isClassPathFetched.add(cachedFilePath);
+                String cachedFileContent = stripCommentsAndMethodBodies(project, cachedFilePath);
+                if (StringUtils.isEmpty(cachedFileContent)) {
+                    ConsolePrinter.info(myConsole, "No matches or file not found: " + cachedFileContent);
+                } else {
+                    contents.add(JAIPilotLLM.getContextSourceContent(cachedFileContent));
+                    ConsolePrinter.success(myConsole, "Cached Snippet(s): " + cachedFileContent);
+                    ConsolePrinter.success(myConsole, "Fetched cached file snippet(s): " + cachedFileContent);
+                }
+            }
+
             List<Content> actualContents = new ArrayList<>(contents);
             boolean shouldRebuild = true;
-            Set<String> isClassPathFetched = new HashSet<>();
             String newTestSource = null;
             for (; ; attempt++) {
                 ConsolePrinter.section(myConsole, "Attempting");
@@ -187,6 +215,8 @@ public final class TestGenerationWorker {
 
                                             // update jaipilot cache.
                                             List<String> files = (List<String>) argMap.get("filesUsed");
+                                            if(CollectionUtils.isNotEmpty(files))
+                                                updateCacheOnApplyTestClass(project, cacheFile, files);
                                         } catch (Exception e) {
                                             ConsolePrinter.info(myConsole, "⚠️ Error composing test class: " + e.getMessage());
                                             continue;
@@ -218,6 +248,7 @@ public final class TestGenerationWorker {
 
                                         actualContents.add(JAIPilotLLM.getContextSourceContent(toolResult));
                                         contents.add(JAIPilotLLM.getContextSourceContent(toolResult));
+                                        updateCacheOnGetFile(project, cacheFile, filePath);
                                     }
                                     break;
                                 case "terminate_call":
@@ -304,6 +335,26 @@ public final class TestGenerationWorker {
         });
     }
 
+    public static void updateCacheOnGetFile(Project project, PsiFile cacheFile, String filePath) {
+        CacheDTO entry = CacheJsonUtil.read(cacheFile);
+
+        if (!entry.files.contains(filePath)) {
+            entry.files.add(filePath);
+            entry.updatedAt = CacheDTO.now();
+            CacheJsonUtil.write(project, cacheFile, entry);
+        }
+    }
+
+
+    public static void updateCacheOnApplyTestClass(Project project, PsiFile cacheFile, List<String> newFiles) {
+        CacheDTO entry = CacheJsonUtil.read(cacheFile);
+
+        entry.files = new ArrayList<>(newFiles);
+        entry.updatedAt = CacheDTO.now();
+
+        CacheJsonUtil.write(project, cacheFile, entry);
+    }
+
     private static PsiDirectory getOrCreateCachePackageDir(
             Project project,
             PsiDirectory cacheRoot,
@@ -326,29 +377,27 @@ public final class TestGenerationWorker {
         });
     }
 
-    private static PsiFile getOrCreateCacheFile(
+    public static PsiFile getOrCreateCacheFile(
             Project project,
             PsiDirectory pkgDir,
             String testClassName
     ) {
-        String fileName = testClassName + ".json";
         return WriteCommandAction.writeCommandAction(project).compute(() -> {
+            String fileName = testClassName + ".json";
             PsiFile existing = pkgDir.findFile(fileName);
+
             if (existing != null) return existing;
 
-            return PsiFileFactory.getInstance(project)
-                    .createFileFromText(
-                            fileName,
-                            JavaFileType.INSTANCE,
-                            "{\n" +
-                                    "  \"class\": \"" + testClassName + "\",\n" +
-                                    "  \"createdAt\": \"" + now() + "\",\n" +
-                                    "  \"updatedAt\": \"" + now() + "\",\n" +
-                                    "  \"files\": []\n" +
-                                    "}\n"
-                    );
+            CacheDTO entry = new CacheDTO(testClassName);
+            String json = CacheJsonUtil.gson.toJson(entry);
+
+            PsiFile file = PsiFileFactory.getInstance(project)
+                    .createFileFromText(fileName, JavaFileType.INSTANCE, json);
+
+            return (PsiFile) pkgDir.add(file);
         });
     }
+
     private static String now() {
         return java.time.OffsetDateTime.now().toString();
     }
