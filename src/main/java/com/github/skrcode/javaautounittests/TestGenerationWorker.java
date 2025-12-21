@@ -147,7 +147,7 @@ public final class TestGenerationWorker {
                         Message.MessageContent messageContent = MAPPER.convertValue(output.getMessage().getContentAsList().get(i),Message.MessageContent.class);
                         if (messageContent.getType().equals("thinking") || messageContent.getType().equals("redacted_thinking")) {
 //                            messages.add(getMessageTool(MODEL_ROLE,Arrays.asList(messageContent)));
-                            actualMessages.add(getMessageTool(MODEL_ROLE,Arrays.asList(messageContent)));
+                            actualMessages.add(getMessageTool(MODEL_ROLE,Arrays.asList(output.getMessage().getContentAsList().get(i))));
                         }
                         if (messageContent.getType().equals("tool_use")) {
                             String fn = messageContent.getName();
