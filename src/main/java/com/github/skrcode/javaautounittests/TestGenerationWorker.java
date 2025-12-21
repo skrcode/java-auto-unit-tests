@@ -99,7 +99,7 @@ public final class TestGenerationWorker {
             String newTestSource = null;
             for (; ; attempt++) {
                 ConsolePrinter.section(myConsole, "Attempting");
-                if(newTestSource != null) actualMessages.add(JAIPilotLLM.getMessage(MODEL_ROLE,testFileName+" = \n"+newTestSource));
+//                if(newTestSource != null) actualMessages.add(JAIPilotLLM.getMessage(MODEL_ROLE,testFileName+" = \n"+newTestSource));
                 // Check if test file already exists and run it
                 Ref<PsiFile> testFile = ReadAction.compute(() -> Ref.create(packageDir.findFile(testFileName)));
                 if (ReadAction.compute(testFile::get) != null && shouldRebuild) {
@@ -143,11 +143,10 @@ public final class TestGenerationWorker {
                 );
                 actualMessages = new ArrayList<>(messages);
                 if (output.getMessage() != null) {
-                    for (int i=0;i<10 && i < output.getMessage().getContentAsList().size();i++) {
+                    for (int i=0;i < output.getMessage().getContentAsList().size();i++) {
                         Message.MessageContent messageContent = MAPPER.convertValue(output.getMessage().getContentAsList().get(i),Message.MessageContent.class);
                         if (messageContent.getType().equals("thinking") || messageContent.getType().equals("redacted_thinking")) {
-//                            messages.add(getMessageTool(MODEL_ROLE,Arrays.asList(messageContent)));
-                            actualMessages.add(getMessageTool(MODEL_ROLE,Arrays.asList(output.getMessage().getContentAsList().get(i))));
+                            actualMessages.add(getMessageTool(MODEL_ROLE,Arrays.asList(messageContent)));
                         }
                         if (messageContent.getType().equals("tool_use")) {
                             String fn = messageContent.getName();
@@ -180,6 +179,7 @@ public final class TestGenerationWorker {
                                         }
                                         // Build and write the test class
                                         newTestSource = BuilderUtil.buildAndWriteTestClass(project, testFile, packageDir, testFileName, classSkeleton, methods, myConsole).stripTrailing();
+                                        actualMessages.add(JAIPilotLLM.getMessage(MODEL_ROLE,testFileName+" = \n"+newTestSource));
                                         shouldRebuild = true;
                                     } catch (Exception e) {
                                         ConsolePrinter.info(myConsole, "⚠️ Error composing test class: " + e.getMessage());
