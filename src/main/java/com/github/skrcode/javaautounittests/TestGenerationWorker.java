@@ -167,6 +167,8 @@ public final class TestGenerationWorker {
                         attempt,
                         indicator
                 );
+//                TestFinderHelper.findTestsForClass(PsiClass sourceClass);
+//                TestFinderHelper.findClassesForTest(PsiClass testClass);
                 actualContents = new ArrayList<>(contents);
                 actualContents.add(output.getContent());
                 if (output.getContent() != null) {
