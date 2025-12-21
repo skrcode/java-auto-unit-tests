@@ -81,13 +81,10 @@ public final class TestGenerationWorker {
             List<Message> messages = new ArrayList<>();
             String cutSource = CUTUtil.cleanedSourceForLLM(project, cut);
             messages.add(JAIPilotLLM.getMessage(JAIPilotLLM.USER_ROLE,testFileName));
-//            messages.add(JAIPilotLLM.getMessageTool(JAIPilotLLM.USER_ROLE,Arrays.asList(getMessageToolRequestContent("toolu_1","get_file",new Message.MessageContent.Input(getRelativePath(cut)+"/"+cutName+".java")))));
             messages.add(JAIPilotLLM.getMessage(JAIPilotLLM.USER_ROLE,cutSource)); // get cut tool
-//            messages.add(JAIPilotLLM.getMessageTool(JAIPilotLLM.USER_ROLE,Arrays.asList(getMessageToolRequestContent("toolu_2","fetch_mockito_version", new Message.MessageContent.Input())))); // get mockito tool
             messages.add(JAIPilotLLM.getMessage(JAIPilotLLM.USER_ROLE,"Mockito version = "+CUTUtil.findMockitoVersion(project)));
             // Add existing test class (if present) as context
             Ref<PsiFile> testFileExisting = ReadAction.compute(() -> Ref.create(packageDir.findFile(testFileName)));
-//            messages.add(JAIPilotLLM.getMessageTool(JAIPilotLLM.USER_ROLE,Arrays.asList(getMessageToolRequestContent("toolu_4","get_file", new Message.MessageContent.Input(getTestRelativePath(cut)+"/"+testFileName))))); // view test file
             String existingTestSource = "";
             if (ReadAction.compute(testFileExisting::get) != null) {
                 existingTestSource = ReadAction.compute(() -> testFileExisting.get().getText());
@@ -99,7 +96,6 @@ public final class TestGenerationWorker {
             String newTestSource = null;
             for (; ; attempt++) {
                 ConsolePrinter.section(myConsole, "Attempting");
-//                if(newTestSource != null) actualMessages.add(JAIPilotLLM.getMessage(MODEL_ROLE,testFileName+" = \n"+newTestSource));
                 // Check if test file already exists and run it
                 Ref<PsiFile> testFile = ReadAction.compute(() -> Ref.create(packageDir.findFile(testFileName)));
                 if (ReadAction.compute(testFile::get) != null && shouldRebuild) {
@@ -143,11 +139,12 @@ public final class TestGenerationWorker {
                 );
                 actualMessages = new ArrayList<>(messages);
                 if (output.getMessage() != null) {
+                    List<Message.MessageContent> messageContentsUser = new ArrayList<>(), actualMessageContentsUser = new ArrayList<>(), messageContentsModel = new ArrayList<>(), actualMessageContentsModel = new ArrayList<>();
                     for (int i=0;i < output.getMessage().getContentAsList().size();i++) {
                         Message.MessageContent messageContent = MAPPER.convertValue(output.getMessage().getContentAsList().get(i),Message.MessageContent.class);
                         if (messageContent.getType().equals("thinking") || messageContent.getType().equals("redacted_thinking")) {
-                            messages.add(getMessageTool(MODEL_ROLE,Arrays.asList(messageContent)));
-                            actualMessages.add(getMessageTool(MODEL_ROLE,Arrays.asList(messageContent)));
+                            actualMessageContentsModel.add(messageContent);
+                            messageContentsModel.add(messageContent);
                         }
                         if (messageContent.getType().equals("tool_use")) {
                             String fn = messageContent.getName();
@@ -157,10 +154,10 @@ public final class TestGenerationWorker {
                                 case "plan_test_changes": {
                                     String testPlan = args.getTestPlan();
                                     ConsolePrinter.info(myConsole, "Fetching test plan: \n" + testPlan);
-                                    messages.add(JAIPilotLLM.getMessageTool(MODEL_ROLE,Arrays.asList(getMessageToolRequestContent(toolUseId, fn, args))));
-                                    messages.add(JAIPilotLLM.getMessageTool(USER_ROLE,Arrays.asList(getMessageToolResultContent(toolUseId, testPlan, !isCacheUsedTestPlan))));
-                                    actualMessages.add(JAIPilotLLM.getMessageTool(MODEL_ROLE,Arrays.asList(getMessageToolRequestContent(toolUseId, fn, args))));
-                                    actualMessages.add(JAIPilotLLM.getMessageTool(USER_ROLE,Arrays.asList(getMessageToolResultContent(toolUseId, testPlan, !isCacheUsedTestPlan))));
+                                    actualMessageContentsModel.add(getMessageToolRequestContent(toolUseId, fn, args));
+                                    messageContentsModel.add(getMessageToolRequestContent(toolUseId, fn, args));
+                                    actualMessageContentsUser.add(getMessageToolResultContent(toolUseId, testPlan, !isCacheUsedTestPlan));
+                                    messageContentsUser.add(getMessageToolResultContent(toolUseId, testPlan, !isCacheUsedTestPlan));
                                     isCacheUsedTestPlan = true;
                                     break;
                                 }
@@ -180,7 +177,7 @@ public final class TestGenerationWorker {
                                         }
                                         // Build and write the test class
                                         newTestSource = BuilderUtil.buildAndWriteTestClass(project, testFile, packageDir, testFileName, classSkeleton, methods, myConsole).stripTrailing();
-                                        actualMessages.add(JAIPilotLLM.getMessage(MODEL_ROLE,testFileName+" = \n"+newTestSource));
+                                        if(newTestSource != null) actualMessageContentsModel.add(getMessageTextContent(testFileName+" = \n"+newTestSource));
                                         shouldRebuild = true;
                                     } catch (Exception e) {
                                         ConsolePrinter.info(myConsole, "⚠️ Error composing test class: " + e.getMessage());
@@ -208,10 +205,10 @@ public final class TestGenerationWorker {
                                         ConsolePrinter.success(myConsole, "Fetched file snippet(s): " + filePath);
                                     }
 
-                                    messages.add(JAIPilotLLM.getMessageTool(MODEL_ROLE,Arrays.asList(getMessageToolRequestContent(toolUseId, fn, args))));
-                                    messages.add(JAIPilotLLM.getMessageTool(USER_ROLE,Arrays.asList(getMessageToolResultContent(toolUseId, toolResult, false))));
-                                    actualMessages.add(JAIPilotLLM.getMessageTool(MODEL_ROLE,Arrays.asList(getMessageToolRequestContent(toolUseId, fn, args))));
-                                    actualMessages.add(JAIPilotLLM.getMessageTool(USER_ROLE,Arrays.asList(getMessageToolResultContent(toolUseId, toolResult, false))));
+                                    actualMessageContentsModel.add(getMessageToolRequestContent(toolUseId, fn, args));
+                                    messageContentsModel.add(getMessageToolRequestContent(toolUseId, fn, args));
+                                    actualMessageContentsUser.add(getMessageToolResultContent(toolUseId, toolResult, false));
+                                    messageContentsUser.add(getMessageToolResultContent(toolUseId, toolResult, false));
                                     break;
                                 case "terminate_call":
                                     ConsolePrinter.warn(myConsole, "Attempts breached. I have tried my best to compile and execute tests. Please fix the remaining tests manually. ");
@@ -220,6 +217,11 @@ public final class TestGenerationWorker {
                             }
                         }
                     }
+
+                    messages.add(JAIPilotLLM.getMessageTool(MODEL_ROLE,messageContentsModel));
+                    messages.add(JAIPilotLLM.getMessageTool(USER_ROLE,messageContentsUser));
+                    actualMessages.add(JAIPilotLLM.getMessageTool(MODEL_ROLE,actualMessageContentsModel));
+                    actualMessages.add(JAIPilotLLM.getMessageTool(USER_ROLE,actualMessageContentsUser));
                 }
 
                 // Server stop condition

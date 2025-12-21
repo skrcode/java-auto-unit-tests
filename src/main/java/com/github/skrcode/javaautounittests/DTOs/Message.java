@@ -90,6 +90,13 @@ public class Message {
 
         public MessageContent() {}
 
+        public static MessageContent textContent(String textContent) {
+            MessageContent mc = new MessageContent();
+            mc.type = "text";
+            mc.content = textContent;
+            return mc;
+        }
+
         // Factory: tool_result
         public static MessageContent toolResult(String toolUseId, String content, Map<String, String> cacheControl) {
             MessageContent mc = new MessageContent();

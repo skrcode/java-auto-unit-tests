@@ -47,6 +47,9 @@ public final class JAIPilotLLM {
     public static Message.MessageContent getMessageToolRequestContent(String toolUseId, String name, Message.MessageContent.Input input) {
         return Message.MessageContent.toolRequest(toolUseId, name, input);
     }
+    public static Message.MessageContent getMessageTextContent(String textContent) {
+        return Message.MessageContent.textContent(textContent);
+    }
     public static Message getMessage(String role, String content) {
         return new Message(role, content == null ? "": content);
     }
