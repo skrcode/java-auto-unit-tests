@@ -81,25 +81,25 @@ public final class TestGenerationWorker {
             List<Message> messages = new ArrayList<>();
             String cutSource = CUTUtil.cleanedSourceForLLM(project, cut);
             messages.add(JAIPilotLLM.getMessage(JAIPilotLLM.USER_ROLE,testFileName));
-            messages.add(JAIPilotLLM.getMessageTool(JAIPilotLLM.MODEL_ROLE,Arrays.asList(getMessageToolRequestContent("toolu_1","get_file",new Message.MessageContent.Input(getRelativePath(cut)+"/"+cutName+".java")))));
-            messages.add(JAIPilotLLM.getMessageTool(JAIPilotLLM.USER_ROLE,Arrays.asList(getMessageToolResultContent("toolu_1",cutSource,false)))); // get cut tool
-            messages.add(JAIPilotLLM.getMessageTool(JAIPilotLLM.MODEL_ROLE,Arrays.asList(getMessageToolRequestContent("toolu_2","fetch_mockito_version", new Message.MessageContent.Input())))); // get mockito tool
-            messages.add(JAIPilotLLM.getMessageTool(JAIPilotLLM.USER_ROLE,Arrays.asList(getMessageToolResultContent("toolu_2",CUTUtil.findMockitoVersion(project),false))));
+//            messages.add(JAIPilotLLM.getMessageTool(JAIPilotLLM.USER_ROLE,Arrays.asList(getMessageToolRequestContent("toolu_1","get_file",new Message.MessageContent.Input(getRelativePath(cut)+"/"+cutName+".java")))));
+            messages.add(JAIPilotLLM.getMessage(JAIPilotLLM.USER_ROLE,cutSource)); // get cut tool
+//            messages.add(JAIPilotLLM.getMessageTool(JAIPilotLLM.USER_ROLE,Arrays.asList(getMessageToolRequestContent("toolu_2","fetch_mockito_version", new Message.MessageContent.Input())))); // get mockito tool
+            messages.add(JAIPilotLLM.getMessage(JAIPilotLLM.USER_ROLE,"Mockito version = "+CUTUtil.findMockitoVersion(project)));
             // Add existing test class (if present) as context
             Ref<PsiFile> testFileExisting = ReadAction.compute(() -> Ref.create(packageDir.findFile(testFileName)));
-            messages.add(JAIPilotLLM.getMessageTool(JAIPilotLLM.MODEL_ROLE,Arrays.asList(getMessageToolRequestContent("toolu_4","get_file", new Message.MessageContent.Input(getTestRelativePath(cut)+"/"+testFileName))))); // view test file
+//            messages.add(JAIPilotLLM.getMessageTool(JAIPilotLLM.USER_ROLE,Arrays.asList(getMessageToolRequestContent("toolu_4","get_file", new Message.MessageContent.Input(getTestRelativePath(cut)+"/"+testFileName))))); // view test file
             String existingTestSource = "";
             if (ReadAction.compute(testFileExisting::get) != null) {
                 existingTestSource = ReadAction.compute(() -> testFileExisting.get().getText());
             }
-            messages.add(JAIPilotLLM.getMessageTool(USER_ROLE,Arrays.asList(getMessageToolResultContent("toolu_4",existingTestSource, false))));
+            messages.add(JAIPilotLLM.getMessage(USER_ROLE,testFileName+" = \n"+existingTestSource));
             List<Message> actualMessages = new ArrayList<>(messages);
             boolean shouldRebuild = true;
             Set<String> isClassPathFetched = new HashSet<>();
             String newTestSource = null;
             for (; ; attempt++) {
                 ConsolePrinter.section(myConsole, "Attempting");
-                if(newTestSource != null) actualMessages.add(JAIPilotLLM.getMessage(MODEL_ROLE,newTestSource));
+                if(newTestSource != null) actualMessages.add(JAIPilotLLM.getMessage(MODEL_ROLE,testFileName+" = \n"+newTestSource));
                 // Check if test file already exists and run it
                 Ref<PsiFile> testFile = ReadAction.compute(() -> Ref.create(packageDir.findFile(testFileName)));
                 if (ReadAction.compute(testFile::get) != null && shouldRebuild) {
@@ -145,6 +145,10 @@ public final class TestGenerationWorker {
                 if (output.getMessage() != null) {
                     for (int i=0;i<10 && i < output.getMessage().getContentAsList().size();i++) {
                         Message.MessageContent messageContent = MAPPER.convertValue(output.getMessage().getContentAsList().get(i),Message.MessageContent.class);
+                        if (messageContent.getType().equals("thinking") || messageContent.getType().equals("redacted_thinking")) {
+                            messages.add(getMessageTool(MODEL_ROLE,Arrays.asList(messageContent)));
+                            actualMessages.add(getMessageTool(MODEL_ROLE,Arrays.asList(messageContent)));
+                        }
                         if (messageContent.getType().equals("tool_use")) {
                             String fn = messageContent.getName();
                             Message.MessageContent.Input args = messageContent.getInput();
@@ -188,10 +192,10 @@ public final class TestGenerationWorker {
 
                                     ConsolePrinter.info(myConsole, "Fetching file details: " + filePath);
 
-                                    if(isClassPathFetched.contains(filePath) || filePath.endsWith(testFileName) || filePath.endsWith(cutName+".java")) {
-                                        ConsolePrinter.info(myConsole, "Duplicate file - ignoring");
-                                        continue;
-                                    }
+//                                    if(isClassPathFetched.contains(filePath) || filePath.endsWith(testFileName) || filePath.endsWith(cutName+".java")) {
+//                                        ConsolePrinter.info(myConsole, "Duplicate file - ignoring");
+//                                        continue;
+//                                    }
                                     isClassPathFetched.add(filePath);
                                     String toolResult = stripCommentsAndMethodBodies(project, filePath);
 

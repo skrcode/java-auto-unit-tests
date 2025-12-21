@@ -83,6 +83,10 @@ public class Message {
         private Input input; // optional structured input for tool_use
         private String id; // when type == "tool_use"
         Map<String, String> cache_control;
+        private String signature; // thinking
+        private String data; // thinking
+        private String thinking;
+        private String text;
 
         public MessageContent() {}
 
@@ -161,6 +165,38 @@ public class Message {
             this.id = id;
         }
 
+        public String getSignature() {
+            return signature;
+        }
+
+        public void setSignature(String signature) {
+            this.signature = signature;
+        }
+
+        public String getData() {
+            return data;
+        }
+
+        public void setData(String data) {
+            this.data = data;
+        }
+
+        public String getThinking() {
+            return thinking;
+        }
+
+        public void setThinking(String thinking) {
+            this.thinking = thinking;
+        }
+
+        public String getText() {
+            return text;
+        }
+
+        public void setText(String text) {
+            this.text = text;
+        }
+
         @JsonInclude(JsonInclude.Include.NON_NULL)
         public static class Input {
             private String command;
@@ -224,6 +260,8 @@ public class Message {
             public void setMethods(Object methods) {
                 this.methods = methods;
             }
+
+
         }
     }
 }
