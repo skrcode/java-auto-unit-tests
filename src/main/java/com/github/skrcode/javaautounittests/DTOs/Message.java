@@ -93,7 +93,7 @@ public class Message {
         public static MessageContent textContent(String textContent) {
             MessageContent mc = new MessageContent();
             mc.type = "text";
-            mc.content = textContent;
+            mc.text = textContent;
             return mc;
         }
 
