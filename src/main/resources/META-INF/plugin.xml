@@ -90,6 +90,30 @@
                 isLogByDefault="false"/>
     </extensions>
 
+    <actions>
+        <action id="JAIPilot.Report.Refresh"
+                class="com.github.skrcode.javaautounittests.report.ui.actions.RefreshReportAction"
+                text="Refresh"
+                icon="AllIcons.Actions.Refresh"/>
+
+        <action id="JAIPilot.Report.RunEvaluator"
+                class="com.github.skrcode.javaautounittests.report.ui.actions.RunEvaluatorAction"
+                text="Run Evaluator"
+                icon="AllIcons.Actions.Execute"/>
+
+        <action id="JAIPilot.Report.ToggleAutoRefresh"
+                class="com.github.skrcode.javaautounittests.report.ui.actions.ToggleAutoRefreshAction"
+                text="Auto Refresh"
+                icon="AllIcons.Actions.Rerun"/>
+
+        <group id="JAIPilot.Report.Toolbar" popup="false">
+            <reference ref="JAIPilot.Report.RunEvaluator"/>
+            <reference ref="JAIPilot.Report.Refresh"/>
+            <separator/>
+            <reference ref="JAIPilot.Report.ToggleAutoRefresh"/>
+        </group>
+    </actions>
+
     <resource-bundle>messages.MyBundle</resource-bundle>
     <idea-version since-build="231"/>
 </idea-plugin>
