@@ -211,6 +211,7 @@ public class Message {
             private String testPlan;
             private String classSkeleton;
             private Object methods;
+            private List<String> filesUsed;
 
             public Input(String classSkeleton, Object methods) {
                 this.classSkeleton = classSkeleton;
@@ -268,7 +269,13 @@ public class Message {
                 this.methods = methods;
             }
 
+            public List<String> getFilesUsed() {
+                return filesUsed;
+            }
 
+            public void setFilesUsed(List<String> filesUsed) {
+                this.filesUsed = filesUsed;
+            }
         }
     }
 }

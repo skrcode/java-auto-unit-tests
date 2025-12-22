@@ -5,14 +5,12 @@
 package com.github.skrcode.javaautounittests;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.skrcode.javaautounittests.DTOs.CacheDTO;
 import com.github.skrcode.javaautounittests.DTOs.Message;
 import com.github.skrcode.javaautounittests.DTOs.PromptResponseOutput;
 import com.github.skrcode.javaautounittests.DTOs.QuotaResponse;
 import com.github.skrcode.javaautounittests.llm.JAIPilotLLM;
-import com.github.skrcode.javaautounittests.settings.AISettings;
-import com.github.skrcode.javaautounittests.settings.ConsolePrinter;
-import com.github.skrcode.javaautounittests.settings.JAIPilotExecutionManager;
-import com.github.skrcode.javaautounittests.settings.QuotaUtil;
+import com.github.skrcode.javaautounittests.settings.*;
 import com.github.skrcode.javaautounittests.settings.telemetry.Telemetry;
 import com.intellij.execution.ui.ConsoleView;
 import com.intellij.ide.BrowserUtil;
@@ -32,6 +30,7 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.*;
 import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.util.PsiTreeUtil;
+import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -55,6 +54,7 @@ public final class TestGenerationWorker {
     public static void process(Project project, PsiClass cut, @NotNull ConsoleView myConsole, PsiDirectory testRoot, @NotNull ProgressIndicator indicator) {
         int attempt = 1;
         boolean isCacheUsedTestPlan = false;
+        LLMGetFilesCache llmGetFilesCache = LLMGetFilesCache.getInstance(project);
         try {
             try {
                 QuotaResponse quotaResponse = QuotaUtil.fetchQuota();
@@ -73,6 +73,17 @@ public final class TestGenerationWorker {
 
             String cutName = ReadAction.compute(() -> cut.isValid() ? cut.getName() : "<invalid>");
             String testFileName = cutName + "Test.java";
+
+            String cutFqn = ReadAction.compute(() -> cut.isValid() ? cut.getQualifiedName() : null);
+            List<String> cachedPaths = Collections.emptyList();
+
+            if (cutFqn != null) {
+                CacheDTO entry = llmGetFilesCache.get(cutFqn);
+                if (entry != null && entry.files != null) {
+                    cachedPaths = entry.files;
+                }
+            }
+
             Telemetry.allGenBegin(testFileName);
 
             boolean isLLMGeneratedAtLeastOnce = false;
@@ -90,9 +101,28 @@ public final class TestGenerationWorker {
                 existingTestSource = ReadAction.compute(() -> testFileExisting.get().getText());
             }
             messages.add(JAIPilotLLM.getMessage(USER_ROLE,testFileName+" = \n"+existingTestSource));
+
+            // cache get
+            Set<String> isClassPathFetched = new HashSet<>();
+            for(String cachedFilePath: cachedPaths) {
+                ConsolePrinter.info(myConsole, "Fetching file details from cache: " + cachedFilePath);
+                if(isClassPathFetched.contains(cachedFilePath) || cachedFilePath.endsWith(testFileName) || cachedFilePath.endsWith(cutName+".java")) {
+                    ConsolePrinter.info(myConsole, "Duplicate file - ignoring");
+                    continue;
+                }
+                isClassPathFetched.add(cachedFilePath);
+                String cachedFileContent = stripCommentsAndMethodBodies(project, cachedFilePath);
+                if (StringUtils.isEmpty(cachedFileContent)) {
+                    ConsolePrinter.info(myConsole, "No matches or file not found: " + cachedFileContent);
+                } else {
+                    messages.add(JAIPilotLLM.getMessage(USER_ROLE,cachedFilePath +"=\n"+cachedFileContent));
+                    ConsolePrinter.success(myConsole, "Cached Snippet(s): " + cachedFileContent);
+                    ConsolePrinter.success(myConsole, "Fetched cached file snippet(s): " + cachedFileContent);
+                }
+            }
+
             List<Message> actualMessages = new ArrayList<>(messages);
             boolean shouldRebuild = true;
-            Set<String> isClassPathFetched = new HashSet<>();
             String newTestSource = null;
             for (; ; attempt++) {
                 ConsolePrinter.section(myConsole, "Attempting");
@@ -179,6 +209,17 @@ public final class TestGenerationWorker {
                                         newTestSource = BuilderUtil.buildAndWriteTestClass(project, testFile, packageDir, testFileName, classSkeleton, methods, myConsole).stripTrailing();
                                         if(newTestSource != null) actualMessageContentsModel.add(getMessageTextContent(testFileName+" = \n"+newTestSource));
                                         shouldRebuild = true;
+
+                                        // update jaipilot cache.
+                                        List<String> files = args.getFilesUsed();
+                                        if (cutFqn != null && CollectionUtils.isNotEmpty(files)) {
+                                            CacheDTO dto = llmGetFilesCache.get(cutFqn);
+                                            if (dto == null) dto = new CacheDTO(cutFqn);
+                                            dto.files = new ArrayList<>(files);
+                                            llmGetFilesCache.put(cutFqn, dto);
+                                        }
+
+
                                     } catch (Exception e) {
                                         ConsolePrinter.info(myConsole, "⚠️ Error composing test class: " + e.getMessage());
                                         continue;
@@ -209,6 +250,17 @@ public final class TestGenerationWorker {
                                     messageContentsModel.add(getMessageToolRequestContent(toolUseId, fn, args));
                                     actualMessageContentsUser.add(getMessageToolResultContent(toolUseId, toolResult, false));
                                     messageContentsUser.add(getMessageToolResultContent(toolUseId, toolResult, false));
+
+                                    if (cutFqn != null) {
+                                        CacheDTO dto = llmGetFilesCache.get(cutFqn);
+                                        if (dto == null) dto = new CacheDTO(cutFqn);
+
+                                        if (dto.files == null) dto.files = new ArrayList<>();
+                                        if (!dto.files.contains(filePath)) dto.files.add(filePath);
+
+                                        llmGetFilesCache.put(cutFqn, dto);
+                                    }
+
                                     break;
                                 case "terminate_call":
                                     ConsolePrinter.warn(myConsole, "Attempts breached. I have tried my best to compile and execute tests. Please fix the remaining tests manually. ");
@@ -317,8 +369,6 @@ public final class TestGenerationWorker {
                 .createNotification("Thanks for your feedback!", NotificationType.INFORMATION)
                 .notify(project);
     }
-
-
 
     private static @Nullable PsiDirectory resolveTestPackageDir(Project project,
                                                                 PsiDirectory testRoot,
