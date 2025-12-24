@@ -200,6 +200,11 @@ public final class ReportView implements Disposable {
         table.setStriped(true);
         ReportTableRenderers.install(table, project);
 
+        // Keep rows compact but tall enough for two lines (name + package)
+        int twoLine = table.getFontMetrics(table.getFont()).getHeight() * 2 + JBUI.scale(4);
+        int rowHeight = Math.max(JBUI.scale(32), twoLine);
+        table.setRowHeight(rowHeight);
+
         root.add(new JBScrollPane(table), BorderLayout.CENTER);
     }
 
