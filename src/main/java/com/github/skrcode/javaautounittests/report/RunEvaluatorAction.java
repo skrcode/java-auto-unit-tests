@@ -23,28 +23,28 @@ public final class RunEvaluatorAction extends AnAction {
         Project project = e.getProject();
         if (project == null) return;
 
-        JaipilotReportPanel panel =
-                JaipilotReportPanel.getActiveInstance(project);
-        if (panel == null) return;
+        ReportView view = ReportView.getInstance(project);
+        List<ClassTestReportRow> rows = view.getSelectedRows();
+        if (rows.isEmpty()) rows = view.getLastRows();
 
-        List<ClassTestReportRow> rows = panel.getSelectedRows();
-        if (rows.isEmpty()) return;
+        runTests(project, rows);
+    }
 
+    static void runTests(Project project, List<ClassTestReportRow> rows) {
+        if (project == null || rows == null || rows.isEmpty()) return;
         for (ClassTestReportRow row : rows) {
-            if (row.getTestFqn() == null) continue;
-            runTestClass(project, row.getTestFqn());
+            if (row.testFqn() == null) continue;
+            runTestClass(project, row.testFqn());
         }
     }
 
-    private void runTestClass(Project project, String testFqn) {
-        JaipilotReportService service =
-                JaipilotReportService.getInstance(project);
+    static void runTestClass(Project project, String testFqn) {
+        ReportView view = ReportView.getInstance(project);
 
         // mark RUNNING
-        var state = service.getState().getOrCreate(testFqn);
-        state.status = TestRunStatus.RUNNING;
+        var state = view.getState().getOrCreate(testFqn);
         state.failureCount = 0;
-        service.refreshAsync("test_running");
+        view.refreshAsync("test_running");
 
         PsiClass testPsi =
                 JavaPsiFacade.getInstance(project)
@@ -64,7 +64,7 @@ public final class RunEvaluatorAction extends AnAction {
         );
     }
 
-    private RunnerAndConfigurationSettings createJUnitConfig(
+    private static RunnerAndConfigurationSettings createJUnitConfig(
             Project project,
             PsiClass testPsi
     ) {
@@ -87,7 +87,7 @@ public final class RunEvaluatorAction extends AnAction {
         return settings;
     }
 
-    private void attachResultListener(Project project, String testFqn) {
+    private static void attachResultListener(Project project, String testFqn) {
         project.getMessageBus().connect().subscribe(
                 ExecutionManager.EXECUTION_TOPIC,
                 new ExecutionListener() {
@@ -98,20 +98,12 @@ public final class RunEvaluatorAction extends AnAction {
                             @NotNull ProcessHandler handler,
                             int exitCode
                     ) {
-                        JaipilotReportService svc =
-                                JaipilotReportService.getInstance(project);
+                        ReportView view = ReportView.getInstance(project);
+                        var st = view.getState().getOrCreate(testFqn);
 
-                        var st = svc.getState().getOrCreate(testFqn);
+                        st.failureCount = exitCode == 0 ? 0 : 1;
 
-                        if (exitCode == 0) {
-                            st.status = TestRunStatus.PASS;
-                            st.failureCount = 0;
-                        } else {
-                            st.status = TestRunStatus.FAIL;
-                            st.failureCount = 1;
-                        }
-
-                        svc.refreshAsync("test_finished");
+                        view.refreshAsync("test_finished");
                     }
                 }
         );

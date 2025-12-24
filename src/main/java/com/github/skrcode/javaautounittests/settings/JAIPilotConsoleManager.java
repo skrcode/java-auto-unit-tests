@@ -26,6 +26,22 @@ public final class JAIPilotConsoleManager {
     private JAIPilotConsoleManager() {}
 
     /**
+     * Safely focuses the console tool window on the EDT.
+     * This is intentionally lightweight to avoid startup crashes
+     * when invoked off the UI thread by legacy callers.
+     */
+    public static void openTestCoverageReport(Project project) {
+        if (project == null) return;
+        ApplicationManager.getApplication().invokeLater(() -> {
+            ToolWindow toolWindow =
+                    ToolWindowManager.getInstance(project).getToolWindow("JAIPilot Console");
+            if (toolWindow != null) {
+                toolWindow.show();
+            }
+        });
+    }
+
+    /**
      * Opens a new console tab with a cancel button wired to the given ProgressIndicator.
      */
     public static ConsoleView openNewConsole(Project project, String title) {
@@ -56,6 +72,10 @@ public final class JAIPilotConsoleManager {
         };
 
         DefaultActionGroup actionGroup = new DefaultActionGroup();
+        AnAction runAllTests = ActionManager.getInstance().getAction("JAIPilot.Console.RunAllTests");
+        if (runAllTests != null) {
+            actionGroup.add(runAllTests);
+        }
 //        actionGroup.add(cancelAction);
         ActionToolbar toolbar = ActionManager.getInstance()
                 .createActionToolbar("JAIPilotConsoleToolbar", actionGroup, false);

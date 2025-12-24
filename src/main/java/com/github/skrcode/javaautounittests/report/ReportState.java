@@ -8,9 +8,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * Stores last run status keyed by test FQN.
  * You can persist this later if you want.
  */
-public final class JaipilotReportState {
+
+public final class ReportState {
     public static final class TestStatus {
-        public volatile TestRunStatus status = TestRunStatus.NEVER_RUN;
         public volatile int failureCount = 0;
     }
 

@@ -7,11 +7,10 @@ import java.util.stream.Collectors;
 
 public final class ReportTableModel extends AbstractTableModel {
     public enum Col {
-        STATUS(""),
+        RUN(""),
         CLASS("Class"),
         TEST_CLASS("Test Class"),
-        COVERAGE("Public Methods"),
-        TESTS("Tests");
+        COVERAGE("Public Methods Tested");
 
         public final String title;
         Col(String t) { this.title = t; }
@@ -37,15 +36,16 @@ public final class ReportTableModel extends AbstractTableModel {
         return filteredRows;
     }
 
+
     private void applyFilter() {
         if (filterText.isBlank()) {
             filteredRows = allRows;
             return;
         }
         filteredRows = allRows.stream().filter(r -> {
-            String a = safe(r.getCutFqn());
-            String b = safe(r.getTestFqn());
-            String c = safe(r.getCutPackageName());
+            String a = safe(r.cutFqn());
+            String b = safe(r.testFqn());
+            String c = safe(r.cutPackageName());
             return a.contains(filterText) || b.contains(filterText) || c.contains(filterText);
         }).collect(Collectors.toList());
     }
@@ -73,11 +73,10 @@ public final class ReportTableModel extends AbstractTableModel {
         ClassTestReportRow r = filteredRows.get(rowIndex);
         Col c = Col.values()[columnIndex];
         return switch (c) {
-            case STATUS -> r;
+            case RUN -> r;
             case CLASS -> r;
             case TEST_CLASS -> r;
             case COVERAGE -> r;
-            case TESTS -> r;
         };
     }
 

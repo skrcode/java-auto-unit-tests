@@ -49,12 +49,6 @@
                     class="com.github.skrcode.javaautounittests.actions.ReviewApplyCodeAction"
                     icon="AllIcons.Actions.IntentionBulb"
                     text="Review and Suggest Improvements"/>
-
-            <action id="ExplainCodeAction"
-                    class="com.github.skrcode.javaautounittests.explain.ExplainClassAction"
-                    icon="AllIcons.Actions.Preview"
-                    text="Explain"/>
-
             <separator/>
 
             <action id="OpenSettingsAction"
@@ -73,13 +67,8 @@
                 factoryClass="com.github.skrcode.javaautounittests.settings.TestGenerationToolWindowFactory"
                 icon="/icons/jaipilot.svg"
                 canCloseContents="false"/>
-        <toolWindow
-                id="JAIPilot Explain"
-                anchor="right"
-                factoryClass="com.github.skrcode.javaautounittests.explain.ExplainToolWindowFactory"
-                icon="/icons/jaipilot.svg"
-                canCloseContents="false"/>
 
+        <projectService serviceImplementation="com.github.skrcode.javaautounittests.report.ReportView"/>
 
         <applicationService serviceImplementation="com.github.skrcode.javaautounittests.settings.AISettings"/>
         <projectConfigurable instance="com.github.skrcode.javaautounittests.settings.AISettingsConfigurable"/>
@@ -89,30 +78,6 @@
                 displayType="BALLOON"
                 isLogByDefault="false"/>
     </extensions>
-
-    <actions>
-        <action id="JAIPilot.Report.Refresh"
-                class="com.github.skrcode.javaautounittests.report.ui.actions.RefreshReportAction"
-                text="Refresh"
-                icon="AllIcons.Actions.Refresh"/>
-
-        <action id="JAIPilot.Report.RunEvaluator"
-                class="com.github.skrcode.javaautounittests.report.ui.actions.RunEvaluatorAction"
-                text="Run Evaluator"
-                icon="AllIcons.Actions.Execute"/>
-
-        <action id="JAIPilot.Report.ToggleAutoRefresh"
-                class="com.github.skrcode.javaautounittests.report.ui.actions.ToggleAutoRefreshAction"
-                text="Auto Refresh"
-                icon="AllIcons.Actions.Rerun"/>
-
-        <group id="JAIPilot.Report.Toolbar" popup="false">
-            <reference ref="JAIPilot.Report.RunEvaluator"/>
-            <reference ref="JAIPilot.Report.Refresh"/>
-            <separator/>
-            <reference ref="JAIPilot.Report.ToggleAutoRefresh"/>
-        </group>
-    </actions>
 
     <resource-bundle>messages.MyBundle</resource-bundle>
     <idea-version since-build="231"/>

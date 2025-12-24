@@ -4,19 +4,33 @@
 
 package com.github.skrcode.javaautounittests.settings;
 
+import com.github.skrcode.javaautounittests.report.ReportView;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowFactory;
+import com.intellij.ui.content.Content;
+import com.intellij.ui.content.ContentFactory;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * ToolWindowFactory only needs to register the toolwindow itself.
- * Actual console tabs are created later by JaipilotConsoleManager.openNewConsole().
+ * ToolWindowFactory creates the reporting panel as initial content.
+ * Console tabs are created later by JaipilotConsoleManager.openNewConsole().
  */
 public class TestGenerationToolWindowFactory implements ToolWindowFactory, DumbAware {
     @Override
     public void createToolWindowContent(@NotNull Project project, @NotNull ToolWindow toolWindow) {
+        ReportView panel = ReportView.getInstance(project);
+        if (panel == null) {
+            // Fallback in case service lookup failed
+            panel = new ReportView(project);
+        }
 
+        ContentFactory contentFactory = ContentFactory.getInstance();
+        Content content = contentFactory.createContent(panel.getComponent(), "Report", false);
+        toolWindow.getContentManager().addContent(content);
+
+        // Initial build
+        panel.refreshAsync("toolwindow_open");
     }
 }

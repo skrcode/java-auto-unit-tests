@@ -4,14 +4,12 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.roots.ProjectRootManager;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.psi.JavaPsiFacade;
-import com.intellij.psi.PsiClass;
-import com.intellij.psi.PsiFile;
-import com.intellij.psi.PsiJavaFile;
+import com.intellij.psi.*;
 import com.intellij.psi.search.FilenameIndex;
 import com.intellij.psi.search.GlobalSearchScope;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public final class TestClassResolver {
@@ -92,5 +90,30 @@ public final class TestClassResolver {
 
     private GlobalSearchScope testScope() {
         return GlobalSearchScope.projectScope(project); // we filter by isInTestSources anyway
+    }
+
+    public List<PsiClass> findAllClasses() {
+        List<PsiClass> result = new ArrayList<>();
+
+        JavaPsiFacade facade = JavaPsiFacade.getInstance(project);
+        PsiPackage root = facade.findPackage("");
+
+        if (root != null) {
+            collectRecursively(root, result);
+        }
+
+        return result;
+    }
+
+    private void collectRecursively(PsiPackage pkg, List<PsiClass> out) {
+        for (PsiClass cls : pkg.getClasses(GlobalSearchScope.projectScope(project))) {
+            if (cls.getQualifiedName() != null) {
+                out.add(cls);
+            }
+        }
+
+        for (PsiPackage sub : pkg.getSubPackages(GlobalSearchScope.projectScope(project))) {
+            collectRecursively(sub, out);
+        }
     }
 }
