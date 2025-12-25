@@ -37,28 +37,7 @@ public class GenerateTestAction extends AnAction implements DumbAware {
         if (project == null || elements == null) return;
 
         List<PsiClass> classes = collectClasses(elements);
-        if (classes.isEmpty()) {
-            Telemetry.uiSettingsFailureClick("classes empty");
-            Messages.showErrorDialog(project, "No Java classes found in selection.", "JAIPilot");
-            return;
-        }
-        if (classes.size() > 1) {
-            Telemetry.uiSettingsFailureClick("multiple classes selected");
-            Messages.showErrorDialog(project, "Please select only single java class.", "JAIPilot");
-            return;
-        }
-        if (AISettings.getInstance().getProKey().isEmpty()) {
-            Telemetry.uiSettingsFailureClick("license key not configured in settings");
-            Messages.showErrorDialog(project, "Please configure license key in settings.", "JAIPilot");
-            return;
-        }
-        if (AIProjectSettings.getInstance(project).getTestDirectory().isEmpty()) {
-            Telemetry.uiSettingsFailureClick("test directory not configured in settings");
-            Messages.showErrorDialog(project, "Please configure test directory in settings.", "JAIPilot");
-            return;
-        }
-
-        BulkGeneratorService.enqueue(project, classes.get(0), stringPathToPsiDirectory(project,AIProjectSettings.getInstance(project).getTestDirectory()));
+        runForClasses(project, classes);
     }
 
     private static @Nullable PsiDirectory stringPathToPsiDirectory(Project project, String path) {
@@ -67,6 +46,43 @@ public class GenerateTestAction extends AnAction implements DumbAware {
             return null;
         }
         return PsiManager.getInstance(project).findDirectory(file);
+    }
+
+    public static boolean runForClass(Project project, PsiClass psiClass) {
+        if (project == null || psiClass == null) return false;
+        return runForClasses(project, List.of(psiClass));
+    }
+
+    private static boolean runForClasses(Project project, List<PsiClass> classes) {
+        if (project == null) return false;
+
+        if (classes == null || classes.isEmpty()) {
+            Telemetry.uiSettingsFailureClick("classes empty");
+            Messages.showErrorDialog(project, "No Java classes found in selection.", "JAIPilot");
+            return false;
+        }
+        if (classes.size() > 1) {
+            Telemetry.uiSettingsFailureClick("multiple classes selected");
+            Messages.showErrorDialog(project, "Please select only single java class.", "JAIPilot");
+            return false;
+        }
+        if (AISettings.getInstance().getProKey().isEmpty()) {
+            Telemetry.uiSettingsFailureClick("license key not configured in settings");
+            Messages.showErrorDialog(project, "Please configure license key in settings.", "JAIPilot");
+            return false;
+        }
+        if (AIProjectSettings.getInstance(project).getTestDirectory().isEmpty()) {
+            Telemetry.uiSettingsFailureClick("test directory not configured in settings");
+            Messages.showErrorDialog(project, "Please configure test directory in settings.", "JAIPilot");
+            return false;
+        }
+
+        BulkGeneratorService.enqueue(
+                project,
+                classes.get(0),
+                stringPathToPsiDirectory(project, AIProjectSettings.getInstance(project).getTestDirectory())
+        );
+        return true;
     }
 
 

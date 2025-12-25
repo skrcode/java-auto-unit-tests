@@ -10,7 +10,8 @@ public final class ReportTableModel extends AbstractTableModel {
         RUN(""),
         CLASS("Class"),
         TEST_CLASS("Test Class"),
-        COVERAGE("Public Methods Tested");
+        COVERAGE("Public Methods Tested"),
+        FAILURES("Test Success Rate");
 
         public final String title;
         Col(String t) { this.title = t; }
@@ -77,6 +78,7 @@ public final class ReportTableModel extends AbstractTableModel {
             case CLASS -> r;
             case TEST_CLASS -> r;
             case COVERAGE -> r;
+            case FAILURES -> r;
         };
     }
 

@@ -6,6 +6,9 @@ import com.intellij.psi.search.LocalSearchScope;
 import com.intellij.psi.search.SearchScope;
 import com.intellij.psi.search.searches.ReferencesSearch;
 import com.intellij.psi.util.PropertyUtilBase;
+import com.intellij.psi.util.PsiTreeUtil;
+import com.intellij.testIntegration.TestFinderHelper;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
@@ -99,5 +102,21 @@ public final class CoverageCalculator {
         static SearchScope projectScope(Project project) {
             return com.intellij.psi.search.GlobalSearchScope.projectScope(project);
         }
+    }
+
+    public @NotNull List<PsiClass> findTestClassesFor(@NotNull PsiClass cut) {
+        List<PsiClass> out = new ArrayList<>();
+
+        // This is the core: IntelliJ test integration
+        for (PsiElement el : TestFinderHelper.findTestsForClass(cut)) {
+            PsiClass cls = PsiTreeUtil.getParentOfType(el, PsiClass.class, /* strict */ false);
+            if (cls != null && cls.isValid()) {
+                out.add(cls);
+            }
+        }
+
+        // Deterministic order for stable UI
+        out.sort(Comparator.comparing(c -> c.getQualifiedName() == null ? "" : c.getQualifiedName()));
+        return out;
     }
 }

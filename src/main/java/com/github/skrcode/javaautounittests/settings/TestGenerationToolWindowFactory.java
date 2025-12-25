@@ -27,7 +27,7 @@ public class TestGenerationToolWindowFactory implements ToolWindowFactory, DumbA
         }
 
         ContentFactory contentFactory = ContentFactory.getInstance();
-        Content content = contentFactory.createContent(panel.getComponent(), "Report", false);
+        Content content = contentFactory.createContent(panel.getComponent(), "Test Health", false);
         toolWindow.getContentManager().addContent(content);
 
         // Initial build

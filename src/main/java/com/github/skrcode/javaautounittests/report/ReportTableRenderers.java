@@ -1,5 +1,6 @@
 package com.github.skrcode.javaautounittests.report;
 
+import com.github.skrcode.javaautounittests.actions.GenerateTestAction;
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.project.Project;
 import com.intellij.ui.JBColor;
@@ -17,19 +18,22 @@ import java.awt.event.ActionListener;
 public final class ReportTableRenderers {
 
     public static void install(JBTable table, Project project) {
-        table.getColumnModel().getColumn(0).setMaxWidth(JBUI.scale(36));
+        table.getColumnModel().getColumn(0).setMaxWidth(JBUI.scale(64));
         RunAgainCell runCell = new RunAgainCell(project, table);
         table.getColumnModel().getColumn(0).setCellRenderer(runCell);
         table.getColumnModel().getColumn(0).setCellEditor(runCell);
-        table.getColumnModel().getColumn(0).setHeaderRenderer(new RunAllHeader(project, table));
 
         table.getColumnModel().getColumn(1).setCellRenderer(new CutRenderer());
         table.getColumnModel().getColumn(2).setCellRenderer(new TestRenderer());
         table.getColumnModel().getColumn(3).setCellRenderer(new CoverageRenderer());
+        table.getColumnModel().getColumn(4).setCellRenderer(new FailureRenderer());
+        table.getColumnModel().getColumn(3).setHeaderRenderer(new RightAlignedHeader(table));
+        table.getColumnModel().getColumn(4).setHeaderRenderer(new RightAlignedHeader(table));
     }
 
     private static final class RunAgainCell extends AbstractCellEditor implements TableCellRenderer, TableCellEditor, ActionListener {
-        private final JButton button = new JButton(AllIcons.Actions.Execute);
+        private final JButton button = new JButton("Fix", AllIcons.Actions.Execute);
+        private final JPanel empty = new JPanel();
         private final Project project;
         private final JBTable table;
         private ClassTestReportRow currentRow;
@@ -50,37 +54,64 @@ public final class ReportTableRenderers {
             button.setMinimumSize(d);
             button.setMaximumSize(d);
             button.addActionListener(this);
+
+            empty.setOpaque(false);
+            empty.setPreferredSize(d);
+            empty.setMinimumSize(d);
+            empty.setMaximumSize(d);
         }
 
         @Override
         public void actionPerformed(ActionEvent e) {
             if (currentRow == null) return;
-            if (currentRow.testFqn() == null) return;
-            RunEvaluatorAction.runTestClass(project, currentRow.testFqn());
+            if (currentRow.cutPsi() == null) return;
+            GenerateTestAction.runForClass(project, currentRow.cutPsi());
             fireEditingStopped();
         }
 
-        private Component prepare(JTable table, Object value, boolean isSelected, int row) {
-            currentRow = (ClassTestReportRow) value;
-            boolean failing = currentRow != null && hasFailure(currentRow);
-            boolean runnable = failing && currentRow.testFqn() != null;
-
-            button.setVisible(failing);
+        private Component rendererComponent(JTable table, Object value, boolean isSelected, int row) {
+            ClassTestReportRow rowData = (ClassTestReportRow) value;
+            boolean failing = rowData != null && rowData.hasFailures();
+            if (!failing) {
+                empty.setBackground(isSelected ? table.getSelectionBackground() : table.getBackground());
+                return empty;
+            }
+            boolean runnable = rowData.cutPsi() != null;
             button.setEnabled(runnable);
-            button.setToolTipText(runnable ? "Re-run failing tests for this class" : null);
+            button.setToolTipText(runnable ? "Generate tests for this class" : null);
+            button.setBackground(isSelected ? table.getSelectionBackground() : table.getBackground());
             return button;
         }
 
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
-            return prepare(table, value, isSelected, row);
+            return rendererComponent(table, value, isSelected, row);
         }
 
         @Override
         public Component getTableCellEditorComponent(JTable table, Object value, boolean isSelected, int row, int column) {
             int modelRow = this.table.convertRowIndexToModel(row);
             Object val = this.table.getModel().getValueAt(modelRow, column);
-            return prepare(table, val, true, row);
+            currentRow = (ClassTestReportRow) val;
+            return rendererComponent(table, val, true, row);
+        }
+
+        @Override
+        public boolean isCellEditable(java.util.EventObject e) {
+            if (!(e instanceof java.awt.event.MouseEvent me)) {
+                return false;
+            }
+            int viewRow = table.rowAtPoint(me.getPoint());
+            int viewCol = table.columnAtPoint(me.getPoint());
+            if (viewRow < 0 || viewCol != 0) return false;
+            ClassTestReportRow rowData = tableModelRow(viewRow);
+            return rowData != null && rowData.hasFailures() && rowData.cutPsi() != null;
+        }
+
+        private ClassTestReportRow tableModelRow(int viewRow) {
+            int modelRow = table.convertRowIndexToModel(viewRow);
+            Object val = table.getModel().getValueAt(modelRow, 0);
+            return (val instanceof ClassTestReportRow rowData) ? rowData : null;
         }
 
         @Override
@@ -89,44 +120,19 @@ public final class ReportTableRenderers {
         }
     }
 
-    private static final class RunAllHeader extends JButton implements TableCellRenderer {
-        private final Project project;
-        private final JBTable table;
+    private static final class RightAlignedHeader implements TableCellRenderer {
+        private final JLabel label = new JLabel("", SwingConstants.RIGHT);
 
-        RunAllHeader(Project project, JBTable table) {
-            super(AllIcons.Actions.Execute);
-            this.project = project;
-            this.table = table;
-            setBorder(BorderFactory.createEmptyBorder());
-            setOpaque(false);
-            setContentAreaFilled(false);
-            setBorderPainted(false);
-            setFocusPainted(false);
-            setRolloverEnabled(false);
-            setMargin(new Insets(0, 0, 0, 0));
-            int size = JBUI.scale(20);
-            Dimension d = new Dimension(size, size);
-            setPreferredSize(d);
-            setMinimumSize(d);
-            setMaximumSize(d);
-            setToolTipText("Run all failing tests");
-            addActionListener(e -> {
-                // Gather failing rows and re-run them
-                var model = table.getModel();
-                if (!(model instanceof ReportTableModel reportModel)) return;
-                java.util.List<ClassTestReportRow> failing =
-                        reportModel.getFilteredRows()
-                                .stream()
-                                .filter(r -> hasFailure(r) && r.testFqn() != null)
-                                .toList();
-                RunEvaluatorAction.runTests(project, failing);
-            });
+        RightAlignedHeader(JTable table) {
+            label.setBorder(JBUI.Borders.empty(0, 6));
+            label.setFont(table.getTableHeader().getFont());
         }
 
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
                                                        boolean hasFocus, int row, int column) {
-            return this;
+            label.setText(value == null ? "" : value.toString());
+            return label;
         }
     }
 
@@ -172,7 +178,7 @@ public final class ReportTableRenderers {
         private final JPanel inner = new JPanel();
         private final JLabel nameLabel = new JLabel();
         private final JLabel pkgLabel = new JLabel();
-        private final JLabel missing = new JLabel("—  (missing)", SwingConstants.CENTER);
+        private final JLabel missing = new JLabel("", SwingConstants.CENTER);
 
         TestRenderer() {
             inner.setLayout(new BoxLayout(inner, BoxLayout.Y_AXIS));
@@ -181,8 +187,7 @@ public final class ReportTableRenderers {
             pkgLabel.setBorder(JBUI.Borders.empty(0, 6, 0, 6));
             panel.add(inner, BorderLayout.WEST);
 
-            missing.setForeground(new JBColor(new Color(200, 50, 50), new Color(255, 120, 120)));
-            missing.setFont(missing.getFont().deriveFont(Font.ITALIC));
+            missing.setBorder(JBUI.Borders.empty(4, 8));
             missing.setOpaque(true);
         }
 
@@ -191,7 +196,11 @@ public final class ReportTableRenderers {
                                                       boolean hasFocus, int row, int column) {
             ClassTestReportRow r = (ClassTestReportRow) value;
             if (r.isMissingTestClass()) {
-                missing.setBackground(isSelected ? table.getSelectionBackground() : table.getBackground());
+                Color bg = isSelected ? table.getSelectionBackground() : new JBColor(new Color(255, 236, 232), new Color(70, 60, 60));
+                Color fg = isSelected ? table.getSelectionForeground() : new JBColor(new Color(160, 60, 40), new Color(255, 200, 200));
+                missing.setText("No test class found");
+                missing.setBackground(bg);
+                missing.setForeground(fg);
                 return missing;
             }
 
@@ -217,15 +226,12 @@ public final class ReportTableRenderers {
 
     private static final class CoverageRenderer implements TableCellRenderer {
         private final JPanel panel = new JPanel(new BorderLayout());
-        private final JProgressBar bar = new JProgressBar(0, 100);
+        private final JLabel label = new JLabel("", SwingConstants.RIGHT);
 
         CoverageRenderer() {
-            bar.setBorder(JBUI.Borders.empty(2, 6));
-            bar.setBorderPainted(false);
-            bar.setStringPainted(true);
-            bar.setOpaque(true);
-            bar.setFont(UIUtil.getLabelFont());
-            panel.add(bar, BorderLayout.CENTER);
+            label.setBorder(JBUI.Borders.empty(0, 6));
+            label.setFont(UIUtil.getLabelFont());
+            panel.add(label, BorderLayout.EAST);
         }
 
         @Override
@@ -233,22 +239,44 @@ public final class ReportTableRenderers {
                                                       boolean hasFocus, int row, int column) {
             ClassTestReportRow r = (ClassTestReportRow) value;
 
-            Color bg = isSelected
-                    ? table.getSelectionBackground()
-                    : new JBColor(new Color(240, 245, 250), UIUtil.getTableBackground());
-            panel.setBackground(bg);
+            panel.setBackground(isSelected ? table.getSelectionBackground() : table.getBackground());
 
             int total = r.totalPublicMethods();
             int cov = r.coveredPublicMethods();
-            String text = cov + " / " + total;
+            int pct = total <= 0 ? 0 : (int) Math.round((cov * 100.0) / total);
+            pct = Math.max(0, Math.min(100, pct));
+            label.setText(pct + "%");
+            label.setToolTipText(cov + " / " + total + " public methods tested");
 
-            bar.setString(text);
-            bar.setForeground(new JBColor(new Color(34, 139, 34), new Color(120, 200, 120))); // fill
-            bar.setBackground(new JBColor(new Color(220, 226, 232), UIUtil.getPanelBackground())); // track
+            return panel;
+        }
+    }
 
-            int pct = total <= 0 ? 100 : (int) Math.round((cov * 100.0) / total);
-            bar.setValue(Math.max(0, Math.min(100, pct)));
+    private static final class FailureRenderer implements TableCellRenderer {
+        private final JPanel panel = new JPanel(new BorderLayout());
+        private final JLabel label = new JLabel("", SwingConstants.RIGHT);
 
+        FailureRenderer() {
+            label.setBorder(JBUI.Borders.empty(0, 6));
+            label.setFont(UIUtil.getLabelFont());
+            panel.add(label, BorderLayout.EAST);
+        }
+
+        @Override
+        public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
+                                                      boolean hasFocus, int row, int column) {
+            ClassTestReportRow r = (ClassTestReportRow) value;
+            panel.setBackground(isSelected ? table.getSelectionBackground() : table.getBackground());
+            if (r == null || r.isMissingTestClass()) {
+                label.setText("—");
+                label.setToolTipText("No test class found");
+                return panel;
+            }
+
+            // With current data we only know if the last run failed; treat any failure as 0% success.
+            int successPct = r.lastFailureCount() > 0 ? 0 : 100;
+            label.setText(successPct + "%");
+            label.setToolTipText("Assumed from last run result");
             return panel;
         }
     }
@@ -267,13 +295,5 @@ public final class ReportTableRenderers {
         if (fqn == null) return "";
         int idx = fqn.lastIndexOf('.');
         return idx > 0 ? fqn.substring(0, idx) : "";
-    }
-
-    private static boolean hasFailure(ClassTestReportRow r) {
-        if (r == null) return false;
-        boolean missingTestClass = r.testFqn() == null;
-        boolean coverageGap = r.totalPublicMethods() > r.coveredPublicMethods();
-        boolean executionFail = r.lastFailureCount() > 0;
-        return missingTestClass || coverageGap || executionFail;
     }
 }

@@ -37,6 +37,18 @@ public record ClassTestReportRow(
         return testFqn == null || testFqn.isBlank();
     }
 
+    public boolean hasCoverageGap() {
+        return totalPublicMethods > coveredPublicMethods;
+    }
+
+    public boolean hasExecutionFailures() {
+        return lastFailureCount > 0;
+    }
+
+    public boolean hasFailures() {
+        return isMissingTestClass() || hasCoverageGap() || hasExecutionFailures();
+    }
+
     public double coverageRatio() {
         return totalPublicMethods <= 0
                 ? 1.0
