@@ -5,10 +5,10 @@
  */
 package com.github.skrcode.javaautounittests.actions;
 
-import com.github.skrcode.javaautounittests.BulkGeneratorService;
-import com.github.skrcode.javaautounittests.settings.AIProjectSettings;
-import com.github.skrcode.javaautounittests.settings.AISettings;
-import com.github.skrcode.javaautounittests.settings.telemetry.Telemetry;
+import com.github.skrcode.javaautounittests.service.BulkGeneratorService;
+import com.github.skrcode.javaautounittests.state.AIProjectSettings;
+import com.github.skrcode.javaautounittests.state.AISettings;
+import com.github.skrcode.javaautounittests.util.Telemetry;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.LangDataKeys;
