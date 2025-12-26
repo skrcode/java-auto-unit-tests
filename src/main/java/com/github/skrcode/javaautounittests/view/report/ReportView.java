@@ -7,12 +7,8 @@ import com.github.skrcode.javaautounittests.util.CoverageCalculator;
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.fileEditor.OpenFileDescriptor;
 import com.intellij.openapi.progress.ProgressIndicator;
-import com.intellij.openapi.progress.ProgressManager;
-import com.intellij.openapi.progress.Task;
-import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.IconLoader;
@@ -87,30 +83,30 @@ public final class ReportView implements Disposable {
     public void refreshAsync(@NotNull String reason) {
         if (!project.isInitialized()) return;
 
-        DumbService.getInstance(project).runWhenSmart(() ->
-                ProgressManager.getInstance().run(
-                        new Task.Backgroundable(project,
-                                "JAIPilot: Building Test Report", false) {
-
-                            @Override
-                            public void run(@NotNull ProgressIndicator indicator) {
-                                indicator.setIndeterminate(false);
-
-                                List<ClassTestReportRow> rows =
-                                        ReadAction.compute(() -> buildReport(indicator));
-
-                                lastRows = rows;
-
-                                ApplicationManager.getApplication().invokeLater(() -> {
-                                    for (Consumer<List<ClassTestReportRow>> l : listeners) {
-                                        try {
-                                            l.accept(rows);
-                                        } catch (Throwable ignored) {}
-                                    }
-                                });
-                            }
-                        })
-        );
+//        DumbService.getInstance(project).runWhenSmart(() ->
+//                ProgressManager.getInstance().run(
+//                        new Task.Backgroundable(project,
+//                                "JAIPilot: Building Test Report", false) {
+//
+//                            @Override
+//                            public void run(@NotNull ProgressIndicator indicator) {
+//                                indicator.setIndeterminate(false);
+//
+//                                List<ClassTestReportRow> rows =
+//                                        ReadAction.compute(() -> buildReport(indicator));
+//
+//                                lastRows = rows;
+//
+//                                ApplicationManager.getApplication().invokeLater(() -> {
+//                                    for (Consumer<List<ClassTestReportRow>> l : listeners) {
+//                                        try {
+//                                            l.accept(rows);
+//                                        } catch (Throwable ignored) {}
+//                                    }
+//                                });
+//                            }
+//                        })
+//        );
     }
 
     private List<ClassTestReportRow> buildReport(@NotNull ProgressIndicator indicator) {
@@ -272,7 +268,7 @@ public final class ReportView implements Disposable {
 
         healthLabel.setVisible(false);
 
-        regenerateButton.addActionListener(e -> refreshAsync("manual"));
+//        regenerateButton.addActionListener(e -> refreshAsync("manual"));
         JButton fixAllButton = new JButton("Fix Tests for all classes", AllIcons.Actions.RunAll);
         fixAllButton.addActionListener(e -> {
             var model = tableModel.getFilteredRows();
