@@ -4,15 +4,21 @@
 
 package com.github.skrcode.javaautounittests.util;
 
+import com.github.skrcode.javaautounittests.dto.CutFileInfo;
+import com.github.skrcode.javaautounittests.dto.TestFileInfo;
 import com.intellij.application.options.CodeStyle;
 import com.intellij.ide.highlighter.JavaFileType;
 import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.application.WriteAction;
 import com.intellij.openapi.command.WriteCommandAction;
+import com.intellij.openapi.module.Module;
+import com.intellij.openapi.module.ModuleUtilCore;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.roots.ProjectRootManager;
+import com.intellij.openapi.roots.*;
 import com.intellij.openapi.roots.libraries.Library;
 import com.intellij.openapi.roots.libraries.LibraryTable;
 import com.intellij.openapi.roots.libraries.LibraryTablesRegistrar;
+import com.intellij.openapi.vfs.VfsUtil;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.*;
@@ -21,10 +27,15 @@ import com.intellij.psi.codeStyle.JavaCodeStyleSettings;
 import com.intellij.psi.codeStyle.PackageEntryTable;
 import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.util.PsiTreeUtil;
+import com.intellij.testIntegration.TestFinderHelper;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.jps.model.java.JavaSourceRootType;
 
 import java.lang.reflect.Field;
 import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
 
 /**
  * Expands all star imports (normal + static) for the file that contains the
@@ -179,14 +190,96 @@ public final class CUTUtil {
         return scratch.getText();
     }
 
-    public static @Nullable PsiDirectory resolveTestPackageDir(Project project,
-                                                                PsiDirectory testRoot,
-                                                                PsiClass cut) throws Exception {
+    public static PsiDirectory resolveTestPackageDir(Project project, PsiClass cut) {
+        PsiClass existingTest = findExistingTestClass(cut);
+        if (existingTest != null) {
+            return existingTest.getContainingFile().getContainingDirectory();
+        }
+        VirtualFile cutFile = cut.getContainingFile().getVirtualFile();
+        @Nullable Module module = ModuleUtilCore.findModuleForFile(cutFile, project);
+        if (module == null) {
+            throw new IllegalStateException("Cannot resolve module for CUT");
+        }
+        VirtualFile testRoot = resolveOrCreateTestRoot(module, cutFile);
+        PsiDirectory testRootDir = PsiManager.getInstance(project).findDirectory(testRoot);
         String relPath = getTestRelativePath(cut);
-        return getOrCreateSubdirectoryPath(project, testRoot, relPath);
+        return getOrCreateSubdirectoryPath(project, testRootDir, relPath);
     }
 
-    public static @Nullable String getTestRelativePath(PsiClass cut) {
+    private static VirtualFile resolveOrCreateTestRoot(Module module, VirtualFile cutFile) {
+
+        ModuleRootManager rootManager = ModuleRootManager.getInstance(module);
+
+        // 1. Find CUT content root (authoritative anchor)
+        ProjectFileIndex projectFileIndex =
+                ProjectRootManager.getInstance(module.getProject()).getFileIndex();
+
+        VirtualFile cutContentRoot =
+                projectFileIndex.getContentRootForFile(cutFile);
+
+        if (cutContentRoot == null) {
+            throw new IllegalStateException("No content root found for CUT");
+        }
+
+        // 2. Get existing test source roots
+        List<VirtualFile> testRoots =
+                rootManager.getSourceRoots(JavaSourceRootType.TEST_SOURCE);
+
+        // 3. If test roots exist, choose deterministically
+        if (!testRoots.isEmpty()) {
+            return testRoots.stream()
+                    // Prefer test root under same content root
+                    .filter(root -> VfsUtilCore.isAncestor(cutContentRoot, root, false))
+                    // Deterministic ordering
+                    .sorted(Comparator.comparing(VirtualFile::getPath))
+                    .findFirst()
+                    // Fallback: global deterministic choice
+                    .orElse(
+                            testRoots.stream()
+                                    .sorted(Comparator.comparing(VirtualFile::getPath))
+                                    .findFirst()
+                                    .orElseThrow()
+                    );
+        }
+
+        // 4. No test root exists → create src/test/java deterministically
+        return WriteAction.compute(() -> {
+            ModifiableRootModel model = rootManager.getModifiableModel();
+            try {
+                // Use existing content entry if present
+                ContentEntry entry = Arrays.stream(model.getContentEntries())
+                        .filter(e -> e.getFile() != null &&
+                                e.getFile().equals(cutContentRoot))
+                        .findFirst()
+                        .orElseGet(() -> model.addContentEntry(cutContentRoot));
+
+                // Canonical test root path
+                VirtualFile testRoot =
+                        VfsUtil.createDirectoryIfMissing(cutContentRoot, "src/test/java");
+
+                entry.addSourceFolder(testRoot, JavaSourceRootType.TEST_SOURCE);
+
+                model.commit();
+                return testRoot;
+            } catch (Exception e) {
+                model.dispose();
+                throw new RuntimeException("Failed to create test source root", e);
+            }
+        });
+    }
+
+
+    @Nullable
+    private static PsiClass findExistingTestClass(PsiClass cut) {
+        for (PsiElement test : TestFinderHelper.findTestsForClass(cut)) {
+            if (test.isValid()) {
+                return (PsiClass) test;
+            }
+        }
+        return null;
+    }
+
+    private static @Nullable String getTestRelativePath(PsiClass cut) {
         PsiPackage cutPkg = ReadAction.compute(() ->
                 JavaDirectoryService.getInstance().getPackage(cut.getContainingFile().getContainingDirectory())
         );
@@ -194,7 +287,7 @@ public final class CUTUtil {
         return ReadAction.compute(() -> cutPkg.getQualifiedName().replace('.', '/'));
     }
 
-    public static VirtualFile findInProjectAndLibraries(Project project, String relativePath) {
+    private static VirtualFile findInProjectAndLibraries(Project project, String relativePath) {
         // 1. Search in content + source roots
         for (VirtualFile root : ProjectRootManager.getInstance(project).getContentSourceRoots()) {
             VirtualFile vf = VfsUtilCore.findRelativeFile(relativePath, root);
@@ -210,7 +303,7 @@ public final class CUTUtil {
         return null;
     }
 
-    public static String getSourceCodeOfContextClasses(Project project, String relativePathOrFqcn) {
+    private static String getSourceCodeOfContextClasses(Project project, String relativePathOrFqcn) {
         if (relativePathOrFqcn == null || relativePathOrFqcn.isBlank()) {
             return "";
         }
@@ -284,23 +377,156 @@ public final class CUTUtil {
 
 
     /** Recursively find or create nested sub-directories like {@code org/example/service}. */
-    public static @Nullable PsiDirectory getOrCreateSubdirectoryPath(Project project,
+    private static @Nullable PsiDirectory getOrCreateSubdirectoryPath(Project project,
                                                                       PsiDirectory root,
-                                                                      String relativePath) throws Exception {
-        try {
-            return WriteCommandAction.writeCommandAction(project).compute(() -> {
-                PsiDirectory current = root;
-                for (String part : relativePath.split("/")) {
-                    PsiDirectory next = current.findSubdirectory(part);
-                    if (next == null) {
-                        next = current.createSubdirectory(part);
-                    }
-                    current = next;
+                                                                      String relativePath) {
+        return WriteCommandAction.writeCommandAction(project).compute(() -> {
+            PsiDirectory current = root;
+            for (String part : relativePath.split("/")) {
+                PsiDirectory next = current.findSubdirectory(part);
+                if (next == null) {
+                    next = current.createSubdirectory(part);
                 }
-                return current;
-            });
-        } catch (Exception e) {
-            throw new Exception("Incorrect tests source directory");
+                current = next;
+            }
+            return current;
+        });
+    }
+
+    public static @Nullable CutFileInfo getCutFileInfo(PsiClass cut) {
+        if (!ReadAction.compute(cut::isValid)) {
+            return null;
         }
+
+        return ReadAction.compute(() -> {
+            String name = cut.getName();
+            if (name == null || name.isBlank()) {
+                throw new IllegalStateException("CUT has no simple name");
+            }
+
+            String qName = cut.getQualifiedName();
+
+            PsiFile f = cut.getContainingFile();
+            String path = null;
+
+            if (f != null) {
+                PsiDirectory dir = f.getContainingDirectory();
+                PsiPackage pkg = dir != null
+                        ? JavaDirectoryService.getInstance().getPackage(dir)
+                        : null;
+
+                String pkgPath = pkg != null
+                        ? pkg.getQualifiedName().replace('.', '/')
+                        : "";
+
+                path = pkgPath.isEmpty()
+                        ? f.getName()
+                        : pkgPath + "/" + f.getName();
+            }
+
+            return new CutFileInfo(
+                    cut,
+                    name,
+                    qName,
+                    path
+            );
+        });
+    }
+
+
+    public static @Nullable TestFileInfo getOrCreateTestFile(
+            Project project,
+            CutFileInfo cutInfo
+    ) {
+        PsiClass cut = cutInfo.cutClass();
+
+        // 1️⃣ Existing test wins (READ)
+        PsiClass existingTest =
+                ReadAction.compute(() -> findExistingTestClass(cut));
+
+        if (existingTest != null && ReadAction.compute(existingTest::isValid)) {
+            return ReadAction.compute(() -> {
+                PsiJavaFile testFile =
+                        (PsiJavaFile) existingTest.getContainingFile();
+
+                String path = null;
+                String source = null;
+
+                if (testFile != null) {
+                    PsiDirectory dir = testFile.getContainingDirectory();
+                    PsiPackage pkg = dir != null
+                            ? JavaDirectoryService.getInstance().getPackage(dir)
+                            : null;
+
+                    String pkgPath = pkg != null
+                            ? pkg.getQualifiedName().replace('.', '/')
+                            : "";
+
+                    path = pkgPath.isEmpty()
+                            ? testFile.getName()
+                            : pkgPath + "/" + testFile.getName();
+
+                    source = testFile.getText(); // ✅ READ-safe
+                }
+
+                return new TestFileInfo(
+                        testFile,
+                        existingTest.getName(),
+                        existingTest.getQualifiedName(),
+                        path,
+                        source
+                );
+            });
+        }
+
+        // 2️⃣ Create new test
+        String testClassName = cutInfo.simpleName() + "Test";
+        PsiDirectory testDir = resolveTestPackageDir(project, cut);
+
+        return WriteCommandAction.writeCommandAction(project).compute(() -> {
+            PsiFile file = testDir.findFile(testClassName + ".java");
+            if (file == null) {
+                file = testDir.createFile(testClassName + ".java");
+            }
+
+            PsiJavaFile javaFile = (PsiJavaFile) file;
+
+            PsiPackage pkg =
+                    JavaDirectoryService.getInstance().getPackage(testDir);
+
+            if (pkg != null && javaFile.getPackageStatement() == null) {
+                PsiElementFactory factory =
+                        JavaPsiFacade.getInstance(project).getElementFactory();
+
+                PsiPackageStatement stmt =
+                        factory.createPackageStatement(pkg.getQualifiedName());
+
+                javaFile.addAfter(stmt, null);
+            }
+
+            String qName = (pkg == null)
+                    ? testClassName
+                    : pkg.getQualifiedName() + "." + testClassName;
+
+            String path = (pkg == null || pkg.getQualifiedName().isBlank())
+                    ? javaFile.getName()
+                    : pkg.getQualifiedName().replace('.', '/') + "/" + javaFile.getName();
+
+            String source = javaFile.getText(); // newly created → safe
+
+            return new TestFileInfo(
+                    javaFile,
+                    testClassName,
+                    qName,
+                    path,
+                    source
+            );
+        });
+    }
+
+
+
+    public static boolean testFileExists(@Nullable PsiJavaFile testFile) {
+        return testFile != null && ReadAction.compute(testFile::isValid);
     }
 }

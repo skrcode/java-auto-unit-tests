@@ -78,29 +78,6 @@ public class ConsolePrinter {
         return "[" + "█".repeat(filled) + " ".repeat(total - filled) + "] " + percent + "%";
     }
 
-    /**
-     * Print each new line of code as it comes in.
-     * Keeps incremental line numbers across chunks.
-     */
-    public static int printLine(ConsoleView consoleView, int currentLine, String line) {
-        if (consoleView == null || line == null) return currentLine;
-
-        int nextLine = currentLine + 1;
-
-        ApplicationManager.getApplication().invokeLater(() -> {
-            String timestamp = "[" + LocalTime.now().format(TIME_FMT) + "]";
-            String numbered = String.format("%s %3d | %s%n",
-                    timestamp, nextLine, line);
-            consoleView.print(numbered, ConsoleViewContentType.NORMAL_OUTPUT);
-
-            if (consoleView instanceof ConsoleViewImpl impl) {
-                impl.scrollToEnd();
-            }
-        });
-
-        return nextLine;
-    }
-
     // --- Print code with line numbers ---
     public static void codeBlock(ConsoleView consoleView, List<String> lines) {
         if (consoleView == null || lines == null) return;

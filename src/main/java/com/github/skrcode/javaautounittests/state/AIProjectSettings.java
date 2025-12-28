@@ -18,7 +18,7 @@ import org.jetbrains.annotations.Nullable;
 public final class AIProjectSettings implements PersistentStateComponent<AIProjectSettings.State> {
 
     public static final class State {
-        public String testDirectory = "";
+//        public String testDirectory = "";
         public boolean autoCorrectEnabled = false;
         public boolean optimizeClassEnabled = false;
     }
@@ -35,9 +35,9 @@ public final class AIProjectSettings implements PersistentStateComponent<AIProje
     @Override
     public void loadState(@NotNull State state) { this.state = state; }
 
-    public String getTestDirectory() { return state.testDirectory; }
-
-    public void setTestDirectory(String dir) { state.testDirectory = dir; }
+//    public String getTestDirectory() { return state.testDirectory; }
+//
+//    public void setTestDirectory(String dir) { state.testDirectory = dir; }
 
 
     public boolean getAutoCorrectEnabled() { return state.autoCorrectEnabled; }

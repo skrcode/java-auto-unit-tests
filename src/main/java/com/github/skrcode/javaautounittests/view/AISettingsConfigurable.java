@@ -6,14 +6,11 @@ package com.github.skrcode.javaautounittests.view;
 
 import com.github.skrcode.javaautounittests.dto.QuotaResponse;
 import com.github.skrcode.javaautounittests.service.QuotaService;
-import com.github.skrcode.javaautounittests.state.AIProjectSettings;
 import com.github.skrcode.javaautounittests.state.AISettings;
-import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory;
 import com.intellij.openapi.options.Configurable;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.roots.ProjectRootManager;
-import com.intellij.openapi.ui.TextBrowseFolderListener;
 import com.intellij.openapi.ui.TextFieldWithBrowseButton;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -44,7 +41,7 @@ public class AISettingsConfigurable implements Configurable {
     private JLabel creditsLabel;
 
     private JBPasswordField jaipilotKeyField;
-    private TextFieldWithBrowseButton testDirField;
+//    private TextFieldWithBrowseButton testDirField;
 
     private JCheckBox telemetryCheck;
 
@@ -108,12 +105,12 @@ public class AISettingsConfigurable implements Configurable {
 
         // ===== Test Directory =====
         Dimension fieldSize = new Dimension(520, 30);
-        testDirField = new TextFieldWithBrowseButton();
-        sizeBrowse(testDirField, fieldSize);
-        testDirField.addBrowseFolderListener(
-                new TextBrowseFolderListener(FileChooserDescriptorFactory.createSingleFolderDescriptor())
-        );
-        addFormBlock(contentPanel, "Select Test Root (e.g., src/test/java):", testDirField);
+//        testDirField = new TextFieldWithBrowseButton();
+//        sizeBrowse(testDirField, fieldSize);
+//        testDirField.addBrowseFolderListener(
+//                new TextBrowseFolderListener(FileChooserDescriptorFactory.createSingleFolderDescriptor())
+//        );
+//        addFormBlock(contentPanel, "Select Test Root (e.g., src/test/java):", testDirField);
         contentPanel.add(Box.createVerticalStrut(8));
 
         // ===== Mode Cards =====
@@ -208,13 +205,13 @@ public class AISettingsConfigurable implements Configurable {
         jaipilotKeyField.setText(app.getProKey());
         telemetryCheck.setSelected(app.isTelemetryEnabled());
 
-        String projectTestDir = AIProjectSettings.getInstance(project).getTestDirectory();
-        if (StringUtil.isEmptyOrSpaces(projectTestDir)) {
-            String auto = detectTestRoot(project);
-            if (!StringUtil.isEmptyOrSpaces(auto)) testDirField.setText(auto);
-        } else {
-            testDirField.setText(projectTestDir);
-        }
+//        String projectTestDir = AIProjectSettings.getInstance(project).getTestDirectory();
+//        if (StringUtil.isEmptyOrSpaces(projectTestDir)) {
+//            String auto = detectTestRoot(project);
+//            if (!StringUtil.isEmptyOrSpaces(auto)) testDirField.setText(auto);
+//        } else {
+//            testDirField.setText(projectTestDir);
+//        }
 
         // Async quota fetch
         fetchAndPopulateQuotaAsync();
@@ -298,10 +295,10 @@ public class AISettingsConfigurable implements Configurable {
     @Override
     public boolean isModified() {
         AISettings.State app = AISettings.getInstance().getState();
-        String projTestDir = AIProjectSettings.getInstance(project).getTestDirectory();
+//        String projTestDir = AIProjectSettings.getInstance(project).getTestDirectory();
 
         return !StringUtil.equals(jaipilotKeyField.getText(), StringUtil.notNullize(app.proKey))
-                || !StringUtil.equals(StringUtil.notNullize(testDirField.getText()), StringUtil.notNullize(projTestDir))
+//                || !StringUtil.equals(StringUtil.notNullize(testDirField.getText()), StringUtil.notNullize(projTestDir))
                 || telemetryCheck.isSelected() != AISettings.getInstance().isTelemetryEnabled();
     }
 
@@ -311,8 +308,8 @@ public class AISettingsConfigurable implements Configurable {
         app.setProKey(jaipilotKeyField.getText());
         app.setTelemetryEnabled(telemetryCheck.isSelected());
 
-        AIProjectSettings proj = AIProjectSettings.getInstance(project);
-        proj.setTestDirectory(StringUtil.notNullize(testDirField.getText()));
+//        AIProjectSettings proj = AIProjectSettings.getInstance(project);
+//        proj.setTestDirectory(StringUtil.notNullize(testDirField.getText()));
     }
 
     @Override
@@ -320,8 +317,8 @@ public class AISettingsConfigurable implements Configurable {
         AISettings.State app = AISettings.getInstance().getState();
         jaipilotKeyField.setText(StringUtil.notNullize(app.proKey));
 
-        String projTestDir = AIProjectSettings.getInstance(project).getTestDirectory();
-        testDirField.setText(StringUtil.notNullize(projTestDir));
+//        String projTestDir = AIProjectSettings.getInstance(project).getTestDirectory();
+//        testDirField.setText(StringUtil.notNullize(projTestDir));
         telemetryCheck.setSelected(AISettings.getInstance().isTelemetryEnabled());
     }
 

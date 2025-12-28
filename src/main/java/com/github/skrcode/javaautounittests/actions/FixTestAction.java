@@ -28,7 +28,7 @@ import java.util.List;
 /**
  * Entry‑point action – collects one or many classes/directories and delegates to the worker service.
  */
-public class GenerateTestAction extends AnAction implements DumbAware {
+public class FixTestAction extends AnAction implements DumbAware {
 
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {

@@ -57,6 +57,7 @@ public final class GenerateTestsLLMService {
         return new Message(role, content == null ? "": content);
     }
     public static Message getMessageTool(String role, List<Message.MessageContent> messageContents) {
+        if(CollectionUtils.isEmpty(messageContents)) return null;
         return new Message(role, messageContents);
     }
 
@@ -94,7 +95,7 @@ public final class GenerateTestsLLMService {
 
                 indicator.checkCanceled();
                 HttpRequest createJobReq = HttpRequest.newBuilder()
-                        .uri(URI.create("https://otxfylhjrlaesjagfhfi.supabase.co/functions/v1/invoke-junit-llm"))
+                        .uri(URI.create("https://otxfylhjrlaesjagfhfi.supabase.co/functions/v1/invoke-junit-llm?type=fix"))
                         .timeout(Duration.ofSeconds(30))
                         .header("Accept", "application/json")
                         .header("Content-Type", "application/json")
@@ -105,12 +106,6 @@ public final class GenerateTestsLLMService {
                 HttpResponse<String> createJobResp =
                         http.send(createJobReq, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 
-                if (createJobResp.statusCode() / 100 == 4) {
-                    PromptResponseOutput promptResponseOutput = new PromptResponseOutput();
-                    promptResponseOutput.setErrorCode(createJobResp.statusCode());
-                    promptResponseOutput.setErrorBody(createJobResp.body());
-                    return promptResponseOutput;
-                }
                 if (createJobResp.statusCode() / 100 != 2) {
                     throw new RuntimeException("Error : " +
                             createJobResp.statusCode() + " " + createJobResp.body());
@@ -150,7 +145,8 @@ public final class GenerateTestsLLMService {
                     if ("done".equalsIgnoreCase(status)) {
                         String output = pollJson.get("output").asText();
                         PromptResponseOutput out = MAPPER.readValue(output, PromptResponseOutput.class);
-
+                        if(out.getMessage() == null)
+                            throw new RuntimeException("Empty Response from server");
                         long end = System.nanoTime();
                         Telemetry.genCompleted(testClassName, String.valueOf(attempt), (end - start) / 1_000_000);
                         ConsolePrinter.success(myConsole,

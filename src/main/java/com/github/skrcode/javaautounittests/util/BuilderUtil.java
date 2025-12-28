@@ -5,6 +5,8 @@
 package com.github.skrcode.javaautounittests.util;
 
 import com.github.javaparser.JavaParser;
+import com.github.skrcode.javaautounittests.dto.MessagesRequestDTO;
+import com.github.skrcode.javaautounittests.service.GenerateTestsLLMService;
 import com.intellij.codeInsight.actions.ReformatCodeProcessor;
 import com.intellij.compiler.CompilerMessageImpl;
 import com.intellij.execution.ExecutionException;
@@ -21,9 +23,7 @@ import com.intellij.execution.runners.ExecutionEnvironment;
 import com.intellij.execution.runners.ExecutionEnvironmentBuilder;
 import com.intellij.execution.runners.ProgramRunner;
 import com.intellij.execution.ui.ConsoleView;
-import com.intellij.ide.highlighter.JavaFileType;
 import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.compiler.CompilerManager;
 import com.intellij.openapi.compiler.CompilerMessage;
@@ -32,15 +32,16 @@ import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleUtil;
+import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Key;
-import com.intellij.openapi.util.Ref;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.psi.*;
 import com.intellij.psi.codeStyle.CodeStyleManager;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
@@ -48,6 +49,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static com.github.skrcode.javaautounittests.service.GenerateTestsLLMService.USER_ROLE;
 import static com.github.skrcode.javaautounittests.util.CUTUtil.expandAll;
 
 /**
@@ -63,7 +65,7 @@ public class BuilderUtil {
     private BuilderUtil() {}
 
     // --- Run JUnit class silently and parse TeamCity output ---
-    public static String runJUnitClass(Project project, PsiFile psiFile) throws Exception {
+    public static String runJUnitClass(Project project, PsiJavaFile psiJavaFile) throws Exception {
         AtomicReference<ExecutionEnvironment> envRef = new AtomicReference<>();
 
         // Step 1: Build environment
@@ -75,10 +77,10 @@ public class BuilderUtil {
 
             JUnitConfiguration configuration = (JUnitConfiguration) settings.getConfiguration();
 
-            @Nullable Module module = ModuleUtil.findModuleForPsiElement(psiFile);
+            @Nullable Module module = ModuleUtil.findModuleForPsiElement(psiJavaFile);
             if (module != null) configuration.setModule(module);
 
-            if (psiFile instanceof PsiJavaFile psiJavaFile && psiJavaFile.getClasses().length > 0) {
+            if (psiJavaFile.getClasses().length > 0) {
                 configuration.setMainClass(psiJavaFile.getClasses()[0]);
             }
 
@@ -179,11 +181,11 @@ public class BuilderUtil {
     }
 
     // --- Compile JUnit class silently ---
-    public static String compileJUnitClass(Project project, Ref<PsiFile> testFile) {
+    public static String compileJUnitClass(Project project, PsiJavaFile testFile) {
         CountDownLatch latch = new CountDownLatch(1);
         StringBuilder result = new StringBuilder();
         try {
-            VirtualFile file = testFile.get().getVirtualFile();
+            VirtualFile file = testFile.getVirtualFile();
 
             ApplicationManager.getApplication().invokeAndWait(() -> {
                 CompilerManager.getInstance(project).compile(new VirtualFile[]{file}, (aborted, errors, warnings, context) -> {
@@ -255,88 +257,85 @@ public class BuilderUtil {
 
 
     @Nullable
-    public static String buildAndWriteTestClass(Project project,
-                                                Ref<PsiFile> testFile,
-                                                PsiDirectory packageDir,
-                                                String testFileName,
-                                                String classSkeleton,
-                                                List<TestMethod> methods,
-                                                ConsoleView myConsole) {
-
-        PsiFile existingFile = ReadAction.compute(testFile::get);
-        boolean hasExisting = existingFile != null && existingFile.isValid();
+    public static String buildAndWriteTestClass(
+            Project project,
+            PsiJavaFile psiJavaFile,
+            String classSkeleton,
+            List<TestMethod> methods,
+            ConsoleView myConsole
+    ) {
         boolean hasSkeleton = classSkeleton != null && !classSkeleton.isBlank();
         boolean hasMethods  = methods != null && !methods.isEmpty();
 
-        if (!hasExisting && !hasSkeleton) {
-            System.err.println("[ERROR] Invalid: no existing test class and skeleton");
-            return null; // <-- now return null on invalid
+        if (!hasSkeleton && !hasMethods) {
+            System.err.println("[ERROR] Invalid: nothing to apply to existing test class");
+            return null;
         }
 
-        java.util.concurrent.atomic.AtomicReference<String> finalSourceRef = new java.util.concurrent.atomic.AtomicReference<>();
-        java.util.concurrent.atomic.AtomicReference<Throwable> errorRef = new java.util.concurrent.atomic.AtomicReference<>();
+        AtomicReference<String> finalSourceRef = new AtomicReference<>();
+        AtomicReference<Throwable> errorRef = new AtomicReference<>();
 
         WriteCommandAction.runWriteCommandAction(project, () -> {
             try {
-                PsiFileFactory fileFactory = PsiFileFactory.getInstance(project);
-                PsiDocumentManager psiDocMgr = PsiDocumentManager.getInstance(project);
-                PsiElementFactory elementFactory = JavaPsiFacade.getInstance(project).getElementFactory();
+                PsiDocumentManager psiDocMgr =
+                        PsiDocumentManager.getInstance(project);
+                PsiElementFactory elementFactory =
+                        JavaPsiFacade.getInstance(project).getElementFactory();
 
-                // ✅ Step 0: Extract old test methods *as text* before any mutation
+                // --- Step 0: Extract old test methods as TEXT ---
                 List<String> oldTestMethodTexts = new ArrayList<>();
-                if (hasExisting && existingFile instanceof PsiJavaFile jf && jf.getClasses().length > 0) {
-                    PsiClass existingClass = jf.getClasses()[0];
-                    for (PsiMethod old : existingClass.getMethods()) {
-                        if (old.isConstructor()) continue;
-                        boolean isTestAnnotated = Arrays.stream(old.getModifierList().getAnnotations())
-                                .anyMatch(a -> a.getQualifiedName() != null && a.getQualifiedName().endsWith("Test"));
-                        boolean nameLooksLikeTest = old.getName().startsWith("test");
-                        if (isTestAnnotated || nameLooksLikeTest) {
-                            oldTestMethodTexts.add(old.getText());
-                        }
+
+                PsiClass psiClass = psiJavaFile.getClasses().length > 0
+                        ? psiJavaFile.getClasses()[0]
+                        : null;
+
+                if (psiClass == null) {
+                    throw new IllegalStateException("Test file has no top-level class");
+                }
+
+                for (PsiMethod old : psiClass.getMethods()) {
+                    if (old.isConstructor()) continue;
+
+                    boolean isTestAnnotated =
+                            Arrays.stream(old.getModifierList().getAnnotations())
+                                    .anyMatch(a ->
+                                            a.getQualifiedName() != null &&
+                                                    a.getQualifiedName().endsWith("Test"));
+
+                    boolean nameLooksLikeTest =
+                            old.getName().startsWith("test");
+
+                    if (isTestAnnotated || nameLooksLikeTest) {
+                        oldTestMethodTexts.add(old.getText());
                     }
                 }
 
-                PsiFile psiFile;
-
-                // ✅ Step 1: Create or overwrite skeleton
+                // --- Step 1: Overwrite with skeleton (if provided) ---
                 if (hasSkeleton) {
-                    if (hasExisting) {
-                        Document doc = psiDocMgr.getDocument(existingFile);
-                        if (doc != null) {
-                            doc.setText(classSkeleton);
-                            psiDocMgr.commitDocument(doc);
-                            psiFile = existingFile;
-                        } else {
-                            psiFile = fileFactory.createFileFromText(testFileName, JavaFileType.INSTANCE, classSkeleton);
-                            psiFile = (PsiFile) packageDir.add(psiFile);
-                        }
-                    } else {
-                        psiFile = fileFactory.createFileFromText(testFileName, JavaFileType.INSTANCE, classSkeleton);
-                        psiFile = (PsiFile) packageDir.add(psiFile);
+                    Document doc = psiDocMgr.getDocument(psiJavaFile);
+                    if (doc == null) {
+                        throw new IllegalStateException("No document for test PsiJavaFile");
                     }
-                    testFile.set(psiFile);
-                } else {
-                    psiFile = existingFile;
+                    doc.setText(classSkeleton);
+                    psiDocMgr.commitDocument(doc);
+
+                    // re-resolve class after rewrite
+                    if (psiJavaFile.getClasses().length == 0) {
+                        throw new IllegalStateException("Skeleton produced no class");
+                    }
+                    psiClass = psiJavaFile.getClasses()[0];
                 }
 
-                if (!(psiFile instanceof PsiJavaFile javaFile)) {
-                    finalSourceRef.set(null);
-                    return;
-                }
-                if (javaFile.getClasses().length == 0) {
-                    finalSourceRef.set(null);
-                    return;
-                }
-
-                PsiClass psiClass = javaFile.getClasses()[0];
-
-                // ✅ Step 2: Restore old @Test methods (avoids stale PSI)
+                // --- Step 2: Restore old test methods ---
                 Set<String> seenNames = new HashSet<>();
-                for (PsiMethod m : psiClass.getMethods()) seenNames.add(m.getName());
+                for (PsiMethod m : psiClass.getMethods()) {
+                    seenNames.add(m.getName());
+                }
+
                 for (String text : oldTestMethodTexts) {
                     try {
-                        PsiMethod restored = elementFactory.createMethodFromText(text, psiClass);
+                        PsiMethod restored =
+                                elementFactory.createMethodFromText(text, psiClass);
                         if (!seenNames.contains(restored.getName())) {
                             psiClass.add(restored);
                             seenNames.add(restored.getName());
@@ -346,7 +345,7 @@ public class BuilderUtil {
                     }
                 }
 
-                // ✅ Step 3: Merge response methods (add / replace / delete)
+                // --- Step 3: Merge response methods ---
                 if (hasMethods) {
                     Map<String, String> response = new LinkedHashMap<>();
                     Set<String> deletes = new HashSet<>();
@@ -354,19 +353,25 @@ public class BuilderUtil {
                     for (TestMethod m : methods) {
                         if (m == null || m.methodName == null) continue;
                         String name = m.methodName.trim();
-                        String impl = m.fullImplementation == null ? "" : m.fullImplementation.trim();
+                        String impl = m.fullImplementation == null
+                                ? ""
+                                : m.fullImplementation.trim();
+
                         if (impl.isEmpty()) deletes.add(name);
                         else response.put(name, impl);
                     }
 
-                    // Delete or replace
+                    // delete / replace
                     for (PsiMethod existing : psiClass.getMethods()) {
                         String name = existing.getName();
+
                         if (deletes.contains(name)) {
                             existing.delete();
                         } else if (response.containsKey(name)) {
                             try {
-                                PsiMethod updated = elementFactory.createMethodFromText(response.get(name), psiClass);
+                                PsiMethod updated =
+                                        elementFactory.createMethodFromText(
+                                                response.get(name), psiClass);
                                 existing.replace(updated);
                                 response.remove(name);
                             } catch (Exception e) {
@@ -375,10 +380,12 @@ public class BuilderUtil {
                         }
                     }
 
-                    // Add new ones
+                    // add new
                     for (Map.Entry<String, String> e : response.entrySet()) {
                         try {
-                            PsiMethod newMethod = elementFactory.createMethodFromText(e.getValue(), psiClass);
+                            PsiMethod newMethod =
+                                    elementFactory.createMethodFromText(
+                                            e.getValue(), psiClass);
                             psiClass.add(newMethod);
                         } catch (Exception ex) {
                             System.err.println("[WARN] Skipping method '" + e.getKey() + "': " + ex.getMessage());
@@ -386,23 +393,30 @@ public class BuilderUtil {
                     }
                 }
 
-                // ✅ Step 4: Commit & validate
-                expandAll(project, (PsiJavaFile) psiFile);
-                new ReformatCodeProcessor(project, psiFile, null, false).run();
-                CodeStyleManager.getInstance(project).reformat(psiFile);
+                // --- Step 4: Optimize, reformat, validate ---
+                expandAll(project, psiJavaFile);
+                new ReformatCodeProcessor(project, psiJavaFile, null, false).run();
+                CodeStyleManager.getInstance(project).reformat(psiJavaFile);
 
-                Document doc = psiDocMgr.getDocument(psiFile);
+                Document doc = psiDocMgr.getDocument(psiJavaFile);
                 if (doc != null) psiDocMgr.commitDocument(doc);
-                String finalTestSource = ((PsiJavaFile) psiFile).getText();
+
+                String finalTestSource = psiJavaFile.getText();
 
                 JavaParser parser = new JavaParser();
-                if (!parser.parse(finalTestSource).getResult().isPresent()) {
-                    throw new IllegalArgumentException("Error in final test file syntax.");
+                if (parser.parse(finalTestSource).getResult().isEmpty()) {
+                    throw new IllegalArgumentException("Final test file has syntax errors");
                 }
 
-                // ✅ Step 5: Log + set return value
-                ConsolePrinter.success(myConsole, "✅ Test class composed and written successfully");
-                ConsolePrinter.codeBlock(myConsole, Arrays.asList(finalTestSource));
+                ConsolePrinter.success(
+                        myConsole,
+                        "✅ Test class updated successfully"
+                );
+                ConsolePrinter.codeBlock(
+                        myConsole,
+                        Arrays.asList(finalTestSource)
+                );
+
                 finalSourceRef.set(finalTestSource);
 
             } catch (Throwable t) {
@@ -411,10 +425,38 @@ public class BuilderUtil {
         });
 
         if (errorRef.get() != null) {
-            // Re-throw so callers can handle (or return null if you prefer)
-            throw new RuntimeException("Failed to build/write test class", errorRef.get());
+            throw new RuntimeException(
+                    "Failed to build/write test class",
+                    errorRef.get()
+            );
         }
+
         return finalSourceRef.get();
+    }
+
+
+    public static boolean buildAndRun(Project project, @NotNull ConsoleView myConsole, @NotNull ProgressIndicator indicator, MessagesRequestDTO messagesRequestDTO, PsiJavaFile testFile, String testFileName) throws Exception {
+        ConsolePrinter.info(myConsole, "Compiling Tests " + testFileName);
+        indicator.checkCanceled();
+        String errorOutput = BuilderUtil.compileJUnitClass(project, testFile);
+
+        if (!errorOutput.isEmpty()) {
+            ConsolePrinter.info(myConsole, "Found compilation errors " + testFileName);
+            messagesRequestDTO.addActualMessage(GenerateTestsLLMService.getMessage(USER_ROLE,errorOutput));
+            return false;
+        }
+
+        ConsolePrinter.success(myConsole, "Compilation Successful " + testFileName);
+        ConsolePrinter.info(myConsole, "Running Tests " + testFileName);
+        indicator.checkCanceled();
+        errorOutput = BuilderUtil.runJUnitClass(project, testFile);
+        if(!errorOutput.isEmpty()) {
+            ConsolePrinter.info(myConsole, "Found tests execution errors " + testFileName);
+            messagesRequestDTO.addActualMessage(GenerateTestsLLMService.getMessage(USER_ROLE,errorOutput));
+            return false;
+        }
+        ConsolePrinter.success(myConsole, "Tests execution successful " + testFileName);
+        return true;
     }
 
 

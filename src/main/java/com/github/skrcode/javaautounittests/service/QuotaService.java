@@ -9,6 +9,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.skrcode.javaautounittests.dto.QuotaResponse;
 import com.github.skrcode.javaautounittests.state.AISettings;
+import com.github.skrcode.javaautounittests.util.ConsolePrinter;
+import com.intellij.execution.ui.ConsoleView;
 
 import java.net.URI;
 import java.net.URLEncoder;
@@ -20,8 +22,8 @@ import java.time.Duration;
 
 public class QuotaService {
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    public static QuotaResponse fetchQuota(
-    ) throws Exception {
+
+    public static QuotaResponse fetchQuota()  {
         String baseUrl = "https://otxfylhjrlaesjagfhfi.supabase.co/functions/v1/fetch-quota";
         String url = baseUrl + "?licenseKey=" + URLEncoder.encode(AISettings.getInstance().getState().proKey, StandardCharsets.UTF_8);
         HttpClient http = HttpClient.newBuilder()
@@ -64,9 +66,16 @@ public class QuotaService {
                     return new QuotaResponse();
                 }
                 long sleep = backoffMillis + (long) (Math.random() * 200); // jitter
-                Thread.sleep(sleep);
+                try {Thread.sleep(sleep);}
+                catch (Exception e) {}
                 backoffMillis = Math.min(backoffMillis * 2, 30_000);
             }
         }
+    }
+
+    public static void printQuotaWarning(ConsoleView myConsole) {
+        QuotaResponse quotaResponse = QuotaService.fetchQuota();
+        if(quotaResponse.message != null)
+            ConsolePrinter.warn(myConsole, quotaResponse.message);
     }
 }

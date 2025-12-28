@@ -90,7 +90,7 @@ public class AIStatusWidgetFactory implements StatusBarWidgetFactory {
         private boolean isConfigured() {
             AISettings s = AISettings.getInstance();
             AIProjectSettings ps = AIProjectSettings.getInstance(project);
-            if (ps.getTestDirectory() == null || ps.getTestDirectory().isEmpty()) return false;
+//            if (ps.getTestDirectory() == null || ps.getTestDirectory().isEmpty()) return false;
             return s.getProKey() != null && !s.getProKey().isBlank();
         }
 
