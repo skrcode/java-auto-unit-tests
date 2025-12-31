@@ -34,7 +34,7 @@
 
     <!-- Actions -->
     <actions>
-        <action id="GenerateTestsAction"
+        <action id="generate"
                 class="com.github.skrcode.javaautounittests.actions.GenerateTestAction"
                 icon="AllIcons.Actions.Execute"
                 text="JAIPilot – Generate Tests and Improve Coverage">
@@ -42,8 +42,8 @@
             <add-to-group group-id="EditorPopupMenu" anchor="first"/>
             <add-to-group group-id="ProjectViewPopupMenu" anchor="first"/>
         </action>
-        <action id="JAIPilotFixTestsRunContextAction"
-                class="com.github.skrcode.javaautounittests.actions.FixTestAction"
+        <action id="fix"
+                class="com.github.skrcode.javaautounittests.actions.GenerateTestAction"
                 icon="AllIcons.Actions.QuickfixBulb"
                 text="JAIPilot – Fix Failing Tests">
             <add-to-group group-id="RunContextGroup" anchor="first"/>

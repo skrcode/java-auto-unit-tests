@@ -4,6 +4,7 @@
 
 package com.github.skrcode.javaautounittests.actions;
 
+import com.github.skrcode.javaautounittests.GenerationType;
 import com.github.skrcode.javaautounittests.service.BulkGeneratorService;
 import com.github.skrcode.javaautounittests.state.AISettings;
 import com.github.skrcode.javaautounittests.util.Telemetry;
@@ -38,7 +39,8 @@ public class GenerateTestAction extends AnAction implements DumbAware {
         if (project == null || elements == null) return;
 
         List<PsiClass> classes = collectClasses(elements);
-        runForClasses(project, classes);
+        String actionId = e.getActionManager().getId(this);
+        runForClasses(project, classes, GenerationType.valueOf(actionId));
     }
 
     private static @Nullable PsiDirectory stringPathToPsiDirectory(Project project, String path) {
@@ -49,7 +51,7 @@ public class GenerateTestAction extends AnAction implements DumbAware {
         return PsiManager.getInstance(project).findDirectory(file);
     }
 
-    private static boolean runForClasses(Project project, List<PsiClass> classes) {
+    private static boolean runForClasses(Project project, List<PsiClass> classes, GenerationType actionId) {
         if (project == null) return false;
 
         if (classes == null || classes.isEmpty()) {
@@ -95,7 +97,7 @@ public class GenerateTestAction extends AnAction implements DumbAware {
 
         BulkGeneratorService.enqueue(
                 project,
-                classes.get(0)
+                classes.get(0),actionId
         );
         return true;
     }

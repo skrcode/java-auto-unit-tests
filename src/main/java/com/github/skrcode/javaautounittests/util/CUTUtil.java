@@ -4,8 +4,7 @@
 
 package com.github.skrcode.javaautounittests.util;
 
-import com.github.skrcode.javaautounittests.dto.CutFileInfo;
-import com.github.skrcode.javaautounittests.dto.TestFileInfo;
+import com.github.skrcode.javaautounittests.dto.FileInfo;
 import com.intellij.application.options.CodeStyle;
 import com.intellij.ide.highlighter.JavaFileType;
 import com.intellij.openapi.application.ReadAction;
@@ -393,7 +392,7 @@ public final class CUTUtil {
         });
     }
 
-    public static @Nullable CutFileInfo getCutFileInfo(PsiClass cut) {
+    public static @Nullable FileInfo getCutFileInfo(PsiClass cut) {
         if (!ReadAction.compute(cut::isValid)) {
             return null;
         }
@@ -406,8 +405,9 @@ public final class CUTUtil {
 
             String qName = cut.getQualifiedName();
 
-            PsiFile f = cut.getContainingFile();
+            PsiJavaFile f = (PsiJavaFile) cut.getContainingFile();
             String path = null;
+            String source = null;
 
             if (f != null) {
                 PsiDirectory dir = f.getContainingDirectory();
@@ -422,21 +422,25 @@ public final class CUTUtil {
                 path = pkgPath.isEmpty()
                         ? f.getName()
                         : pkgPath + "/" + f.getName();
+
+                source = f.getText();
             }
 
-            return new CutFileInfo(
+            return new FileInfo(
                     cut,
+                    f,
                     name,
                     qName,
-                    path
+                    path,
+                    source
             );
         });
     }
 
 
-    public static @Nullable TestFileInfo getOrCreateTestFile(
+    public static @Nullable FileInfo getOrCreateTestFile(
             Project project,
-            CutFileInfo cutInfo
+            FileInfo cutInfo
     ) {
         PsiClass cut = cutInfo.cutClass();
 
@@ -469,7 +473,8 @@ public final class CUTUtil {
                     source = testFile.getText(); // ✅ READ-safe
                 }
 
-                return new TestFileInfo(
+                return new FileInfo(
+                        null,
                         testFile,
                         existingTest.getName(),
                         existingTest.getQualifiedName(),
@@ -514,7 +519,8 @@ public final class CUTUtil {
 
             String source = javaFile.getText(); // newly created → safe
 
-            return new TestFileInfo(
+            return new FileInfo(
+                    null,
                     javaFile,
                     testClassName,
                     qName,

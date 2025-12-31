@@ -6,5 +6,5 @@
 package com.github.skrcode.javaautounittests;
 
 public enum GenerationType {
-    GENERATE, FIX
+    generate, fix
 }

@@ -20,7 +20,7 @@ import static com.github.skrcode.javaautounittests.util.GetFilesCacheUtil.*;
 
 public class ToolHandlerUtil {
 
-    public static String handleApplyTestClass(Project project, @NotNull ConsoleView myConsole, Message.MessageContent.Input args, GenerateTestsGetFilesCache generateTestsGetFilesCache, String cutFqn, String oldTestSource, MessagesContentsRequestDTO messagesContentsRequestDTO, TestFileInfo testFileInfo) {
+    public static String handleApplyTestClass(Project project, @NotNull ConsoleView myConsole, Message.MessageContent.Input args, GenerateTestsGetFilesCache generateTestsGetFilesCache, String cutFqn, String oldTestSource, MessagesContentsRequestDTO messagesContentsRequestDTO, FileInfo testFileInfo) {
         try {
             String classSkeleton = args.getClassSkeleton();
             List<BuilderUtil.TestMethod> methods = new ArrayList<>();

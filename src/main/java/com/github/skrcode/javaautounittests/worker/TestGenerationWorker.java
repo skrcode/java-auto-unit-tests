@@ -45,8 +45,8 @@ public final class TestGenerationWorker {
         try {
             printQuotaWarning(myConsole);
             long start = System.nanoTime();
-            CutFileInfo cutFileInfo = CUTUtil.getCutFileInfo(cut);
-            TestFileInfo testFileInfo = generationType.equals(GenerationType.GENERATE)?CUTUtil.getOrCreateTestFile(project, cutFileInfo);
+            FileInfo cutFileInfo = CUTUtil.getCutFileInfo(cut);
+            FileInfo testFileInfo = generationType.equals(GenerationType.generate)?CUTUtil.getOrCreateTestFile(project, cutFileInfo):cutFileInfo;
             GenerateTestsGetFilesCache generateTestsGetFilesCache = GenerateTestsGetFilesCache.getInstance(project);
             Telemetry.allGenBegin(testFileInfo.simpleName());
             boolean isLLMGeneratedAtLeastOnce = false;
@@ -57,7 +57,8 @@ public final class TestGenerationWorker {
                     .addMessage((GenerateTestsLLMService.getMessage(GenerateTestsLLMService.USER_ROLE, testFileInfo.simpleName())))
                     .addMessage(GenerateTestsLLMService.getMessage(GenerateTestsLLMService.USER_ROLE, cutSource))
                     .addMessage(GenerateTestsLLMService.getMessage(GenerateTestsLLMService.USER_ROLE,"Mockito version = "+CUTUtil.findMockitoVersion(project)));
-            messagesRequestDTO.addMessage(GenerateTestsLLMService.getMessage(USER_ROLE, testFileInfo.simpleName()+" = \n"+testFileInfo.source()));
+            if(generationType.equals(GenerationType.generate))
+                messagesRequestDTO.addMessage(GenerateTestsLLMService.getMessage(USER_ROLE, testFileInfo.simpleName()+" = \n"+testFileInfo.source()));
             Set<String> isClassPathFetched = new HashSet<>();
             messagesRequestDTO.addAllMessages(getCachedGetFilesMessages(getCachedGetFilesCachedPaths(generateTestsGetFilesCache, cutFileInfo.qualifiedName()), myConsole,project, testFileInfo.filePath(), cutFileInfo.filePath(), isClassPathFetched));
             messagesRequestDTO.setActualMessages(messagesRequestDTO.getMessages());
@@ -76,7 +77,7 @@ public final class TestGenerationWorker {
                     ConsolePrinter.warn(myConsole, "Attempts breached. I have tried my best to compile and execute tests. Please fix the remaining tests manually. " + testFileInfo.simpleName());
                     break;
                 }
-                if(attempt == 1) {
+                if(attempt == 1 && generationType.equals(GenerationType.generate)) {
                     PromptResponseOutput planOutput = GenerateTestsLLMService.generatePlan(testFileInfo.simpleName(), messagesRequestDTO.getActualMessages(),myConsole, attempt, indicator);
                     Message.MessageContent messageContent = MAPPER.convertValue(planOutput.getMessage().getContentAsList().get(0),Message.MessageContent.class);
                     ConsolePrinter.info(myConsole, "Fetching test plan: \n" + messageContent.getText());
@@ -84,7 +85,7 @@ public final class TestGenerationWorker {
                 }
                 ConsolePrinter.info(myConsole, "Generating tests " + testFileInfo.simpleName() +" Please wait....");
                 indicator.checkCanceled();
-                PromptResponseOutput output = GenerateTestsLLMService.generateContent(testFileInfo.simpleName(), messagesRequestDTO.getActualMessages(), myConsole, attempt, indicator);
+                PromptResponseOutput output = GenerateTestsLLMService.generateContent(testFileInfo.simpleName(), messagesRequestDTO.getActualMessages(), myConsole, attempt, indicator, generationType);
                 messagesRequestDTO.setActualMessages(messagesRequestDTO.getMessages());
                 MessagesContentsRequestDTO messagesContentsRequestDTO = new MessagesContentsRequestDTO();
                 for (Object messageContentObject: output.getMessage().getContentAsList()) {

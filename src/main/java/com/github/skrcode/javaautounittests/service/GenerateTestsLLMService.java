@@ -6,6 +6,7 @@ package com.github.skrcode.javaautounittests.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.skrcode.javaautounittests.GenerationType;
 import com.github.skrcode.javaautounittests.dto.Message;
 import com.github.skrcode.javaautounittests.dto.PromptResponseOutput;
 import com.github.skrcode.javaautounittests.state.AISettings;
@@ -66,7 +67,7 @@ public final class GenerateTestsLLMService {
             List<Message> messages,
             ConsoleView myConsole,
             int attempt
-            , @NotNull ProgressIndicator indicator
+            , @NotNull ProgressIndicator indicator, GenerationType generationType
     ) throws Exception {
         long start = System.nanoTime();
         Telemetry.genStarted(testClassName, String.valueOf(attempt));
@@ -95,7 +96,7 @@ public final class GenerateTestsLLMService {
 
                 indicator.checkCanceled();
                 HttpRequest createJobReq = HttpRequest.newBuilder()
-                        .uri(URI.create("https://otxfylhjrlaesjagfhfi.supabase.co/functions/v1/invoke-junit-llm?type=fix"))
+                        .uri(URI.create("https://otxfylhjrlaesjagfhfi.supabase.co/functions/v1/invoke-junit-llm?type="+generationType.toString()))
                         .timeout(Duration.ofSeconds(30))
                         .header("Accept", "application/json")
                         .header("Content-Type", "application/json")
