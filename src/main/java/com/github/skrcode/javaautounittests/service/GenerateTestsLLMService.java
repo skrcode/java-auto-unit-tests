@@ -183,14 +183,14 @@ public final class GenerateTestsLLMService {
     }
 
     public static PromptResponseOutput generatePlan(
-            String testClassName,
+            String combinedTestClassName,
             List<Message> messages,
             ConsoleView myConsole,
             int attempt
             , @NotNull ProgressIndicator indicator
     ) throws Exception {
         long start = System.nanoTime();
-        Telemetry.genStarted(testClassName, String.valueOf(attempt));
+        Telemetry.genStarted(combinedTestClassName, String.valueOf(attempt));
 
         int retries = 0;
         long backoffMillis = 1000; // start with 1s
@@ -244,7 +244,7 @@ public final class GenerateTestsLLMService {
                     throw new RuntimeException("Error in generating plan");
 
                 long end = System.nanoTime();
-                Telemetry.genCompleted(testClassName, String.valueOf(attempt), (end - start) / 1_000_000);
+                Telemetry.genCompleted(combinedTestClassName, String.valueOf(attempt), (end - start) / 1_000_000);
                 ConsolePrinter.success(myConsole,
                         "Received model output");
                 return planOutput;
@@ -253,7 +253,7 @@ public final class GenerateTestsLLMService {
                 indicator.checkCanceled();
                 retries++;
                 if (retries > MAX_RETRIES) {
-                    Telemetry.genFailed(testClassName, String.valueOf(attempt), t.getMessage());
+                    Telemetry.genFailed(combinedTestClassName, String.valueOf(attempt), t.getMessage());
                     ConsolePrinter.error(myConsole,
                             "Request failed after " + retries + " retries: " + t.getMessage());
                     throw new Exception("Max retries reached: " + t.getMessage(), t);

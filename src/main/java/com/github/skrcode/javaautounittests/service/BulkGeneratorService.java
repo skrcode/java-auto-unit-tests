@@ -19,12 +19,15 @@ import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.psi.PsiClass;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.List;
+
 /**
  * Spins up a background task that iterates over classes sequentially.
  */
 public final class BulkGeneratorService {
 
-    public static void enqueue(Project project, PsiClass clazz, GenerationType generationType) {
+    public static void enqueue(Project project, List<PsiClass> clazzes, GenerationType generationType) {
+        PsiClass clazz = clazzes.get(0);
         String tabTitle = ReadAction.compute(() -> clazz.isValid() ? clazz.getName() : "<invalid>");
 
         ApplicationManager.getApplication().invokeLater(() -> {
@@ -61,7 +64,7 @@ public final class BulkGeneratorService {
                                     ConsoleViewContentType.NORMAL_OUTPUT)
                     );
 
-                    TestGenerationWorker.process(project, clazz, console, indicator, generationType);
+                    TestGenerationWorker.process(project, clazzes, console, indicator, generationType);
                 }
 
                 @Override

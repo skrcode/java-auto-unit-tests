@@ -59,11 +59,11 @@ public class GenerateTestAction extends AnAction implements DumbAware {
             Messages.showErrorDialog(project, "No Java classes found in selection.", "JAIPilot");
             return false;
         }
-        if (classes.size() > 1) {
-            Telemetry.uiSettingsFailureClick("multiple classes selected");
-            Messages.showErrorDialog(project, "Please select only single java class.", "JAIPilot");
-            return false;
-        }
+//        if (classes.size() > 1) {
+//            Telemetry.uiSettingsFailureClick("multiple classes selected");
+//            Messages.showErrorDialog(project, "Please select only single java class.", "JAIPilot");
+//            return false;
+//        }
         if (AISettings.getInstance().getProKey().isEmpty()) {
             Telemetry.uiSettingsFailureClick("license key not configured in settings");
             Messages.showErrorDialog(project, "Please configure license key in settings.", "JAIPilot");
@@ -97,7 +97,7 @@ public class GenerateTestAction extends AnAction implements DumbAware {
 
         BulkGeneratorService.enqueue(
                 project,
-                classes.get(0),actionId
+                classes,actionId
         );
         return true;
     }

@@ -4,8 +4,12 @@
 
 package com.github.skrcode.javaautounittests.util;
 
+import com.github.skrcode.javaautounittests.dto.FileInfo;
 import com.github.skrcode.javaautounittests.service.TelemetryService;
 import com.intellij.openapi.application.ApplicationManager;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 public final class Telemetry {
     private Telemetry() {}
@@ -43,5 +47,9 @@ public final class Telemetry {
     }
     public static void bulkDone(int ok, long ms) {
         svc().log("bulk_generation_completed", "ok="+ok, "ms="+ms);
+    }
+
+    public static String getCombinedClassName(List<FileInfo> classes) {
+        return classes.stream().map(FileInfo::toString).collect(Collectors.joining(","));
     }
 }
