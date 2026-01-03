@@ -4,12 +4,11 @@
 
 package com.github.skrcode.javaautounittests.service;
 
-import com.github.skrcode.javaautounittests.GenerationType;
+import com.github.skrcode.javaautounittests.constants.GenerationType;
 import com.github.skrcode.javaautounittests.worker.TestGenerationWorker;
 import com.intellij.execution.ui.ConsoleView;
 import com.intellij.execution.ui.ConsoleViewContentType;
 import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
@@ -27,17 +26,10 @@ import java.util.List;
 public final class BulkGeneratorService {
 
     public static void enqueue(Project project, List<PsiClass> clazzes, GenerationType generationType) {
-        PsiClass clazz = clazzes.get(0);
-        String tabTitle = ReadAction.compute(() -> clazz.isValid() ? clazz.getName() : "<invalid>");
-
+        String tabTitle = generationType.name();
         ApplicationManager.getApplication().invokeLater(() -> {
-            // Ensure tool window is visible
             ToolWindow toolWindow = ToolWindowManager.getInstance(project).getToolWindow("JAIPilot Console");
-            if (toolWindow != null) {
-                toolWindow.show();
-            }
-
-            // Create new console tab on EDT
+            if (toolWindow != null) toolWindow.show();
             ConsoleView console = ConsoleManager.openNewConsole(project, tabTitle);
             ConsoleManager.print(console,
                     "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
@@ -46,36 +38,17 @@ public final class BulkGeneratorService {
                             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n",
                     ConsoleViewContentType.SYSTEM_OUTPUT);
 
-            ProgressManager.getInstance().run(new Task.Backgroundable(
-                    project,
-                    "Generating tests for " + tabTitle,
-                    true
-            ) {
+            ProgressManager.getInstance().run(new Task.Backgroundable(project, "Generating tests for " + tabTitle, true) {
                 @Override
                 public void run(@NotNull ProgressIndicator indicator) {
                     if (indicator.isCanceled()) return;
-
-                    String qName = ReadAction.compute(() ->
-                            clazz.isValid() ? clazz.getQualifiedName() : "<invalid>");
-
-                    ApplicationManager.getApplication().invokeLater(() ->
-                            ConsoleManager.print(console,
-                                    "⚙️ Processing " + qName,
-                                    ConsoleViewContentType.NORMAL_OUTPUT)
-                    );
-
+                    ApplicationManager.getApplication().invokeLater(() -> ConsoleManager.print(console, "⚙️ Processing ", ConsoleViewContentType.NORMAL_OUTPUT));
                     TestGenerationWorker.process(project, clazzes, console, indicator, generationType);
                 }
-
                 @Override
                 public void onCancel() {
-                    ApplicationManager.getApplication().invokeLater(() ->
-                            ConsoleManager.print(console,
-                                    "❌ JAIPilot generation cancelled by user.",
-                                    ConsoleViewContentType.ERROR_OUTPUT)
-                    );
+                    ApplicationManager.getApplication().invokeLater(() -> ConsoleManager.print(console, "❌ JAIPilot generation cancelled by user.", ConsoleViewContentType.ERROR_OUTPUT));
                 }
-
                 @Override
                 public void onSuccess() {
 //                    ApplicationManager.getApplication().invokeLater(() -> {

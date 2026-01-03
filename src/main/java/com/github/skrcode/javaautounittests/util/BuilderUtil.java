@@ -6,7 +6,6 @@ package com.github.skrcode.javaautounittests.util;
 
 import com.github.javaparser.JavaParser;
 import com.github.skrcode.javaautounittests.dto.MessagesRequestDTO;
-import com.github.skrcode.javaautounittests.service.GenerateTestsLLMService;
 import com.intellij.codeInsight.actions.ReformatCodeProcessor;
 import com.intellij.compiler.CompilerMessageImpl;
 import com.intellij.execution.ExecutionException;
@@ -51,6 +50,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static com.github.skrcode.javaautounittests.service.GenerateTestsLLMService.USER_ROLE;
 import static com.github.skrcode.javaautounittests.util.CUTUtil.expandAll;
+import static com.github.skrcode.javaautounittests.util.LLMMessageContentUtil.getMessage;
 
 /**
  * Compiles a JUnit test class, runs it with coverage, and returns:
@@ -181,6 +181,7 @@ public class BuilderUtil {
     }
 
     // --- Compile JUnit class silently ---
+    // TODO : get error only from this testFile and not others
     public static String compileJUnitClass(Project project, PsiJavaFile testFile) {
         CountDownLatch latch = new CountDownLatch(1);
         StringBuilder result = new StringBuilder();
@@ -434,31 +435,45 @@ public class BuilderUtil {
         return finalSourceRef.get();
     }
 
-
-    public static boolean buildAndRun(Project project, @NotNull ConsoleView myConsole, @NotNull ProgressIndicator indicator, MessagesRequestDTO messagesRequestDTO, PsiJavaFile testFile, String testFileName) throws Exception {
-        ConsolePrinter.info(myConsole, "Compiling Tests " + testFileName);
+    // return true only if all tests across all files successful
+    public static boolean buildAndRun(Project project, @NotNull ConsoleView myConsole, @NotNull ProgressIndicator indicator, List<MessagesRequestDTO> messagesRequestDTOs, List<PsiJavaFile> testFiles, String combinedTestFileName) throws Exception {
+        ConsolePrinter.info(myConsole, "Compiling Tests " + combinedTestFileName);
         indicator.checkCanceled();
-        String errorOutput = BuilderUtil.compileJUnitClass(project, testFile);
-
-        if (!errorOutput.isEmpty()) {
-            ConsolePrinter.info(myConsole, "Found compilation errors " + testFileName);
-            messagesRequestDTO.addActualMessage(GenerateTestsLLMService.getMessage(USER_ROLE,errorOutput));
+        boolean isAllSuccess = true;
+        for(int i=0;i<testFiles.size();i++) {
+            PsiJavaFile testFile = testFiles.get(i);
+            String errorOutput = BuilderUtil.compileJUnitClass(project, testFile);
+            MessagesRequestDTO messagesRequestDTO = messagesRequestDTOs.get(i);
+            if (!errorOutput.isEmpty()) {
+                ConsolePrinter.info(myConsole, "Found compilation errors " + combinedTestFileName);
+                messagesRequestDTO.addActualMessage(getMessage(USER_ROLE,errorOutput));
+                isAllSuccess = false;
+            }
+        }
+        if(!isAllSuccess) {
+            ConsolePrinter.info(myConsole, "Found compilation errors " + combinedTestFileName);
             return false;
         }
-
-        ConsolePrinter.success(myConsole, "Compilation Successful " + testFileName);
-        ConsolePrinter.info(myConsole, "Running Tests " + testFileName);
+        ConsolePrinter.success(myConsole, "Compilation Successful " + combinedTestFileName);
+        ConsolePrinter.info(myConsole, "Running Tests " + combinedTestFileName);
         indicator.checkCanceled();
-        errorOutput = BuilderUtil.runJUnitClass(project, testFile);
-        if(!errorOutput.isEmpty()) {
-            ConsolePrinter.info(myConsole, "Found tests execution errors " + testFileName);
-            messagesRequestDTO.addActualMessage(GenerateTestsLLMService.getMessage(USER_ROLE,errorOutput));
+        for(int i=0;i<testFiles.size();i++) {
+            PsiJavaFile testFile = testFiles.get(i);
+            String errorOutput = BuilderUtil.runJUnitClass(project, testFile);
+            MessagesRequestDTO messagesRequestDTO = messagesRequestDTOs.get(i);
+            if(!errorOutput.isEmpty()) {
+                ConsolePrinter.info(myConsole, "Found tests execution errors " + combinedTestFileName);
+                messagesRequestDTO.addActualMessage(getMessage(USER_ROLE,errorOutput));
+                return false;
+            }
+        }
+        if(!isAllSuccess) {
+            ConsolePrinter.info(myConsole, "Found tests execution errors " + combinedTestFileName);
             return false;
         }
-        ConsolePrinter.success(myConsole, "Tests execution successful " + testFileName);
-        return true;
+        ConsolePrinter.success(myConsole, "Tests execution successful " + combinedTestFileName);
+        return isAllSuccess;
     }
-
 
     private static String joinLines(List<String> list) { if (list == null || list.isEmpty()) return ""; return String.join("\n", list); }
 }

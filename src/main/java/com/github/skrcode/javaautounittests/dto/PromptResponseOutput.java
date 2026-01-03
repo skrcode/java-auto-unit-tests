@@ -4,26 +4,28 @@
 
 package com.github.skrcode.javaautounittests.dto;
 
+import java.util.List;
+
 public class PromptResponseOutput {
-    private Message message;
+    private List<Message> messages;
     private int errorCode;
     private String errorBody;
 
     public PromptResponseOutput() {
     }
 
-    public PromptResponseOutput(Message message, int errorCode, String errorBody) {
-        this.message = message;
+    public PromptResponseOutput(List<Message> messages, int errorCode, String errorBody) {
+        this.messages = messages;
         this.errorCode = errorCode;
         this.errorBody = errorBody;
     }
 
-    public Message getMessage() {
-        return message;
+    public List<Message> getMessages() {
+        return messages;
     }
 
-    public void setMessage(Message message) {
-        this.message = message;
+    public void setMessages(List<Message> message) {
+        this.messages = messages;
     }
 
     public int getErrorCode() {

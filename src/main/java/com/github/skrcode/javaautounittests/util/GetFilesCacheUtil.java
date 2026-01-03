@@ -7,16 +7,19 @@ package com.github.skrcode.javaautounittests.util;
 
 import com.github.skrcode.javaautounittests.dto.CacheDTO;
 import com.github.skrcode.javaautounittests.dto.Message;
-import com.github.skrcode.javaautounittests.service.GenerateTestsLLMService;
 import com.github.skrcode.javaautounittests.state.GenerateTestsGetFilesCache;
 import com.intellij.execution.ui.ConsoleView;
 import com.intellij.openapi.project.Project;
 import org.apache.commons.lang3.StringUtils;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
 
 import static com.github.skrcode.javaautounittests.service.GenerateTestsLLMService.USER_ROLE;
 import static com.github.skrcode.javaautounittests.util.CUTUtil.stripCommentsAndMethodBodies;
+import static com.github.skrcode.javaautounittests.util.LLMMessageContentUtil.getMessage;
 
 public class GetFilesCacheUtil {
 
@@ -53,7 +56,7 @@ public class GetFilesCacheUtil {
                 ConsolePrinter.info(myConsole, "Ignoring. Duplicate file or file not found: " + cachedFilePath);
                 continue;
             }
-            messages.add(GenerateTestsLLMService.getMessage(USER_ROLE,cachedFilePath +"=\n"+cachedFileContent));
+            messages.add(getMessage(USER_ROLE,cachedFilePath +"=\n"+cachedFileContent));
             ConsolePrinter.success(myConsole, "Cached Snippet(s): " + cachedFileContent);
             ConsolePrinter.success(myConsole, "Fetched cached file snippet(s): " + cachedFileContent);
         }

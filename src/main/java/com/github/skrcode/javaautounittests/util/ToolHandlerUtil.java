@@ -5,7 +5,9 @@
  */
 package com.github.skrcode.javaautounittests.util;
 
-import com.github.skrcode.javaautounittests.dto.*;
+import com.github.skrcode.javaautounittests.dto.FileInfo;
+import com.github.skrcode.javaautounittests.dto.Message;
+import com.github.skrcode.javaautounittests.dto.MessagesContentsRequestDTO;
 import com.github.skrcode.javaautounittests.state.GenerateTestsGetFilesCache;
 import com.intellij.execution.ui.ConsoleView;
 import com.intellij.openapi.project.Project;
@@ -15,8 +17,8 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
 
-import static com.github.skrcode.javaautounittests.service.GenerateTestsLLMService.*;
 import static com.github.skrcode.javaautounittests.util.GetFilesCacheUtil.*;
+import static com.github.skrcode.javaautounittests.util.LLMMessageContentUtil.*;
 
 public class ToolHandlerUtil {
 

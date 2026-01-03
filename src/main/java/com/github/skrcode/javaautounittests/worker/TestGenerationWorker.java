@@ -5,8 +5,11 @@
 package com.github.skrcode.javaautounittests.worker;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.skrcode.javaautounittests.GenerationType;
-import com.github.skrcode.javaautounittests.dto.*;
+import com.github.skrcode.javaautounittests.constants.GenerationType;
+import com.github.skrcode.javaautounittests.dto.FileInfo;
+import com.github.skrcode.javaautounittests.dto.Message;
+import com.github.skrcode.javaautounittests.dto.MessagesContentsRequestDTO;
+import com.github.skrcode.javaautounittests.dto.MessagesRequestDTO;
 import com.github.skrcode.javaautounittests.service.ExecutionManager;
 import com.github.skrcode.javaautounittests.service.GenerateTestsLLMService;
 import com.github.skrcode.javaautounittests.state.GenerateTestsGetFilesCache;
@@ -34,6 +37,8 @@ import static com.github.skrcode.javaautounittests.util.BuilderUtil.buildAndRun;
 import static com.github.skrcode.javaautounittests.util.CUTUtil.testFileExists;
 import static com.github.skrcode.javaautounittests.util.GetFilesCacheUtil.getCachedGetFilesCachedPaths;
 import static com.github.skrcode.javaautounittests.util.GetFilesCacheUtil.getCachedGetFilesMessages;
+import static com.github.skrcode.javaautounittests.util.LLMMessageContentUtil.getMessage;
+import static com.github.skrcode.javaautounittests.util.LLMMessageContentUtil.getMessageTool;
 import static com.github.skrcode.javaautounittests.util.Telemetry.getCombinedClassName;
 import static com.github.skrcode.javaautounittests.util.ToolHandlerUtil.handleApplyTestClass;
 import static com.github.skrcode.javaautounittests.util.ToolHandlerUtil.handleGetFile;
@@ -48,36 +53,36 @@ public final class TestGenerationWorker {
         try {
             printQuotaWarning(myConsole);
             long start = System.nanoTime();
-            List<FileInfo> cutFileInfos = cuts.stream()
-                    .map(CUTUtil::getCutFileInfo)
-                    .toList();
-            List<FileInfo> testFileInfos = cutFileInfos.stream()
-                    .map(cutFileInfo ->
-                            generationType.equals(GenerationType.generate)
-                                    ? CUTUtil.getOrCreateTestFile(project, cutFileInfo)
-                                    : cutFileInfo
-                    )
-                    .toList();
+            List<FileInfo> cutFileInfos = cuts.stream().map(CUTUtil::getCutFileInfo).toList();
+            List<FileInfo> testFileInfos = cutFileInfos.stream().map(cutFileInfo -> generationType.equals(GenerationType.generate) ? CUTUtil.getOrCreateTestFile(project, cutFileInfo) : cutFileInfo).toList();
             GenerateTestsGetFilesCache generateTestsGetFilesCache = GenerateTestsGetFilesCache.getInstance(project);
             Telemetry.allGenBegin(getCombinedClassName(testFileInfos));
-            boolean isLLMGeneratedAtLeastOnce = false;
+//            for(FileInfo testFileInfo: testFileInfos) { // TODO : initial build compilation check - to remove and use bottom check. if build failure in other files apart from generated, then fail
+//                String error = BuilderUtil.compileJUnitClass(project, testFileInfo.psiFile());
+//                if(!error.isEmpty()) {
+//                    Telemetry.allGenError(String.valueOf(attempt),"Compilation Error.");
+//                    ApplicationManager.getApplication().invokeLater(() -> Messages.showErrorDialog(project, "Error. Found compilation errors. Please fix and retry.","JAIPilot"));
+//                    return;
+//                }
+//            }
+            boolean isLLMGeneratedAtLeastOnce = false; // TODO : need to check for fix case
             ExecutionManager.reset();
             List<MessagesRequestDTO> messagesRequestDTOs = new ArrayList<>();
-            List<String> cutSources = cuts.stream()
-                    .map(cut -> CUTUtil.cleanedSourceForLLM(project, cut))
-                    .toList();
+            List<Set<String>> classPathFetchedFlags = new ArrayList<>();
+            List<String> cutSources = cuts.stream().map(cut -> CUTUtil.cleanedSourceForLLM(project, cut)).toList();
             for(int i=0;i<cuts.size();i++) {
                 MessagesRequestDTO messagesRequestDTO = new MessagesRequestDTO();
                 messagesRequestDTO
-                        .addMessage((GenerateTestsLLMService.getMessage(GenerateTestsLLMService.USER_ROLE, testFileInfos.get(i).simpleName())))
-                        .addMessage(GenerateTestsLLMService.getMessage(GenerateTestsLLMService.USER_ROLE, cutSources.get(i)))
-                        .addMessage(GenerateTestsLLMService.getMessage(GenerateTestsLLMService.USER_ROLE,"Mockito version = "+CUTUtil.findMockitoVersion(project)));
+                        .addMessage((getMessage(GenerateTestsLLMService.USER_ROLE, testFileInfos.get(i).simpleName())))
+                        .addMessage(getMessage(GenerateTestsLLMService.USER_ROLE, cutSources.get(i)))
+                        .addMessage(getMessage(GenerateTestsLLMService.USER_ROLE,"Mockito version = "+CUTUtil.findMockitoVersion(project)));
                 if(generationType.equals(GenerationType.generate))
-                    messagesRequestDTO.addMessage(GenerateTestsLLMService.getMessage(USER_ROLE, testFileInfos.get(i).simpleName()+" = \n"+testFileInfos.get(i).source()));
+                    messagesRequestDTO.addMessage(getMessage(USER_ROLE, testFileInfos.get(i).simpleName()+" = \n"+testFileInfos.get(i).source()));
                 Set<String> isClassPathFetched = new HashSet<>();
                 messagesRequestDTO.addAllMessages(getCachedGetFilesMessages(getCachedGetFilesCachedPaths(generateTestsGetFilesCache, cutFileInfos.get(i).qualifiedName()), myConsole,project, testFileInfos.get(i).filePath(), cutFileInfos.get(i).filePath(), isClassPathFetched));
                 messagesRequestDTO.setActualMessages(messagesRequestDTO.getMessages());
                 messagesRequestDTOs.add(messagesRequestDTO);
+                classPathFetchedFlags.add(isClassPathFetched);
             }
             boolean shouldRebuild = true;
             String newTestSource = null;
@@ -92,45 +97,54 @@ public final class TestGenerationWorker {
                     }
                 }
                 if(isFileCorrupted) break;
-                // send all here in one shot
-                if(shouldRebuild && buildAndRun(project, myConsole, indicator, messagesRequestDTO, testFileInfo.psiFile(), testFileInfo.simpleName()) && isLLMGeneratedAtLeastOnce) break;
-                shouldRebuild = false;
                 if (attempt > MAX_ATTEMPTS) {
-                    ConsolePrinter.warn(myConsole, "Attempts breached. I have tried my best to compile and execute tests. Please fix the remaining tests manually. " + testFileInfo.simpleName());
+                    ConsolePrinter.warn(myConsole, "Attempts breached. I have tried my best to compile and execute tests. Please fix the remaining tests manually. " + getCombinedClassName(testFileInfos));
                     break;
                 }
                 if(attempt == 1 && generationType.equals(GenerationType.generate)) {
-                    // send all here in one shot and get back list of plans
-                    PromptResponseOutput planOutput = GenerateTestsLLMService.generatePlan(getCombinedClassName(testFileInfos), messagesRequestDTO.getActualMessages(),myConsole, attempt, indicator);
-                    Message.MessageContent messageContent = MAPPER.convertValue(planOutput.getMessage().getContentAsList().get(0),Message.MessageContent.class);
-                    ConsolePrinter.info(myConsole, "Fetching test plan: \n" + messageContent.getText());
-                    messagesRequestDTO.addToBoth(GenerateTestsLLMService.getMessage(USER_ROLE,messageContent.getText(), true));
+                    List<Message> planOutputMessages = GenerateTestsLLMService.generate(getCombinedClassName(testFileInfos),messagesRequestDTOs.stream().map(MessagesRequestDTO::getActualMessages).toList(),myConsole, attempt, indicator, null);
+                    for(int i=0;i<planOutputMessages.size();i++) {
+                        Message message = planOutputMessages.get(i);
+                        Message.MessageContent messageContent = MAPPER.convertValue(message.getContentAsList(), Message.MessageContent.class);
+                        ConsolePrinter.info(myConsole, "Fetching test plan: \n" + messageContent.getText());
+                        messagesRequestDTOs.get(i).addToBoth(getMessage(USER_ROLE, messageContent.getText(), true));
+                    }
                 }
-                ConsolePrinter.info(myConsole, "Generating tests " + getCombinedClassName(testFileInfos) +" Please wait....");
+                // all tests generated
+                if(shouldRebuild && buildAndRun(project, myConsole, indicator, messagesRequestDTOs, testFileInfos.stream().map(FileInfo::psiFile).toList(), getCombinedClassName(testFileInfos)) && isLLMGeneratedAtLeastOnce) break;
+                shouldRebuild = false;
+                ConsolePrinter.info(myConsole, "Generating tests " + getCombinedClassName(testFileInfos) +". Please wait....");
                 indicator.checkCanceled();
-                PromptResponseOutput output = GenerateTestsLLMService.generateContent(testFileInfo.simpleName(), messagesRequestDTO.getActualMessages(), myConsole, attempt, indicator, generationType);
-                messagesRequestDTO.setActualMessages(messagesRequestDTO.getMessages());
-                MessagesContentsRequestDTO messagesContentsRequestDTO = new MessagesContentsRequestDTO();
-                for (Object messageContentObject: output.getMessage().getContentAsList()) {
-                    Message.MessageContent messageContent = MAPPER.convertValue(messageContentObject,Message.MessageContent.class);
-                    if (messageContent.getType().equals("thinking") || messageContent.getType().equals("redacted_thinking")) messagesContentsRequestDTO.addToBothModel(messageContent);
-                    if (!messageContent.getType().equals("tool_use")) continue;
-                    Message.MessageContent.Input args = messageContent.getInput();
-                    if(messageContent.getName().equals("apply_test_class")) {
-                        isLLMGeneratedAtLeastOnce = true;
-                        indicator.checkCanceled();
-                        newTestSource = handleApplyTestClass(project,myConsole,args,generateTestsGetFilesCache, cutFileInfo.qualifiedName(), newTestSource,messagesContentsRequestDTO, testFileInfo);
-                        shouldRebuild = true;
+                List<Message> outputMessages = GenerateTestsLLMService.generate(getCombinedClassName(testFileInfos),messagesRequestDTOs.stream().map(MessagesRequestDTO::getActualMessages).toList(),myConsole, attempt, indicator, generationType);
+                for(MessagesRequestDTO messagesRequestDTO:messagesRequestDTOs)messagesRequestDTO.setActualMessages(messagesRequestDTO.getMessages()); // initialize
+
+                for(int i=0;i<outputMessages.size();i++) {
+                    Message message = outputMessages.get(i);
+                    MessagesContentsRequestDTO messagesContentsRequestDTO = new MessagesContentsRequestDTO();
+                    if(message == null) continue; // skipped message
+                    for (Object messageContentObject : message.getContentAsList()) {
+                        Message.MessageContent messageContent = MAPPER.convertValue(messageContentObject, Message.MessageContent.class);
+                        if (messageContent.getType().equals("thinking") || messageContent.getType().equals("redacted_thinking"))
+                            messagesContentsRequestDTO.addToBothModel(messageContent);
+                        if (!messageContent.getType().equals("tool_use")) continue;
+                        Message.MessageContent.Input args = messageContent.getInput();
+                        if (messageContent.getName().equals("apply_test_class")) {
+                            isLLMGeneratedAtLeastOnce = true;
+                            indicator.checkCanceled();
+                            newTestSource = handleApplyTestClass(project, myConsole, args, generateTestsGetFilesCache, cutFileInfos.get(i).qualifiedName(), newTestSource, messagesContentsRequestDTO, testFileInfos.get(i));
+                            shouldRebuild = true;
+                        }
+                        if (messageContent.getName().equals("get_file"))
+                            handleGetFile(project, myConsole, args, messageContent.getId(), testFileInfos.get(i).filePath(), cutFileInfos.get(i).filePath(), classPathFetchedFlags.get(i), messagesContentsRequestDTO, generateTestsGetFilesCache, cutFileInfos.get(i).qualifiedName(), messageContent.getName());
+                        if (messageContent.getName().equals("terminate_call")) {
+                            ConsolePrinter.warn(myConsole, "Attempts breached. I have tried my best to compile and execute tests. Please fix the remaining tests manually. ");
+                            Telemetry.allGenError(String.valueOf(attempt), "terminate call");
+                        }
                     }
-                    if(messageContent.getName().equals("get_file")) handleGetFile(project,myConsole,args, messageContent.getId(), testFileInfo.filePath(), cutFileInfo.filePath(),  isClassPathFetched, messagesContentsRequestDTO, generateTestsGetFilesCache, cutFileInfo.qualifiedName(), messageContent.getName());
-                    if(messageContent.getName().equals("terminate_call")) {
-                        ConsolePrinter.warn(myConsole, "Attempts breached. I have tried my best to compile and execute tests. Please fix the remaining tests manually. ");
-                        Telemetry.allGenError(String.valueOf(attempt), "terminate call");
-                    }
+                    messagesRequestDTOs.get(i)
+                            .addMessage(getMessageTool(MODEL_ROLE, messagesContentsRequestDTO.getMessageContentsModel())).addMessage(getMessageTool(USER_ROLE, messagesContentsRequestDTO.getMessageContentsUser()))
+                            .addActualMessage(getMessageTool(MODEL_ROLE, messagesContentsRequestDTO.getActualMessageContentsModel())).addActualMessage(getMessageTool(USER_ROLE, messagesContentsRequestDTO.getActualMessageContentsUser()));
                 }
-                messagesRequestDTO
-                        .addMessage(GenerateTestsLLMService.getMessageTool(MODEL_ROLE,messagesContentsRequestDTO.getMessageContentsModel())).addMessage(GenerateTestsLLMService.getMessageTool(USER_ROLE,messagesContentsRequestDTO.getMessageContentsUser()))
-                        .addActualMessage(GenerateTestsLLMService.getMessageTool(MODEL_ROLE,messagesContentsRequestDTO.getActualMessageContentsModel())).addActualMessage(GenerateTestsLLMService.getMessageTool(USER_ROLE,messagesContentsRequestDTO.getActualMessageContentsUser()));
             }
             Telemetry.allGenDone(getCombinedClassName(testFileInfos), String.valueOf(attempt), (System.nanoTime() - start) / 1_000_000);
             ConsolePrinter.section(myConsole, "Summary");

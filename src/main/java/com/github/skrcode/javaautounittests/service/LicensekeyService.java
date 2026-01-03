@@ -23,7 +23,7 @@
 //public class LicensekeyService {
 //    private static final ObjectMapper MAPPER = new ObjectMapper();
 //
-//    public static boolean validateLicesekey(String licenseKey)  {
+//    public static QuotaResponse fetchQuota()  {
 //        String baseUrl = "https://otxfylhjrlaesjagfhfi.supabase.co/functions/v1/fetch-quota";
 //        String url = baseUrl + "?licenseKey=" + URLEncoder.encode(AISettings.getInstance().getState().proKey, StandardCharsets.UTF_8);
 //        HttpClient http = HttpClient.newBuilder()
@@ -71,5 +71,11 @@
 //                backoffMillis = Math.min(backoffMillis * 2, 30_000);
 //            }
 //        }
+//    }
+//
+//    public static void printQuotaWarning(ConsoleView myConsole) {
+//        QuotaResponse quotaResponse = LicensekeyService.fetchQuota();
+//        if(quotaResponse.message != null)
+//            ConsolePrinter.warn(myConsole, quotaResponse.message);
 //    }
 //}
