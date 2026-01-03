@@ -34,20 +34,46 @@
 
     <!-- Actions -->
     <actions>
-        <group id="AIAutoUnitTestGroup"
-               popup="true"
-               text="JAIPilot – One-Click AI Agent for Java Unit Testing">
+        <action id="generate"
+                class="com.github.skrcode.javaautounittests.actions.GenerateTestAction"
+                icon="AllIcons.Actions.Execute"
+                text="JAIPilot – Generate Tests and Improve Coverage">
+
             <add-to-group group-id="EditorPopupMenu" anchor="first"/>
             <add-to-group group-id="ProjectViewPopupMenu" anchor="first"/>
+        </action>
+        <action id="fix"
+                class="com.github.skrcode.javaautounittests.actions.GenerateTestAction"
+                icon="AllIcons.Actions.QuickfixBulb"
+                text="JAIPilot – Fix Failing Tests">
+            <add-to-group group-id="RunContextGroup" anchor="first"/>
+        </action>
 
-            <action id="GenerateTestsAction"
-                    class="com.github.skrcode.javaautounittests.GenerateTestAction"
-                    text="Generate Tests"/>
+<!--        <group id="AIAutoUnitTestGroup"-->
+<!--               popup="true"-->
+<!--               text="JAIPilot – One-Click AI Agent for Java Unit Testing">-->
+<!--            <add-to-group group-id="EditorPopupMenu" anchor="first"/>-->
+<!--            <add-to-group group-id="ProjectViewPopupMenu" anchor="first"/>-->
 
-            <action id="OpenSettingsAction"
-                    class="com.github.skrcode.javaautounittests.settings.OpenAISettingsAction"
-                    text="Settings"/>
-        </group>
+<!--            <action id="GenerateTestsAction"-->
+<!--                    class="com.github.skrcode.javaautounittests.actions.GenerateTestAction"-->
+<!--                    icon="AllIcons.Actions.Execute"-->
+<!--                    text="Generate Tests and Improve Coverage"/>-->
+<!--            <separator text="Separator text"/>-->
+<!--            <action id="TestInlineInlayAction"-->
+<!--                    class="com.github.skrcode.javaautounittests.actions.ReviewApplyCodeAction"-->
+<!--                    icon="AllIcons.Actions.QuickfixBulb"-->
+<!--                    text="Only fix failing tests"/>-->
+<!--            <separator text="Separator text"/>-->
+
+<!--            <action id="OpenSettingsAction"-->
+<!--                    icon="AllIcons.Actions.InlayGear"-->
+<!--                    class="com.github.skrcode.javaautounittests.actions.OpenAISettingsAction"-->
+<!--                    text="Settings"/>-->
+<!--            <separator/>-->
+<!--        </group>-->
+
+
     </actions>
 
     <!-- Extensions -->
@@ -55,13 +81,15 @@
         <toolWindow
                 id="JAIPilot Console"
                 anchor="bottom"
-                factoryClass="com.github.skrcode.javaautounittests.settings.TestGenerationToolWindowFactory"
+                factoryClass="com.github.skrcode.javaautounittests.actions.TestGenerationToolWindowFactory"
                 icon="/icons/jaipilot.svg"
                 canCloseContents="false"/>
 
-        <applicationService serviceImplementation="com.github.skrcode.javaautounittests.settings.AISettings"/>
-        <projectConfigurable instance="com.github.skrcode.javaautounittests.settings.AISettingsConfigurable"/>
-        <statusBarWidgetFactory id="AIStatusWidget" implementation="com.github.skrcode.javaautounittests.settings.AIStatusWidgetFactory"/>
+<!--        <projectService serviceImplementation="com.github.skrcode.javaautounittests.view.report.ReportView"/>-->
+
+        <applicationService serviceImplementation="com.github.skrcode.javaautounittests.state.AISettings"/>
+        <projectConfigurable instance="com.github.skrcode.javaautounittests.view.AISettingsConfigurable"/>
+        <statusBarWidgetFactory id="AIStatusWidget" implementation="com.github.skrcode.javaautounittests.view.AIStatusWidgetFactory"/>
         <notificationGroup
                 id="JAIPilot - One-Click AI Agent for Java Unit Testing Feedback"
                 displayType="BALLOON"
