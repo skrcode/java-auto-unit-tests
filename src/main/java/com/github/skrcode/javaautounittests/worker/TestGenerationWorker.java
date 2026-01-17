@@ -1,4 +1,4 @@
-// Copyright © 2025 Suraj Rajan / JAIPilot
+// Copyright © 2026 Suraj Rajan / JAIPilot
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 // If a copy of the MPL was not distributed with this file, you can obtain one at https://mozilla.org/MPL/2.0/.
 
@@ -54,7 +54,13 @@ public final class TestGenerationWorker {
             printQuotaWarning(myConsole);
             long start = System.nanoTime();
             List<FileInfo> cutFileInfos = cuts.stream().map(CUTUtil::getCutFileInfo).toList();
-            List<FileInfo> testFileInfos = cutFileInfos.stream().map(cutFileInfo -> generationType.equals(GenerationType.generate) ? CUTUtil.getOrCreateTestFile(project, cutFileInfo) : cutFileInfo).toList();
+            List<FileInfo> testFileInfos = new ArrayList<>(cutFileInfos.size());
+            for (FileInfo cutFileInfo : cutFileInfos) {
+                FileInfo testFileInfo = generationType.equals(GenerationType.generate)
+                        ? CUTUtil.getOrCreateTestFile(project, cutFileInfo)
+                        : cutFileInfo;
+                testFileInfos.add(testFileInfo);
+            }
             GenerateTestsGetFilesCache generateTestsGetFilesCache = GenerateTestsGetFilesCache.getInstance(project);
             Telemetry.allGenBegin(getCombinedClassName(testFileInfos));
 //            for(FileInfo testFileInfo: testFileInfos) { // TODO : initial build compilation check - to remove and use bottom check. if build failure in other files apart from generated, then fail
@@ -105,7 +111,7 @@ public final class TestGenerationWorker {
                     List<Message> planOutputMessages = GenerateTestsLLMService.generate(getCombinedClassName(testFileInfos),messagesRequestDTOs.stream().map(MessagesRequestDTO::getActualMessages).toList(),myConsole, attempt, indicator, null);
                     for(int i=0;i<planOutputMessages.size();i++) {
                         Message message = planOutputMessages.get(i);
-                        Message.MessageContent messageContent = MAPPER.convertValue(message.getContentAsList(), Message.MessageContent.class);
+                        Message.MessageContent messageContent = MAPPER.convertValue(message.getContentAsList().get(0), Message.MessageContent.class);
                         ConsolePrinter.info(myConsole, "Fetching test plan: \n" + messageContent.getText());
                         messagesRequestDTOs.get(i).addToBoth(getMessage(USER_ROLE, messageContent.getText(), true));
                     }

@@ -22,7 +22,6 @@
       <li><strong>Optimized AI models</strong> — dynamically picks the best AI model per class for speed and accuracy</li>
       <li><strong>Custom test root</strong> — choose where tests go (e.g., <code>src/test/java</code>)</li>
       <li><strong>Seamless JUnit integration</strong> — works out-of-the-box with your existing Java projects</li>
-      <li><strong>Free credits on signup</strong> — get started instantly with no credit card required</li>
     </ul>
 
     <p>Skip the repetitive test writing. Let JAIPilot handle the heavy lifting — so you can focus on real engineering.<br/>

@@ -1,11 +1,11 @@
-// Copyright © 2025 Suraj Rajan / JAIPilot
+// Copyright © 2026 Suraj Rajan / JAIPilot
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 // If a copy of the MPL was not distributed with this file, you can obtain one at https://mozilla.org/MPL/2.0/.
 
 package com.github.skrcode.javaautounittests.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.github.skrcode.javaautounittests.constants.GenerationType;
 import com.github.skrcode.javaautounittests.dto.Message;
 import com.github.skrcode.javaautounittests.dto.PromptResponseOutput;
@@ -14,7 +14,7 @@ import com.github.skrcode.javaautounittests.util.ConsolePrinter;
 import com.github.skrcode.javaautounittests.util.Telemetry;
 import com.intellij.execution.ui.ConsoleView;
 import com.intellij.openapi.progress.ProgressIndicator;
-import org.apache.commons.collections.CollectionUtils;
+
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -32,6 +32,7 @@ public final class GenerateTestsLLMService {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String API_HOST = "https://otxfylhjrlaesjagfhfi.supabase.co/functions/v1/";
     private static final int MAX_RETRIES = 10;
+    private static final int DEFAULT_BATCH_SIZE = 1;
     private static final String GENERATE_URL = API_HOST+"invoke-junit-llm";
     private static final String PLAN_URL = API_HOST+"invoke-junit-llm-fetch-plan";
     private static final int POLL_SLEEP_MILLIS = 2000;
@@ -42,80 +43,122 @@ public final class GenerateTestsLLMService {
 
     private GenerateTestsLLMService() {}
 
-    // guarantees all the output is correct, if not throw exception
     public static List<Message> generate(String combinedClassName, List<List<Message>> requests, ConsoleView myConsole, int attempt, ProgressIndicator indicator, GenerationType generationType) throws Exception {
-        indicator.checkCanceled();
         Telemetry.bulkStart(requests.size());
         long bulkStart = System.nanoTime();
-        List<CompletableFuture<PromptResponseOutput>> futures = requests.stream()
-                .map(request -> CompletableFuture.supplyAsync(() -> executeRequest(combinedClassName, request, myConsole, attempt, indicator, generationType), BULK_EXECUTOR))
-                .toList();
-        List<PromptResponseOutput> outputs = new ArrayList<>(requests.size());
-        int ok = 0;
+        indicator.checkCanceled();
+        List<Message> responses = new ArrayList<>(Collections.nCopies(requests.size(), null));
+        List<String> failures = new ArrayList<>();
+        List<CompletableFuture<BatchResult>> futures = new ArrayList<>();
+        for (int start = 0; start < requests.size(); start += DEFAULT_BATCH_SIZE) {
+            int from = start;
+            int to = Math.min(start + DEFAULT_BATCH_SIZE, requests.size());
+            List<List<Message>> batch = requests.subList(from, to);
+            futures.add(CompletableFuture.supplyAsync(() -> processBatch(combinedClassName, batch, from, myConsole, attempt, indicator, generationType), BULK_EXECUTOR));
+        }
         try {
-            for (CompletableFuture<PromptResponseOutput> future : futures) {
-                outputs.add(future.join());
-                ok++;
+            for (CompletableFuture<BatchResult> future : futures) {
+                BatchResult result = future.join();
+                result.responses.forEach(responses::set);
+                failures.addAll(result.failures);
             }
-            return outputs;
-        } catch (CompletionException ce) {
-            futures.forEach(future -> future.cancel(true));
-            Throwable cause = ce.getCause();
-            if (cause instanceof Exception e) throw e;
-            throw new Exception(cause);
+            if (!failures.isEmpty()) throw new Exception("Failed to generate for entities - " + String.join("; ", failures));
+            return responses;
         } finally {
-            Telemetry.bulkDone(ok, (System.nanoTime() - bulkStart) / 1_000_000);
+            Telemetry.bulkDone(requests.size() - failures.size(), (System.nanoTime() - bulkStart) / 1_000_000);
         }
     }
-    private static PromptResponseOutput executeRequest(String combinedClassName, List<Message> messages, ConsoleView myConsole, int attempt, ProgressIndicator indicator, GenerationType generationType) throws CompletionException {
+
+    private static BatchResult processBatch(String combinedClassName, List<List<Message>> batch, int startIndex, ConsoleView myConsole, int attempt, ProgressIndicator indicator, GenerationType generationType) {
+        Map<Integer, Message> batchResponses = new HashMap<>();
+        List<String> failures = new ArrayList<>();
+
+        List<Integer> payloadPositions = new ArrayList<>();
+        List<List<Message>> payload = new ArrayList<>();
+        for (int i = 0; i < batch.size(); i++) {
+            List<Message> request = batch.get(i);
+            if (request == null) {
+                batchResponses.put(startIndex + i, null);
+                continue;
+            }
+            payloadPositions.add(i);
+            payload.add(request);
+        }
+        if (payload.isEmpty()) return new BatchResult(batchResponses, failures);
+
         long start = System.nanoTime();
         Telemetry.genStarted(combinedClassName, String.valueOf(attempt));
-        int retries = 0;
-        long backoffMillis = 1000; // start with 1s
-        List<Message> safeMessages = messages == null ? Collections.emptyList() : messages;
-        while (true) {
+        long backoffMillis = 1000;
+        for (int retries = 0;; retries++) {
             try {
-                Map<String, Object> body = new LinkedHashMap<>();
-                body.put("attemptNumber", attempt);
-                body.put("messages", safeMessages);
-                String requestJson = MAPPER.writeValueAsString(body);
-                String headerValue = "Bearer " + AISettings.getInstance().getProKey();
-                indicator.checkCanceled();
-                HttpRequest createJobReq = buildInitialRequest(requestJson, headerValue, generationType);
-                HttpResponse<String> createJobResp = HTTP_CLIENT.send(createJobReq, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-                if (createJobResp.statusCode() / 100 == 4) {
-                    PromptResponseOutput promptResponseOutput = new PromptResponseOutput();
-                    promptResponseOutput.setErrorCode(createJobResp.statusCode());
-                    promptResponseOutput.setErrorBody(createJobResp.body());
-                    return promptResponseOutput;
-                }
-                if (createJobResp.statusCode() / 100 != 2) throw new Exception("Error : " + createJobResp.statusCode() + " " + createJobResp.body());
-                PromptResponseOutput result;
-                if(generationType != null) result = handleResponse(createJobResp, headerValue, indicator);
-                else {
-                    JsonNode jsonNode = MAPPER.readTree(createJobResp.body());
-                    result = MAPPER.treeToValue(jsonNode, PromptResponseOutput.class);
-                    if(result == null || result.getMessages() == null || CollectionUtils.isEmpty(result.getMessages())) throw new Exception("Error in generating plan");
-                }
+                PromptResponseOutput output = sendRequest(attempt, indicator, payload, generationType);
                 Telemetry.genCompleted(combinedClassName, String.valueOf(attempt), (System.nanoTime() - start) / 1_000_000);
-                ConsolePrinter.success(myConsole, "Received model output");
-                return result;
+                if (output == null) throw new Exception("Empty response from server");
+
+                int errorCategory = output.getErrorCode() / 100;
+                List<Message> outputMessages = output.getMessages();
+                if (errorCategory == 4) {
+                    String body = output.getErrorBody() == null ? "Client error" : output.getErrorBody();
+                    for (int pos : payloadPositions) failures.add("entity " + (startIndex + pos) + ": " + body);
+                    return new BatchResult(batchResponses, failures);
+                }
+                if (outputMessages == null || outputMessages.size() != payload.size())
+                    throw new Exception("Mismatched response count");
+
+                for (int j = 0; j < outputMessages.size(); j++) {
+                    int entityIndex = startIndex + payloadPositions.get(j);
+                    Message msg = outputMessages.get(j);
+                    if (msg == null) {
+                        failures.add("entity " + entityIndex + ": Empty response from server");
+                        batchResponses.put(entityIndex, null);
+                    } else {
+                        batchResponses.put(entityIndex, msg);
+                    }
+                }
+                return new BatchResult(batchResponses, failures);
             } catch (Throwable t) {
                 indicator.checkCanceled();
-                retries++;
-                if (retries > MAX_RETRIES) {
+                if (retries >= MAX_RETRIES) {
                     Telemetry.genFailed(combinedClassName, String.valueOf(attempt), t.getMessage());
-                    ConsolePrinter.error(myConsole,
-                            "Request failed after " + retries + " retries: " + t.getMessage());
-                    throw new CompletionException("Max retries reached: " + t.getMessage(), t);
+                    String errorMsg = "Request failed after " + retries + " retries: " + t.getMessage();
+                    ConsolePrinter.error(myConsole, errorMsg);
+                    for (int pos : payloadPositions) failures.add("entity " + (startIndex + pos) + ": " + errorMsg);
+                    return new BatchResult(batchResponses, failures);
                 }
                 long sleepMillis = backoffMillis + (long) (Math.random() * 250); // jitter
                 ConsolePrinter.warn(myConsole, "Retrying request (" + retries + "/" + MAX_RETRIES + ") after " + sleepMillis + "ms: " + t.getMessage());
-                try {Thread.sleep(sleepMillis);}
-                catch (Exception e) {throw new CompletionException(e);}
+                try {
+                    Thread.sleep(sleepMillis);
+                } catch (Exception e) {
+                    throw new CompletionException(e);
+                }
                 backoffMillis = Math.min(backoffMillis * 2, 30_000); // cap at 30s
             }
         }
+    }
+
+    private static PromptResponseOutput sendRequest(int attempt, ProgressIndicator indicator, List<List<Message>> messages, GenerationType generationType) throws Exception {
+        Map<String, Object> body = Map.of("attemptNumber", attempt, "requests", messages);
+        String requestJson = MAPPER.writeValueAsString(body);
+        String headerValue = "Bearer " + AISettings.getInstance().getProKey();
+        indicator.checkCanceled();
+
+        HttpRequest createJobReq = buildInitialRequest(requestJson, headerValue, generationType);
+        HttpResponse<String> createJobResp = HTTP_CLIENT.send(createJobReq, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        if (createJobResp.statusCode() / 100 == 4) {
+            PromptResponseOutput promptResponseOutput = new PromptResponseOutput();
+            promptResponseOutput.setErrorCode(createJobResp.statusCode());
+            promptResponseOutput.setErrorBody(createJobResp.body());
+            return promptResponseOutput;
+        }
+        if (createJobResp.statusCode() / 100 != 2) throw new Exception("Error : " + createJobResp.statusCode() + " " + createJobResp.body());
+
+        if (generationType != null) return handleResponse(createJobResp, headerValue, indicator);
+
+        JsonNode jsonNode = MAPPER.readTree(createJobResp.body());
+        PromptResponseOutput result = MAPPER.treeToValue(jsonNode, PromptResponseOutput.class);
+        if (result == null || result.getMessages() == null || result.getMessages().isEmpty()) throw new Exception("Error in generating plan");
+        return result;
     }
 
     private static HttpRequest buildInitialRequest(String requestJson, String headerValue, GenerationType generationType) {
@@ -132,10 +175,8 @@ public final class GenerateTestsLLMService {
     private static PromptResponseOutput handleResponse(HttpResponse<String> createJobResp, String headerValue, ProgressIndicator indicator) throws Exception {
         JsonNode createJobJson = MAPPER.readTree(createJobResp.body());
         String jobId = createJobJson.get("jobId").asText();
-        int pollTime = 0;
-        while (true) {
+        for (int pollTime = 0; pollTime <= MAX_POLLING_TIME_MILLIS; pollTime += POLL_SLEEP_MILLIS) {
             indicator.checkCanceled();
-            if(pollTime > MAX_POLLING_TIME_MILLIS) throw new Exception("Job timed out after " + MAX_POLLING_TIME_MILLIS + "seconds");
             HttpRequest pollReq = HttpRequest.newBuilder()
                     .uri(URI.create("https://otxfylhjrlaesjagfhfi.supabase.co/functions/v1/fetch-job?id=" + jobId))
                     .timeout(Duration.ofSeconds(30))
@@ -150,12 +191,13 @@ public final class GenerateTestsLLMService {
             if ("done".equalsIgnoreCase(status)) {
                 String output = pollJson.get("output").asText();
                 PromptResponseOutput out = MAPPER.readValue(output, PromptResponseOutput.class);
-                if(out.getMessages() == null) throw new Exception("Empty Response from server");
+                if (out.getMessages() == null || out.getMessages().isEmpty()) throw new Exception("Empty Response from server");
                 return out;
             } else if ("error".equalsIgnoreCase(status)) throw new Exception("Job failed: " + pollJson.get("output").asText());
-            pollTime += POLL_SLEEP_MILLIS;
             Thread.sleep(POLL_SLEEP_MILLIS);
         }
+        throw new Exception("Job timed out after " + MAX_POLLING_TIME_MILLIS + "seconds");
     }
 
+    private record BatchResult(Map<Integer, Message> responses, List<String> failures) {}
 }

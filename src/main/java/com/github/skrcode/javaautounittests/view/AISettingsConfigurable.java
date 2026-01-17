@@ -1,4 +1,4 @@
-// Copyright © 2025 Suraj Rajan / JAIPilot
+// Copyright © 2026 Suraj Rajan / JAIPilot
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 // If a copy of the MPL was not distributed with this file, you can obtain one at https://mozilla.org/MPL/2.0/.
 
@@ -74,7 +74,6 @@ public class AISettingsConfigurable implements Configurable {
         JLabel howToTitle = new JLabel(
                 "<html><div style='width:520px;'>"
                         + "After setup, you can right-click any Java class and instantly generate Tests with JAIPilot.<br>"
-                        + "<span style='color:#4CAF50;'><b>No credit card required.</b> Free credits included on signup.</span>"
                         + "</div></html>"
         );
         howToTitle.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -127,12 +126,13 @@ public class AISettingsConfigurable implements Configurable {
                         + "<b>Quick steps</b>"
                         + "<ol style='margin-top:4px;'>"
                         + "<li>Click <i>Open Account</i> to sign in or sign up (takes seconds)</li>"
-                        + "<li>You’ll instantly get <b>free credits</b> – no credit card required</li>"
+                        + "<li>Purchase credits</li>"
                         + "<li>Copy your <b>License Key</b> from the Account page</li>"
                         + "<li>Paste it below</li>"
                         + "</ol>"
                         + "</div></html>"
         );
+
         addFormBlock(jaipilotPanel, null, jaipilotSteps);
 
         JButton openAccountBtn = new JButton("Open Account");
@@ -161,7 +161,6 @@ public class AISettingsConfigurable implements Configurable {
         JLabel tip = new JLabel(
                 "<html><div style='width:520px; color:#888;'>"
                         + "Tip: You can always reopen <a href='" + ACCOUNT_URL + "'>https://www.jaipilot.com/account</a> to manage your key.<br>"
-                        + "Signup is free – you’ll always start with trial credits."
                         + "</div></html>"
         );
         tip.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
