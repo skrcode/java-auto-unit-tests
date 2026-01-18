@@ -13,4 +13,11 @@ public class QuotaResponse {
     public Integer quotaTotal;
     public Integer quotaRemaining;
     public String message;
+    public String error;
+
+    public QuotaResponse() {
+        this.quotaUsed = 0;
+        this.quotaRemaining = 0;
+        this.quotaTotal = 0;
+    }
 }

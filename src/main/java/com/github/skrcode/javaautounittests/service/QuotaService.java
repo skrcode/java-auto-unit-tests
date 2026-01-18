@@ -34,6 +34,7 @@ public class QuotaService {
         long backoffMillis = 1500;
         while (true) {
             try {
+                QuotaResponse out = new QuotaResponse();
                 HttpRequest req = HttpRequest.newBuilder()
                         .uri(URI.create(url))
                         .timeout(Duration.ofSeconds(20))
@@ -44,16 +45,19 @@ public class QuotaService {
                         http.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 
                 int sc = resp.statusCode();
-//                if (sc / 100 == 4) {
-//                    throw new RuntimeException("Unexpected quota fetch error: " + sc + " " + resp.body());
-//                }
+                if (sc / 100 == 4) {
+                    // Surface client-side errors immediately and skip retries.
+                    JsonNode errorBody = MAPPER.readTree(resp.body());
+                    if (errorBody != null && errorBody.get("error") != null) {
+                        out.error = errorBody.get("error").asText();
+                    }
+                    return out;
+                }
                 if (sc / 100 != 2) {
-                    throw new RuntimeException("Unexpected quota fetch error: " + sc + " " + resp.body());
+                    throw new RuntimeException("Unexpected quota fetch error");
                 }
                 // Success
                 JsonNode json = MAPPER.readTree(resp.body());
-
-                QuotaResponse out = new QuotaResponse();
                 out.quotaUsed      = json.get("quotaUsed").asInt();
                 out.quotaTotal     = json.get("quotaTotal").asInt();
                 out.quotaRemaining = json.get("quotaRemaining").asInt();
@@ -77,5 +81,6 @@ public class QuotaService {
         QuotaResponse quotaResponse = QuotaService.fetchQuota();
         if(quotaResponse.message != null)
             ConsolePrinter.warn(myConsole, quotaResponse.message);
+        if(quotaResponse.error != null) throw new RuntimeException(quotaResponse.error);
     }
 }

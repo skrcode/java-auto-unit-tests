@@ -400,7 +400,7 @@ public final class CUTUtil {
         return ReadAction.compute(() -> {
             String name = cut.getName();
             if (name == null || name.isBlank()) {
-                throw new IllegalStateException("CUT has no simple name");
+                return null;
             }
 
             String qName = cut.getQualifiedName();

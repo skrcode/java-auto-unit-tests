@@ -24,10 +24,7 @@ import com.intellij.openapi.ui.Messages;
 import com.intellij.psi.PsiClass;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 import static com.github.skrcode.javaautounittests.service.GenerateTestsLLMService.MODEL_ROLE;
 import static com.github.skrcode.javaautounittests.service.GenerateTestsLLMService.USER_ROLE;
@@ -53,7 +50,10 @@ public final class TestGenerationWorker {
         try {
             printQuotaWarning(myConsole);
             long start = System.nanoTime();
-            List<FileInfo> cutFileInfos = cuts.stream().map(CUTUtil::getCutFileInfo).toList();
+            List<FileInfo> cutFileInfos = cuts.stream()
+                    .map(CUTUtil::getCutFileInfo)
+                    .filter(Objects::nonNull)
+                    .toList();
             List<FileInfo> testFileInfos = new ArrayList<>(cutFileInfos.size());
             for (FileInfo cutFileInfo : cutFileInfos) {
                 FileInfo testFileInfo = generationType.equals(GenerationType.generate)
@@ -63,20 +63,12 @@ public final class TestGenerationWorker {
             }
             GenerateTestsGetFilesCache generateTestsGetFilesCache = GenerateTestsGetFilesCache.getInstance(project);
             Telemetry.allGenBegin(getCombinedClassName(testFileInfos));
-//            for(FileInfo testFileInfo: testFileInfos) { // TODO : initial build compilation check - to remove and use bottom check. if build failure in other files apart from generated, then fail
-//                String error = BuilderUtil.compileJUnitClass(project, testFileInfo.psiFile());
-//                if(!error.isEmpty()) {
-//                    Telemetry.allGenError(String.valueOf(attempt),"Compilation Error.");
-//                    ApplicationManager.getApplication().invokeLater(() -> Messages.showErrorDialog(project, "Error. Found compilation errors. Please fix and retry.","JAIPilot"));
-//                    return;
-//                }
-//            }
-            boolean isLLMGeneratedAtLeastOnce = false; // TODO : need to check for fix case
+            List<Boolean> isLLMGeneratedAtLeastOnceForEveryClass = new ArrayList<>(Collections.nCopies(cutFileInfos.size(), false));
             ExecutionManager.reset();
             List<MessagesRequestDTO> messagesRequestDTOs = new ArrayList<>();
             List<Set<String>> classPathFetchedFlags = new ArrayList<>();
-            List<String> cutSources = cuts.stream().map(cut -> CUTUtil.cleanedSourceForLLM(project, cut)).toList();
-            for(int i=0;i<cuts.size();i++) {
+            List<String> cutSources = cutFileInfos.stream().map(cut -> CUTUtil.cleanedSourceForLLM(project, cut.cutClass())).toList();
+            for(int i=0;i<cutFileInfos.size();i++) {
                 MessagesRequestDTO messagesRequestDTO = new MessagesRequestDTO();
                 messagesRequestDTO
                         .addMessage((getMessage(GenerateTestsLLMService.USER_ROLE, testFileInfos.get(i).simpleName())))
@@ -90,7 +82,7 @@ public final class TestGenerationWorker {
                 messagesRequestDTOs.add(messagesRequestDTO);
                 classPathFetchedFlags.add(isClassPathFetched);
             }
-            boolean shouldRebuild = true;
+            List<Boolean> shouldRebuildForEveryClass = new ArrayList<>(Collections.nCopies(cutFileInfos.size(), true));
             String newTestSource = null;
             for (; ; attempt++) {
                 ConsolePrinter.section(myConsole, "Attempting");
@@ -101,12 +93,25 @@ public final class TestGenerationWorker {
                         ConsolePrinter.warn(myConsole, "File corrupted during run. Please retry. " + testFileInfos.get(i).simpleName());
                         isFileCorrupted = true;
                     }
+                    //            for(FileInfo testFileInfo: testFileInfos) { // TODO : initial build compilation check - to remove and use bottom check. if build failure in other files apart from generated, then fail
+//                String error = BuilderUtil.compileJUnitClass(project, testFileInfo.psiFile());
+//                if(!error.isEmpty()) {
+//                    Telemetry.allGenError(String.valueOf(attempt),"Compilation Error.");
+//                    ApplicationManager.getApplication().invokeLater(() -> Messages.showErrorDialog(project, "Error. Found compilation errors. Please fix and retry.","JAIPilot"));
+//                    return;
+//                }
+//            }
                 }
                 if(isFileCorrupted) break;
                 if (attempt > MAX_ATTEMPTS) {
-                    ConsolePrinter.warn(myConsole, "Attempts breached. I have tried my best to compile and execute tests. Please fix the remaining tests manually. " + getCombinedClassName(testFileInfos));
+                    ConsolePrinter.warn(myConsole, "Maximum attempts reached. JAIPilot has made multiple attempts to generate, compile, and execute the tests but could not make further progress. Please review and fix any remaining issues manually. " + getCombinedClassName(testFileInfos));
                     break;
                 }
+                // all tests generated
+                if(buildAndRun(project, myConsole, indicator, messagesRequestDTOs, testFileInfos.stream().map(FileInfo::psiFile).toList(), getCombinedClassName(testFileInfos), shouldRebuildForEveryClass) && isLLMGeneratedAtLeastOnceForEveryClass.stream().allMatch(Boolean::booleanValue)) break;
+                shouldRebuildForEveryClass = new ArrayList<>(Collections.nCopies(cutFileInfos.size(), false));
+                ConsolePrinter.info(myConsole, "Generating tests " + getCombinedClassName(testFileInfos) +". Please wait....");
+                indicator.checkCanceled();
                 if(attempt == 1 && generationType.equals(GenerationType.generate)) {
                     List<Message> planOutputMessages = GenerateTestsLLMService.generate(getCombinedClassName(testFileInfos),messagesRequestDTOs.stream().map(MessagesRequestDTO::getActualMessages).toList(),myConsole, attempt, indicator, null);
                     for(int i=0;i<planOutputMessages.size();i++) {
@@ -116,11 +121,6 @@ public final class TestGenerationWorker {
                         messagesRequestDTOs.get(i).addToBoth(getMessage(USER_ROLE, messageContent.getText(), true));
                     }
                 }
-                // all tests generated
-                if(shouldRebuild && buildAndRun(project, myConsole, indicator, messagesRequestDTOs, testFileInfos.stream().map(FileInfo::psiFile).toList(), getCombinedClassName(testFileInfos)) && isLLMGeneratedAtLeastOnce) break;
-                shouldRebuild = false;
-                ConsolePrinter.info(myConsole, "Generating tests " + getCombinedClassName(testFileInfos) +". Please wait....");
-                indicator.checkCanceled();
                 List<Message> outputMessages = GenerateTestsLLMService.generate(getCombinedClassName(testFileInfos),messagesRequestDTOs.stream().map(MessagesRequestDTO::getActualMessages).toList(),myConsole, attempt, indicator, generationType);
                 for(MessagesRequestDTO messagesRequestDTO:messagesRequestDTOs)messagesRequestDTO.setActualMessages(messagesRequestDTO.getMessages()); // initialize
 
@@ -135,15 +135,15 @@ public final class TestGenerationWorker {
                         if (!messageContent.getType().equals("tool_use")) continue;
                         Message.MessageContent.Input args = messageContent.getInput();
                         if (messageContent.getName().equals("apply_test_class")) {
-                            isLLMGeneratedAtLeastOnce = true;
+                            isLLMGeneratedAtLeastOnceForEveryClass.set(i, true);
                             indicator.checkCanceled();
                             newTestSource = handleApplyTestClass(project, myConsole, args, generateTestsGetFilesCache, cutFileInfos.get(i).qualifiedName(), newTestSource, messagesContentsRequestDTO, testFileInfos.get(i));
-                            shouldRebuild = true;
+                            shouldRebuildForEveryClass.set(i,true);
                         }
                         if (messageContent.getName().equals("get_file"))
                             handleGetFile(project, myConsole, args, messageContent.getId(), testFileInfos.get(i).filePath(), cutFileInfos.get(i).filePath(), classPathFetchedFlags.get(i), messagesContentsRequestDTO, generateTestsGetFilesCache, cutFileInfos.get(i).qualifiedName(), messageContent.getName());
                         if (messageContent.getName().equals("terminate_call")) {
-                            ConsolePrinter.warn(myConsole, "Attempts breached. I have tried my best to compile and execute tests. Please fix the remaining tests manually. ");
+                            ConsolePrinter.warn(myConsole, "Maximum attempts reached. JAIPilot has made multiple attempts to generate, compile, and execute the tests but could not make further progress. Please review and fix any remaining issues manually. ");
                             Telemetry.allGenError(String.valueOf(attempt), "terminate call");
                         }
                     }
@@ -159,7 +159,7 @@ public final class TestGenerationWorker {
 
         } catch (Throwable t) {
             Telemetry.allGenError(String.valueOf(attempt), t.getMessage());
-            ConsolePrinter.error(myConsole, "Generation failed: " + t.getMessage());
+            ConsolePrinter.error(myConsole, "Generation failed: Please retry in a few minutes.");
             ApplicationManager.getApplication().invokeLater(() -> Messages.showErrorDialog(t.getMessage(), "Error. Please retry in a few minutes."));
         }
     }

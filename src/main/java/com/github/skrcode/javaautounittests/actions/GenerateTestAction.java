@@ -11,11 +11,16 @@ import com.github.skrcode.javaautounittests.util.Telemetry;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.LangDataKeys;
+import com.intellij.openapi.actionSystem.CommonDataKeys;
+import com.intellij.openapi.actionSystem.Presentation;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.options.ShowSettingsUtil;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
+import com.intellij.openapi.roots.ProjectFileIndex;
+import com.intellij.openapi.roots.ProjectRootManager;
+import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.*;
 import org.jetbrains.annotations.NotNull;
 
@@ -31,11 +36,59 @@ public class GenerateTestAction extends AnAction implements DumbAware {
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
         Project project = e.getProject();
-        PsiElement[] elements = e.getData(LangDataKeys.PSI_ELEMENT_ARRAY);
+        PsiElement[] elements = getElements(e);
         if (project == null || elements == null) return;
         List<PsiClass> classes = collectClasses(elements);
         String actionId = e.getActionManager().getId(this);
         runForClasses(project, classes, GenerationType.valueOf(actionId));
+    }
+
+    @Override
+    public void update(@NotNull AnActionEvent e) {
+        Project project = e.getProject();
+        Presentation presentation = e.getPresentation();
+        PsiElement[] elements = getElements(e);
+        if (project == null || elements == null) {
+            presentation.setEnabledAndVisible(false);
+            return;
+        }
+
+        List<PsiClass> classes = collectClasses(elements);
+        if (classes.isEmpty()) {
+            presentation.setEnabledAndVisible(false);
+            return;
+        }
+
+        GenerationType generationType = null;
+        String actionId = e.getActionManager().getId(this);
+        if (actionId != null) {
+            try {
+                generationType = GenerationType.valueOf(actionId);
+            } catch (IllegalArgumentException ignored) {
+            }
+        }
+        if (generationType == null) {
+            presentation.setEnabledAndVisible(false);
+            return;
+        }
+
+        ProjectFileIndex fileIndex = ProjectRootManager.getInstance(project).getFileIndex();
+        boolean allInTests = true;
+        boolean allInProduction = true;
+
+        for (PsiClass psiClass : classes) {
+            PsiFile containingFile = psiClass.getContainingFile();
+            VirtualFile virtualFile = containingFile != null ? containingFile.getVirtualFile() : null;
+            boolean isTest = virtualFile != null && fileIndex.isInTestSourceContent(virtualFile);
+            allInTests &= isTest;
+            allInProduction &= !isTest;
+        }
+
+        boolean visible = switch (generationType) {
+            case generate -> allInProduction;
+            case fix -> allInTests;
+        };
+        presentation.setEnabledAndVisible(visible);
     }
 
     private static boolean runForClasses(Project project, List<PsiClass> classes, GenerationType actionId) {
@@ -62,18 +115,6 @@ public class GenerateTestAction extends AnAction implements DumbAware {
             });
             return false;
         }
-//        if (validateLicesekey(AISettings.getInstance().getProKey())) {
-//            Telemetry.uiSettingsFailureClick("license key not valid.");
-//            Messages.showErrorDialog(project, "Invalid License Key configured", "JAIPilot");
-//            ApplicationManager.getApplication().invokeLater(() -> {
-//                ShowSettingsUtil.getInstance()
-//                        .showSettingsDialog(
-//                                project,
-//                                "JAIPilot - One-Click AI Agent for Java Unit Testing"
-//                        );
-//            });
-//            return false;
-//        }
 //        if (AIProjectSettings.getInstance(project).getTestDirectory().isEmpty()) {
 //            Telemetry.uiSettingsFailureClick("test directory not configured in settings");
 //            Messages.showErrorDialog(project, "Please configure test directory in settings.", "JAIPilot");
@@ -81,6 +122,16 @@ public class GenerateTestAction extends AnAction implements DumbAware {
 //        }
         BulkGeneratorService.enqueue(project, classes,actionId);
         return true;
+    }
+
+    private PsiElement[] getElements(@NotNull AnActionEvent e) {
+        PsiElement[] elements = e.getData(LangDataKeys.PSI_ELEMENT_ARRAY);
+        if (elements != null) return elements;
+        PsiElement psiElement = e.getData(CommonDataKeys.PSI_ELEMENT);
+        if (psiElement != null) return new PsiElement[]{psiElement};
+        PsiFile psiFile = e.getData(CommonDataKeys.PSI_FILE);
+        if (psiFile != null) return new PsiElement[]{psiFile};
+        return null;
     }
 
 

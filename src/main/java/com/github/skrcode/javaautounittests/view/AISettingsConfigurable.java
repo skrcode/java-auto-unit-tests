@@ -229,17 +229,19 @@ public class AISettingsConfigurable implements Configurable {
         new Thread(() -> {
             try {
                 QuotaResponse quota = QuotaService.fetchQuota();
-
                 SwingUtilities.invokeLater(() -> {
                     StringBuilder sb = new StringBuilder("<html>");
                     sb.append("[Credits] Request Attempts remaining: – ").append(quota.quotaRemaining);
 
-                    if (quota.message != null && !quota.message.isEmpty()) {
-                        String htmlMsg = quota.message.replaceAll(
+                    String message = null;
+                    if(quota.message != null && !quota.message.isEmpty()) message = quota.message;
+                    if(quota.error != null && !quota.error.isEmpty()) message = quota.error;
+
+                    if ((message != null && !message.isEmpty())) {
+                        String htmlMsg = message.replaceAll(
                                 "(https?://[^ ]+)",
                                 "<a href='$1'>$1</a>"
                         );
-
                         sb.append("<br>").append(htmlMsg);
                         creditsLabel.setForeground(new Color(200, 200, 200));
                     }

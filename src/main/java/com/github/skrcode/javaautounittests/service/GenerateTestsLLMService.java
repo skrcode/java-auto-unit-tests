@@ -32,7 +32,7 @@ public final class GenerateTestsLLMService {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String API_HOST = "https://otxfylhjrlaesjagfhfi.supabase.co/functions/v1/";
     private static final int MAX_RETRIES = 10;
-    private static final int DEFAULT_BATCH_SIZE = 1;
+    private static final int DEFAULT_BATCH_SIZE = 5;
     private static final String GENERATE_URL = API_HOST+"invoke-junit-llm";
     private static final String PLAN_URL = API_HOST+"invoke-junit-llm-fetch-plan";
     private static final int POLL_SLEEP_MILLIS = 2000;

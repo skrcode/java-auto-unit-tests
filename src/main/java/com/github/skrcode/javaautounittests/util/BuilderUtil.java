@@ -290,24 +290,22 @@ public class BuilderUtil {
                         ? psiJavaFile.getClasses()[0]
                         : null;
 
-                if (psiClass == null) {
-                    throw new IllegalStateException("Test file has no top-level class");
-                }
+                if (psiClass != null) {
+                    for (PsiMethod old : psiClass.getMethods()) {
+                        if (old.isConstructor()) continue;
 
-                for (PsiMethod old : psiClass.getMethods()) {
-                    if (old.isConstructor()) continue;
+                        boolean isTestAnnotated =
+                                Arrays.stream(old.getModifierList().getAnnotations())
+                                        .anyMatch(a ->
+                                                a.getQualifiedName() != null &&
+                                                        a.getQualifiedName().endsWith("Test"));
 
-                    boolean isTestAnnotated =
-                            Arrays.stream(old.getModifierList().getAnnotations())
-                                    .anyMatch(a ->
-                                            a.getQualifiedName() != null &&
-                                                    a.getQualifiedName().endsWith("Test"));
+                        boolean nameLooksLikeTest =
+                                old.getName().startsWith("test");
 
-                    boolean nameLooksLikeTest =
-                            old.getName().startsWith("test");
-
-                    if (isTestAnnotated || nameLooksLikeTest) {
-                        oldTestMethodTexts.add(old.getText());
+                        if (isTestAnnotated || nameLooksLikeTest) {
+                            oldTestMethodTexts.add(old.getText());
+                        }
                     }
                 }
 
@@ -436,39 +434,46 @@ public class BuilderUtil {
     }
 
     // return true only if all tests across all files successful
-    public static boolean buildAndRun(Project project, @NotNull ConsoleView myConsole, @NotNull ProgressIndicator indicator, List<MessagesRequestDTO> messagesRequestDTOs, List<PsiJavaFile> testFiles, String combinedTestFileName) throws Exception {
+    public static boolean buildAndRun(Project project, @NotNull ConsoleView myConsole, @NotNull ProgressIndicator indicator, List<MessagesRequestDTO> messagesRequestDTOs, List<PsiJavaFile> testFiles, String combinedTestFileName, List<Boolean> shouldRebuildForEveryClass) throws Exception {
         ConsolePrinter.info(myConsole, "Compiling Tests " + combinedTestFileName);
+        StringBuilder failedClassNamesBuilder = new StringBuilder();
         indicator.checkCanceled();
         boolean isAllSuccess = true;
         for(int i=0;i<testFiles.size();i++) {
+            if(!shouldRebuildForEveryClass.get(i)) continue;
             PsiJavaFile testFile = testFiles.get(i);
+            if(testFile.getClasses().length == 0) continue; // class not found but file present
             String errorOutput = BuilderUtil.compileJUnitClass(project, testFile);
             MessagesRequestDTO messagesRequestDTO = messagesRequestDTOs.get(i);
             if (!errorOutput.isEmpty()) {
-                ConsolePrinter.info(myConsole, "Found compilation errors " + combinedTestFileName);
+                ConsolePrinter.info(myConsole, "Found compilation errors " + testFile.getName());
+                failedClassNamesBuilder.append(testFile.getName());
                 messagesRequestDTO.addActualMessage(getMessage(USER_ROLE,errorOutput));
                 isAllSuccess = false;
             }
         }
         if(!isAllSuccess) {
-            ConsolePrinter.info(myConsole, "Found compilation errors " + combinedTestFileName);
+            ConsolePrinter.info(myConsole, "Found compilation errors " + failedClassNamesBuilder);
             return false;
         }
         ConsolePrinter.success(myConsole, "Compilation Successful " + combinedTestFileName);
         ConsolePrinter.info(myConsole, "Running Tests " + combinedTestFileName);
         indicator.checkCanceled();
         for(int i=0;i<testFiles.size();i++) {
+            if(!shouldRebuildForEveryClass.get(i)) continue;
             PsiJavaFile testFile = testFiles.get(i);
+            if(testFile.getClasses().length == 0) continue; // class not found but file present
             String errorOutput = BuilderUtil.runJUnitClass(project, testFile);
             MessagesRequestDTO messagesRequestDTO = messagesRequestDTOs.get(i);
             if(!errorOutput.isEmpty()) {
-                ConsolePrinter.info(myConsole, "Found tests execution errors " + combinedTestFileName);
+                ConsolePrinter.info(myConsole, "Found tests execution errors " + testFile.getName());
+                failedClassNamesBuilder.append(testFile.getName());
                 messagesRequestDTO.addActualMessage(getMessage(USER_ROLE,errorOutput));
                 return false;
             }
         }
         if(!isAllSuccess) {
-            ConsolePrinter.info(myConsole, "Found tests execution errors " + combinedTestFileName);
+            ConsolePrinter.info(myConsole, "Found tests execution errors " + failedClassNamesBuilder);
             return false;
         }
         ConsolePrinter.success(myConsole, "Tests execution successful " + combinedTestFileName);
