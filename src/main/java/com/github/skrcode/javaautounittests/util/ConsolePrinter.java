@@ -89,7 +89,7 @@ public class ConsolePrinter {
                 String timestamp = "[" + LocalTime.now().format(TIME_FMT) + "]";
                 String numbered = String.format("%s %3d | %s%n",
                         timestamp, i + 1, lines.get(i));
-                consoleView.print(numbered, ConsoleViewContentType.NORMAL_OUTPUT);
+//                consoleView.print(numbered, ConsoleViewContentType.NORMAL_OUTPUT);
             }
 
             if (consoleView instanceof ConsoleViewImpl impl) {

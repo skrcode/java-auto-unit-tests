@@ -147,7 +147,7 @@ public class GenerateTestAction extends AnAction implements DumbAware {
                 dir.accept(new JavaRecursiveElementVisitor() {
                     @Override public void visitClass(PsiClass aClass) {
                         classes.add(aClass);
-                        super.visitClass(aClass);
+                        // Do not descend into inner classes; only collect top‑level declarations.
                     }
                 });
             } else if (element instanceof PsiPackage pkg) {

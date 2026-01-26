@@ -6,9 +6,9 @@ package com.github.skrcode.javaautounittests.util;
 
 import com.github.skrcode.javaautounittests.dto.FileInfo;
 import com.intellij.application.options.CodeStyle;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.ide.highlighter.JavaFileType;
 import com.intellij.openapi.application.ReadAction;
-import com.intellij.openapi.application.WriteAction;
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleUtilCore;
@@ -17,6 +17,9 @@ import com.intellij.openapi.roots.*;
 import com.intellij.openapi.roots.libraries.Library;
 import com.intellij.openapi.roots.libraries.LibraryTable;
 import com.intellij.openapi.roots.libraries.LibraryTablesRegistrar;
+import com.intellij.openapi.util.Computable;
+import com.intellij.openapi.util.Ref;
+import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VfsUtil;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -35,6 +38,9 @@ import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 /**
  * Expands all star imports (normal + static) for the file that contains the
@@ -241,20 +247,30 @@ public final class CUTUtil {
                     );
         }
 
+        VirtualFile sourceRoot = projectFileIndex.getSourceRootForFile(cutFile);
+
+        // 3b. Try to reuse or create a sibling test root inferred from the CUT source root
+        List<String> candidateTestRootPaths = deriveCandidateTestRootPaths(sourceRoot, cutContentRoot);
+        VirtualFile sibling = tryReuseCandidateTestRoot(module, candidateTestRootPaths, cutContentRoot);
+        if (sibling != null) {
+            return sibling;
+        }
+        VirtualFile createdSibling = tryCreateCandidateTestRoot(module, candidateTestRootPaths, cutContentRoot);
+        if (createdSibling != null) {
+            return createdSibling;
+        }
+
         // 4. No test root exists → create src/test/java deterministically
-        return WriteAction.compute(() -> {
+        VirtualFile preferredContentRoot = pickPreferredTestContentRoot(module, cutContentRoot, cutFile);
+
+        return runWrite(module.getProject(), () -> {
             ModifiableRootModel model = rootManager.getModifiableModel();
             try {
-                // Use existing content entry if present
-                ContentEntry entry = Arrays.stream(model.getContentEntries())
-                        .filter(e -> e.getFile() != null &&
-                                e.getFile().equals(cutContentRoot))
-                        .findFirst()
-                        .orElseGet(() -> model.addContentEntry(cutContentRoot));
+                ContentEntry entry = findOrCreateContentEntry(model, preferredContentRoot);
 
                 // Canonical test root path
                 VirtualFile testRoot =
-                        VfsUtil.createDirectoryIfMissing(cutContentRoot, "src/test/java");
+                        createDirectoryIfMissingSafe(preferredContentRoot, "src/test/java");
 
                 entry.addSourceFolder(testRoot, JavaSourceRootType.TEST_SOURCE);
 
@@ -265,6 +281,238 @@ public final class CUTUtil {
                 throw new RuntimeException("Failed to create test source root", e);
             }
         });
+    }
+
+    private static ContentEntry findOrCreateContentEntry(ModifiableRootModel model, VirtualFile preferredContentRoot) {
+        return Arrays.stream(model.getContentEntries())
+                .filter(e -> e.getFile() != null && e.getFile().equals(preferredContentRoot))
+                .findFirst()
+                .orElseGet(() -> model.addContentEntry(preferredContentRoot));
+    }
+
+    private static VirtualFile ensureRegisteredTestRoot(Module module, VirtualFile testRoot) {
+        ModuleRootManager rootManager = ModuleRootManager.getInstance(module);
+        if (Arrays.asList(rootManager.getSourceRoots(JavaSourceRootType.TEST_SOURCE)).contains(testRoot)) {
+            return testRoot;
+        }
+        return runWrite(module.getProject(), () -> {
+            ModifiableRootModel model = rootManager.getModifiableModel();
+            try {
+                VirtualFile contentRoot = findContentRootFor(module, testRoot);
+                ContentEntry entry = findOrCreateContentEntry(model, contentRoot);
+                entry.addSourceFolder(testRoot, JavaSourceRootType.TEST_SOURCE);
+                model.commit();
+                return testRoot;
+            } catch (Exception e) {
+                model.dispose();
+                throw new RuntimeException("Failed to register test source root", e);
+            }
+        });
+    }
+
+    private static VirtualFile findContentRootFor(Module module, VirtualFile file) {
+        ProjectFileIndex index = ProjectRootManager.getInstance(module.getProject()).getFileIndex();
+        VirtualFile root = index.getContentRootForFile(file);
+        if (root != null) {
+            return root;
+        }
+        VirtualFile[] roots = ModuleRootManager.getInstance(module).getContentRoots();
+        if (roots.length > 0) {
+            return roots[0];
+        }
+        return file;
+    }
+
+    private static VirtualFile tryReuseCandidateTestRoot(Module module,
+                                                         List<String> candidatePaths,
+                                                         VirtualFile cutContentRoot) {
+        LocalFileSystem lfs = LocalFileSystem.getInstance();
+        for (String path : candidatePaths) {
+            if (!pathStartsWithRoot(path, cutContentRoot)) continue;
+            VirtualFile vf = lfs.findFileByPath(path);
+            if (vf != null && isAcceptableTestRoot(module, vf)) {
+                return ensureRegisteredTestRoot(module, vf);
+            }
+        }
+        return null;
+    }
+
+    private static VirtualFile tryCreateCandidateTestRoot(Module module,
+                                                          List<String> candidatePaths,
+                                                          VirtualFile cutContentRoot) {
+        for (String path : candidatePaths) {
+            if (!pathStartsWithRoot(path, cutContentRoot)) continue;
+            VirtualFile vf = runWrite(module.getProject(), () -> createDirectoryIfMissingSafe(path));
+            if (vf != null && isAcceptableTestRoot(module, vf)) {
+                return ensureRegisteredTestRoot(module, vf);
+            }
+        }
+        return null;
+    }
+
+    private static boolean pathStartsWithRoot(String path, VirtualFile root) {
+        if (root == null) return false;
+        String normRoot = root.getPath().replace('\\', '/');
+        String normPath = path.replace('\\', '/');
+        return normPath.startsWith(normRoot);
+    }
+
+    private static VirtualFile pickPreferredTestContentRoot(Module module,
+                                                            VirtualFile cutContentRoot,
+                                                            VirtualFile cutFile) {
+        ProjectFileIndex index = ProjectRootManager.getInstance(module.getProject()).getFileIndex();
+        ModuleRootManager roots = ModuleRootManager.getInstance(module);
+
+        VirtualFile moduleDir = toVirtualFile(ModuleUtilCore.getModuleDirPath(module));
+        if (isAcceptableContentRoot(module, moduleDir)) {
+            return moduleDir;
+        }
+
+        VirtualFile derivedModuleRoot = deriveRootAboveSrc(index, cutFile);
+        if (isAcceptableContentRoot(module, derivedModuleRoot)) {
+            return derivedModuleRoot;
+        }
+
+        if (isAcceptableContentRoot(module, cutContentRoot)) {
+            return cutContentRoot;
+        }
+
+        return Arrays.stream(roots.getContentRoots())
+                .filter(root -> isAcceptableContentRoot(module, root))
+                .sorted(Comparator.comparing(VirtualFile::getPath))
+                .findFirst()
+                .orElse(cutContentRoot);
+    }
+
+    private static boolean isAcceptableContentRoot(Module module, @Nullable VirtualFile root) {
+        if (root == null || !root.isValid() || isIdeaDirectory(root)) {
+            return false;
+        }
+        ProjectFileIndex index = ProjectRootManager.getInstance(module.getProject()).getFileIndex();
+        if (index.isExcluded(root)) {
+            return false;
+        }
+        // Accept if it is a registered content root, or inside project content.
+        if (Arrays.stream(ModuleRootManager.getInstance(module).getContentRoots()).anyMatch(root::equals)) {
+            return true;
+        }
+        return index.isInContent(root);
+    }
+
+    private static boolean isAcceptableTestRoot(Module module, @Nullable VirtualFile root) {
+        if (root == null || !root.isValid() || isIdeaDirectory(root)) {
+            return false;
+        }
+        ProjectFileIndex index = ProjectRootManager.getInstance(module.getProject()).getFileIndex();
+        return index.isInContent(root) && !index.isExcluded(root);
+    }
+
+    private static @Nullable VirtualFile deriveRootAboveSrc(ProjectFileIndex index, @Nullable VirtualFile cutFile) {
+        if (cutFile == null) return null;
+        VirtualFile sourceRoot = index.getSourceRootForFile(cutFile);
+        if (sourceRoot == null) return null;
+
+        VirtualFile srcDir = findAncestorNamed(sourceRoot, "src");
+        if (srcDir != null && srcDir.getParent() != null) {
+            return srcDir.getParent();
+        }
+        return null;
+    }
+
+    private static @Nullable VirtualFile findAncestorNamed(VirtualFile start, String name) {
+        VirtualFile current = start;
+        while (current != null && !name.equals(current.getName())) {
+            current = current.getParent();
+        }
+        return current;
+    }
+
+    private static boolean isIdeaDirectory(VirtualFile root) {
+        String path = root.getPath().replace('\\', '/');
+        return path.endsWith("/.idea") || path.contains("/.idea/");
+    }
+
+    private static List<String> deriveCandidateTestRootPaths(@Nullable VirtualFile sourceRoot,
+                                                             @Nullable VirtualFile contentRoot) {
+        if (sourceRoot == null || contentRoot == null) return List.of();
+        String sourcePath = sourceRoot.getPath().replace('\\', '/');
+        String contentPath = contentRoot.getPath().replace('\\', '/');
+        if (!sourcePath.startsWith(contentPath)) return List.of();
+
+        Set<String> candidates = new LinkedHashSet<>();
+
+        // Replace /src/<variant>/... with /src/test/...
+        int srcIdx = sourcePath.indexOf("/src/");
+        if (srcIdx >= 0) {
+            String afterSrc = sourcePath.substring(srcIdx + "/src/".length()); // e.g., main/java
+            int slash = afterSrc.indexOf('/');
+            if (slash >= 0) {
+                String remainder = afterSrc.substring(slash + 1); // e.g., java
+                String prefix = sourcePath.substring(0, srcIdx);   // before /src
+                candidates.add(prefix + "/src/test/" + remainder);
+            } else {
+                String prefix = sourcePath.substring(0, srcIdx);
+                candidates.add(prefix + "/src/test");
+            }
+        }
+
+        // Common fallbacks
+        if (sourcePath.contains("/src/main/java")) {
+            candidates.add(sourcePath.replace("/src/main/java", "/src/test/java"));
+        }
+        if (sourcePath.contains("/src/main/kotlin")) {
+            candidates.add(sourcePath.replace("/src/main/kotlin", "/src/test/kotlin"));
+        }
+        if (sourcePath.endsWith("/src/java")) {
+            candidates.add(sourcePath.replace("/src/java", "/src/test/java"));
+        }
+
+        return new ArrayList<>(candidates);
+    }
+
+    private static @Nullable VirtualFile toVirtualFile(@Nullable String path) {
+        if (path == null || path.isBlank()) {
+            return null;
+        }
+        return LocalFileSystem.getInstance().findFileByPath(path);
+    }
+
+    private static VirtualFile createDirectoryIfMissingSafe(String path) {
+        try {
+            return VfsUtil.createDirectoryIfMissing(path);
+        } catch (java.io.IOException e) {
+            throw new RuntimeException("Failed to create directory: " + path, e);
+        }
+    }
+
+    private static VirtualFile createDirectoryIfMissingSafe(VirtualFile parent, String relative) {
+        try {
+            return VfsUtil.createDirectoryIfMissing(parent, relative);
+        } catch (java.io.IOException e) {
+            throw new RuntimeException("Failed to create directory: " + parent.getPath() + "/" + relative, e);
+        }
+    }
+
+    private static <T> T runWrite(Project project, Computable<T> action) {
+        if (ApplicationManager.getApplication().isDispatchThread()) {
+            return ApplicationManager.getApplication().runWriteAction(action);
+        }
+        Ref<T> result = Ref.create();
+        ApplicationManager.getApplication().invokeAndWait(
+                () -> result.set(ApplicationManager.getApplication().runWriteAction(action))
+        );
+        return result.get();
+    }
+
+    private static <T> T runWriteCommand(Project project, Computable<T> action) {
+        if (ApplicationManager.getApplication().isDispatchThread()) {
+            return WriteCommandAction.runWriteCommandAction(project, action);
+        }
+        Ref<T> result = Ref.create();
+        ApplicationManager.getApplication().invokeAndWait(
+                () -> result.set(WriteCommandAction.runWriteCommandAction(project, action))
+        );
+        return result.get();
     }
 
 
@@ -379,7 +627,7 @@ public final class CUTUtil {
     private static @Nullable PsiDirectory getOrCreateSubdirectoryPath(Project project,
                                                                       PsiDirectory root,
                                                                       String relativePath) {
-        return WriteCommandAction.writeCommandAction(project).compute(() -> {
+        return runWriteCommand(project, () -> {
             PsiDirectory current = root;
             for (String part : relativePath.split("/")) {
                 PsiDirectory next = current.findSubdirectory(part);
@@ -488,7 +736,7 @@ public final class CUTUtil {
         String testClassName = cutInfo.simpleName() + "Test";
         PsiDirectory testDir = resolveTestPackageDir(project, cut);
 
-        return WriteCommandAction.writeCommandAction(project).compute(() -> {
+        return runWriteCommand(project, () -> {
             PsiFile file = testDir.findFile(testClassName + ".java");
             if (file == null) {
                 file = testDir.createFile(testClassName + ".java");

@@ -57,8 +57,7 @@ public class GetFilesCacheUtil {
                 continue;
             }
             messages.add(getMessage(USER_ROLE,cachedFilePath +"=\n"+cachedFileContent));
-            ConsolePrinter.success(myConsole, "Cached Snippet(s): " + cachedFileContent);
-            ConsolePrinter.success(myConsole, "Fetched cached file snippet(s): " + cachedFileContent);
+            ConsolePrinter.success(myConsole, "Fetched cached file snippet(s): " + cachedFilePath);
         }
         return messages;
     }

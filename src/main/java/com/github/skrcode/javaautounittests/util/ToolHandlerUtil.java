@@ -54,7 +54,6 @@ public class ToolHandlerUtil {
             ConsolePrinter.info(myConsole, "Duplicate File, No matches or file not found: " + filePath);
             toolResult = filePath + " duplicate, not found or no matches found.";
         } else {
-            ConsolePrinter.success(myConsole, "Snippet(s): " + toolResult);
             ConsolePrinter.success(myConsole, "Fetched file snippet(s): " + filePath);
         }
         messagesContentsRequestDTO.addToBothUser(getMessageToolResultContent(toolUseId, toolResult, false));

@@ -5,7 +5,6 @@
 package com.github.skrcode.javaautounittests.util;
 
 import com.github.javaparser.JavaParser;
-import com.github.skrcode.javaautounittests.dto.MessagesRequestDTO;
 import com.intellij.codeInsight.actions.ReformatCodeProcessor;
 import com.intellij.compiler.CompilerMessageImpl;
 import com.intellij.execution.ExecutionException;
@@ -31,7 +30,6 @@ import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleUtil;
-import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Key;
 import com.intellij.openapi.util.TextRange;
@@ -40,7 +38,6 @@ import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.psi.*;
 import com.intellij.psi.codeStyle.CodeStyleManager;
-import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
@@ -48,9 +45,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static com.github.skrcode.javaautounittests.service.GenerateTestsLLMService.USER_ROLE;
 import static com.github.skrcode.javaautounittests.util.CUTUtil.expandAll;
-import static com.github.skrcode.javaautounittests.util.LLMMessageContentUtil.getMessage;
 
 /**
  * Compiles a JUnit test class, runs it with coverage, and returns:
@@ -162,7 +157,7 @@ public class BuilderUtil {
         });
 
         try {
-            if (!latch.await(200, TimeUnit.SECONDS)) {
+            if (!latch.await(1000, TimeUnit.SECONDS)) {
                 throw new Exception("Test Execution Timeout. Cannot run tests. Please fix IDE issues and retry.");
             }
         } catch (InterruptedException e) {
@@ -216,7 +211,7 @@ public class BuilderUtil {
             });
 
             try {
-                if (!latch.await(200, TimeUnit.SECONDS)) {
+                if (!latch.await(1000, TimeUnit.SECONDS)) {
                     result.append("COMPILATION_TIMEOUT");
                 }
             } catch (InterruptedException e) {
@@ -432,53 +427,5 @@ public class BuilderUtil {
 
         return finalSourceRef.get();
     }
-
-    // return true only if all tests across all files successful
-    public static boolean buildAndRun(Project project, @NotNull ConsoleView myConsole, @NotNull ProgressIndicator indicator, List<MessagesRequestDTO> messagesRequestDTOs, List<PsiJavaFile> testFiles, String combinedTestFileName, List<Boolean> shouldRebuildForEveryClass) throws Exception {
-        ConsolePrinter.info(myConsole, "Compiling Tests " + combinedTestFileName);
-        StringBuilder failedClassNamesBuilder = new StringBuilder();
-        indicator.checkCanceled();
-        boolean isAllSuccess = true;
-        for(int i=0;i<testFiles.size();i++) {
-            if(!shouldRebuildForEveryClass.get(i)) continue;
-            PsiJavaFile testFile = testFiles.get(i);
-            if(testFile.getClasses().length == 0) continue; // class not found but file present
-            String errorOutput = BuilderUtil.compileJUnitClass(project, testFile);
-            MessagesRequestDTO messagesRequestDTO = messagesRequestDTOs.get(i);
-            if (!errorOutput.isEmpty()) {
-                ConsolePrinter.info(myConsole, "Found compilation errors " + testFile.getName());
-                failedClassNamesBuilder.append(testFile.getName());
-                messagesRequestDTO.addActualMessage(getMessage(USER_ROLE,errorOutput));
-                isAllSuccess = false;
-            }
-        }
-        if(!isAllSuccess) {
-            ConsolePrinter.info(myConsole, "Found compilation errors " + failedClassNamesBuilder);
-            return false;
-        }
-        ConsolePrinter.success(myConsole, "Compilation Successful " + combinedTestFileName);
-        ConsolePrinter.info(myConsole, "Running Tests " + combinedTestFileName);
-        indicator.checkCanceled();
-        for(int i=0;i<testFiles.size();i++) {
-            if(!shouldRebuildForEveryClass.get(i)) continue;
-            PsiJavaFile testFile = testFiles.get(i);
-            if(testFile.getClasses().length == 0) continue; // class not found but file present
-            String errorOutput = BuilderUtil.runJUnitClass(project, testFile);
-            MessagesRequestDTO messagesRequestDTO = messagesRequestDTOs.get(i);
-            if(!errorOutput.isEmpty()) {
-                ConsolePrinter.info(myConsole, "Found tests execution errors " + testFile.getName());
-                failedClassNamesBuilder.append(testFile.getName());
-                messagesRequestDTO.addActualMessage(getMessage(USER_ROLE,errorOutput));
-                return false;
-            }
-        }
-        if(!isAllSuccess) {
-            ConsolePrinter.info(myConsole, "Found tests execution errors " + failedClassNamesBuilder);
-            return false;
-        }
-        ConsolePrinter.success(myConsole, "Tests execution successful " + combinedTestFileName);
-        return isAllSuccess;
-    }
-
     private static String joinLines(List<String> list) { if (list == null || list.isEmpty()) return ""; return String.join("\n", list); }
 }
