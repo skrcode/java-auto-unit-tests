@@ -5,47 +5,24 @@
  */
 package com.github.skrcode.javaautounittests.dto;
 
+import com.github.skrcode.javaautounittests.constants.GenerationType;
+import com.github.skrcode.javaautounittests.constants.TransitionStateClass;
+
 public class ClassGenerationMetadataStateDTO {
-    private boolean shouldRebuild;
-    private boolean isLLMGeneratedAtleastOnce;
-    private boolean isPlanGenerated;
+    private TransitionStateClass currentState;
     private String newTestSource;
-    private boolean readyToGeneratePlan;
-    private boolean buildAndRunSuccess;
-    private boolean buildSuccess;
 
     public ClassGenerationMetadataStateDTO() {
-        this.shouldRebuild = true;
-        this.isLLMGeneratedAtleastOnce = false;
-        this.isPlanGenerated = false;
+        this.currentState = null;
         this.newTestSource = null;
-        this.readyToGeneratePlan = false;
-        this.buildAndRunSuccess = false;
-        this.buildSuccess = false;
     }
 
-    public boolean isShouldRebuild() {
-        return shouldRebuild;
+    public TransitionStateClass getCurrentState() {
+        return currentState;
     }
 
-    public void setShouldRebuild(boolean shouldRebuild) {
-        this.shouldRebuild = shouldRebuild;
-    }
-
-    public boolean isLLMGeneratedAtleastOnce() {
-        return isLLMGeneratedAtleastOnce;
-    }
-
-    public void setLLMGeneratedAtleastOnce(boolean LLMGeneratedAtleastOnce) {
-        isLLMGeneratedAtleastOnce = LLMGeneratedAtleastOnce;
-    }
-
-    public boolean isPlanGenerated() {
-        return isPlanGenerated;
-    }
-
-    public void setPlanGenerated(boolean planGenerated) {
-        isPlanGenerated = planGenerated;
+    public void setCurrentState(TransitionStateClass currentState) {
+        this.currentState = currentState;
     }
 
     public String getNewTestSource() {
@@ -56,27 +33,42 @@ public class ClassGenerationMetadataStateDTO {
         this.newTestSource = newTestSource;
     }
 
-    public boolean isReadyToGeneratePlan() {
-        return readyToGeneratePlan;
+    public boolean shouldGenerateTool(GenerationType generationType) {
+        return currentState.equals(TransitionStateClass.BUILD_FAILURE) ||
+               currentState.equals(TransitionStateClass.EXECUTION_FAILURE) ||
+               currentState.equals(TransitionStateClass.INITIAL_BUILD_FAILURE) ||
+               currentState.equals(TransitionStateClass.INITIAL_EXECUTION_FAILURE) ||
+               (currentState.equals(TransitionStateClass.INITIAL_EXECUTION_SUCCESS) && generationType.equals(GenerationType.generate));
     }
 
-    public void setReadyToGeneratePlan(boolean readyToGeneratePlan) {
-        this.readyToGeneratePlan = readyToGeneratePlan;
+    public boolean isBuildFailure() {
+        return currentState.equals(TransitionStateClass.BUILD_FAILURE) ||
+                currentState.equals(TransitionStateClass.INITIAL_BUILD_FAILURE);
     }
 
-    public boolean isBuildAndRunSuccess() {
-        return buildAndRunSuccess;
+    public boolean shouldRebuild() {
+        return currentState.equals(TransitionStateClass.APPLY_DONE);
     }
 
-    public void setBuildAndRunSuccess(boolean buildAndRunSuccess) {
-        this.buildAndRunSuccess = buildAndRunSuccess;
+    public boolean isExecutionFailure() {
+        return currentState.equals(TransitionStateClass.EXECUTION_FAILURE) ||
+                currentState.equals(TransitionStateClass.INITIAL_EXECUTION_FAILURE);
     }
 
-    public boolean isBuildSuccess() {
-        return buildSuccess;
-    }
+    public boolean shouldExecute() {
+        return currentState.equals(TransitionStateClass.BUILD_SUCCESS) ||
+                currentState.equals(TransitionStateClass.INITIAL_BUILD_SUCCESS);
 
-    public void setBuildSuccess(boolean buildSuccess) {
-        this.buildSuccess = buildSuccess;
     }
 }
+
+
+//INITIAL_BUILD_SUCCESS, - yes
+//INITIAL_BUILD_FAILURE, - no
+//INITIAL_EXECUTION_SUCCESS, - no
+//INITIAL_EXECUTION_FAILURE, - yes
+//APPLY_DONE, - no
+//BUILD_SUCCESS, - yes
+//BUILD_FAILURE, - no
+//EXECUTION_SUCCESS, - no
+//EXECUTION_FAILURE - yes
