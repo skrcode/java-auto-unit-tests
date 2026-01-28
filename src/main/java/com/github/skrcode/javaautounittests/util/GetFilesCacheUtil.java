@@ -9,6 +9,8 @@ import com.github.skrcode.javaautounittests.dto.CacheDTO;
 import com.github.skrcode.javaautounittests.dto.Message;
 import com.github.skrcode.javaautounittests.state.GenerateTestsGetFilesCache;
 import com.intellij.execution.ui.ConsoleView;
+import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.project.Project;
 import org.apache.commons.lang3.StringUtils;
 
@@ -65,6 +67,9 @@ public class GetFilesCacheUtil {
     public static String getFileContentFromCache(Project project, String cachedFilePath,  String testFilePath, String cutFilePath, Set<String> isClassPathFetched) {
         if(isClassPathFetched.contains(cachedFilePath) || cachedFilePath.contains(testFilePath) || cachedFilePath.contains(cutFilePath)) return null;
         isClassPathFetched.add(cachedFilePath);
-        return stripCommentsAndMethodBodies(project, cachedFilePath);
+        if (ApplicationManager.getApplication().isReadAccessAllowed()) {
+            return stripCommentsAndMethodBodies(project, cachedFilePath);
+        }
+        return ReadAction.compute(() -> stripCommentsAndMethodBodies(project, cachedFilePath));
     }
 }

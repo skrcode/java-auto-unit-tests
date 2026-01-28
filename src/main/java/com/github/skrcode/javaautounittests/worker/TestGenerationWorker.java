@@ -19,6 +19,7 @@ import com.github.skrcode.javaautounittests.util.Telemetry;
 import com.intellij.execution.ui.ConsoleView;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.application.WriteAction;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
@@ -110,7 +111,7 @@ public final class TestGenerationWorker {
             allState = TransitionStateClassAll.INITIAL_ALL_BUILD_SUCCESS;
             for(int i=0;i<testFileInfos.size();i++) {
                 PsiJavaFile testFile = testFileInfos.get(i).psiFile();
-                if(safeClasses(testFile).length == 0) {
+                if (ReadAction.compute(testFile::isValid) && safeClasses(testFile).length == 0) {
                     state.get(i).setCurrentState(TransitionStateClass.INITIAL_BUILD_FAILURE);
                     allState = TransitionStateClassAll.INITIAL_ALL_BUILD_FAILURE;
                     continue; // class not found but file present
@@ -133,7 +134,7 @@ public final class TestGenerationWorker {
                 allState = TransitionStateClassAll.INITIAL_ALL_EXECUTION_SUCCESS;
                 for (int i = 0; i < testFileInfos.size(); i++) {
                     PsiJavaFile testFile = testFileInfos.get(i).psiFile();
-                    if (safeClasses(testFile).length == 0) {
+                    if (!ReadAction.compute(testFile::isValid) || safeClasses(testFile).length == 0) {
                         state.get(i).setCurrentState(TransitionStateClass.INITIAL_EXECUTION_FAILURE);
                         allState = TransitionStateClassAll.INITIAL_ALL_EXECUTION_FAILURE;
                         continue; // class not found but file present

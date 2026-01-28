@@ -181,20 +181,18 @@ public final class CUTUtil {
             PsiJavaFile file = (PsiJavaFile) cut.getContainingFile();
             return file != null ? file : null;
         });
-        if(original == null)
+        if (original == null) {
             return "<no file>";
+        }
 
-        // 1️⃣  Create a NON-PHYSICAL copy (no VirtualFile, never saved)
-        PsiJavaFile scratch  = (PsiJavaFile) original.copy();
+        PsiJavaFile scratch = ReadAction.compute(() -> (PsiJavaFile) original.copy());
 
-        // 2️⃣  Expand star imports on the scratch only
         runWriteCommand(project, () -> {
             expandAll(project, scratch);          // ← your expander from earlier
             return null;
         });
 
-        // 3️⃣  Harvest the source and return; the scratch is GC-eligible
-        return scratch.getText();
+        return ReadAction.compute(scratch::getText);
     }
 
     public static PsiDirectory resolveTestPackageDir(Project project, PsiClass cut) {
@@ -230,20 +228,19 @@ public final class CUTUtil {
 
         ModuleRootManager rootManager = ModuleRootManager.getInstance(module);
 
-        // 1. Find CUT content root (authoritative anchor)
         ProjectFileIndex projectFileIndex =
                 ProjectRootManager.getInstance(module.getProject()).getFileIndex();
 
-        VirtualFile cutContentRoot =
-                projectFileIndex.getContentRootForFile(cutFile);
+        VirtualFile cutContentRoot = ReadAction.compute(() ->
+                projectFileIndex.getContentRootForFile(cutFile));
 
         if (cutContentRoot == null) {
             throw new IllegalStateException("No content root found for CUT");
         }
 
         // 2. Get existing test source roots
-        List<VirtualFile> testRoots =
-                rootManager.getSourceRoots(JavaSourceRootType.TEST_SOURCE);
+        List<VirtualFile> testRoots = ReadAction.compute(() ->
+                rootManager.getSourceRoots(JavaSourceRootType.TEST_SOURCE));
 
         // 3. If test roots exist, choose deterministically
         if (!testRoots.isEmpty()) {
@@ -262,7 +259,7 @@ public final class CUTUtil {
                     );
         }
 
-        VirtualFile sourceRoot = projectFileIndex.getSourceRootForFile(cutFile);
+        VirtualFile sourceRoot = ReadAction.compute(() -> projectFileIndex.getSourceRootForFile(cutFile));
 
         // 3b. Try to reuse or create a sibling test root inferred from the CUT source root
         List<String> candidateTestRootPaths = deriveCandidateTestRootPaths(sourceRoot, cutContentRoot);
@@ -424,7 +421,7 @@ public final class CUTUtil {
 
     private static @Nullable VirtualFile deriveRootAboveSrc(ProjectFileIndex index, @Nullable VirtualFile cutFile) {
         if (cutFile == null) return null;
-        VirtualFile sourceRoot = index.getSourceRootForFile(cutFile);
+        VirtualFile sourceRoot = ReadAction.compute(() -> index.getSourceRootForFile(cutFile));
         if (sourceRoot == null) return null;
 
         VirtualFile srcDir = findAncestorNamed(sourceRoot, "src");
@@ -571,6 +568,10 @@ public final class CUTUtil {
     private static String getSourceCodeOfContextClasses(Project project, String relativePathOrFqcn) {
         if (relativePathOrFqcn == null || relativePathOrFqcn.isBlank()) {
             return "";
+        }
+
+        if (!ApplicationManager.getApplication().isReadAccessAllowed()) {
+            return ReadAction.compute(() -> getSourceCodeOfContextClasses(project, relativePathOrFqcn));
         }
 
         String normPath = relativePathOrFqcn.replace("\\", "/");
