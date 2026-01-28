@@ -8,13 +8,16 @@ import com.github.skrcode.javaautounittests.constants.GenerationType;
 import com.github.skrcode.javaautounittests.service.BulkGeneratorService;
 import com.github.skrcode.javaautounittests.state.AISettings;
 import com.github.skrcode.javaautounittests.util.Telemetry;
+import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.LangDataKeys;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.actionSystem.Presentation;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.options.ShowSettingsUtil;
+import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
@@ -34,43 +37,50 @@ import java.util.List;
 public class GenerateTestAction extends AnAction implements DumbAware {
 
     @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+        return ActionUpdateThread.BGT;
+    }
+
+    @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
         Project project = e.getProject();
         PsiElement[] elements = getElements(e);
         if (project == null || elements == null) return;
         List<PsiClass> classes = collectClasses(elements);
-        String actionId = e.getActionManager().getId(this);
-        runForClasses(project, classes, GenerationType.valueOf(actionId));
+        GenerationType generationType = getGenerationType(e);
+        if (generationType == null) return;
+        runForClasses(project, classes, generationType);
     }
 
     @Override
     public void update(@NotNull AnActionEvent e) {
         Project project = e.getProject();
         Presentation presentation = e.getPresentation();
-        PsiElement[] elements = getElements(e);
-        if (project == null || elements == null) {
+        if (project == null) {
             presentation.setEnabledAndVisible(false);
             return;
         }
+
+        boolean visible;
+        try {
+            visible = ReadAction.compute(() -> computeVisibility(e, project));
+        } catch (ProcessCanceledException ignored) {
+            visible = false;
+        }
+        presentation.setEnabledAndVisible(visible);
+    }
+
+    private boolean computeVisibility(@NotNull AnActionEvent e, @NotNull Project project) {
+        if (project.isDisposed()) return false;
+
+        PsiElement[] elements = getElements(e);
+        if (elements == null) return false;
 
         List<PsiClass> classes = collectClasses(elements);
-        if (classes.isEmpty()) {
-            presentation.setEnabledAndVisible(false);
-            return;
-        }
+        if (classes.isEmpty()) return false;
 
-        GenerationType generationType = null;
-        String actionId = e.getActionManager().getId(this);
-        if (actionId != null) {
-            try {
-                generationType = GenerationType.valueOf(actionId);
-            } catch (IllegalArgumentException ignored) {
-            }
-        }
-        if (generationType == null) {
-            presentation.setEnabledAndVisible(false);
-            return;
-        }
+        GenerationType generationType = getGenerationType(e);
+        if (generationType == null) return false;
 
         ProjectFileIndex fileIndex = ProjectRootManager.getInstance(project).getFileIndex();
         boolean allInTests = true;
@@ -79,19 +89,29 @@ public class GenerateTestAction extends AnAction implements DumbAware {
         for (PsiClass psiClass : classes) {
             PsiFile containingFile = psiClass.getContainingFile();
             VirtualFile virtualFile = containingFile != null ? containingFile.getVirtualFile() : null;
-            boolean isTest = virtualFile != null && fileIndex.isInTestSourceContent(virtualFile);
+            if (virtualFile == null) return false;
+            boolean isTest = fileIndex.isInTestSourceContent(virtualFile);
             allInTests &= isTest;
             allInProduction &= !isTest;
         }
 
-        boolean visible = switch (generationType) {
+        return switch (generationType) {
             case generate -> allInProduction;
             case fix -> allInTests;
         };
-        presentation.setEnabledAndVisible(visible);
     }
 
-    private static boolean runForClasses(Project project, List<PsiClass> classes, GenerationType actionId) {
+    private GenerationType getGenerationType(@NotNull AnActionEvent e) {
+        String actionId = e.getActionManager().getId(this);
+        if (actionId == null) return null;
+        try {
+            return GenerationType.valueOf(actionId);
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
+    }
+
+    private static boolean runForClasses(Project project, List<PsiClass> classes, GenerationType generationType) {
         if (project == null) return false;
         if (classes == null || classes.isEmpty()) {
             Telemetry.uiSettingsFailureClick("classes empty");
@@ -120,7 +140,7 @@ public class GenerateTestAction extends AnAction implements DumbAware {
 //            Messages.showErrorDialog(project, "Please configure test directory in settings.", "JAIPilot");
 //            return false;
 //        }
-        BulkGeneratorService.enqueue(project, classes,actionId);
+        BulkGeneratorService.enqueue(project, classes, generationType);
         return true;
     }
 
