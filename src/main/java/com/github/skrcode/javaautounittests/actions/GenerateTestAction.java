@@ -44,9 +44,12 @@ public class GenerateTestAction extends AnAction implements DumbAware {
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
         Project project = e.getProject();
-        PsiElement[] elements = getElements(e);
-        if (project == null || elements == null) return;
-        List<PsiClass> classes = collectClasses(elements);
+        if (project == null) return;
+
+        PsiElement[] elements = ReadAction.compute(() -> getElements(e, project));
+        if (elements == null) return;
+
+        List<PsiClass> classes = ReadAction.compute(() -> collectClasses(elements));
         GenerationType generationType = getGenerationType(e);
         if (generationType == null) return;
         runForClasses(project, classes, generationType);
@@ -73,7 +76,7 @@ public class GenerateTestAction extends AnAction implements DumbAware {
     private boolean computeVisibility(@NotNull AnActionEvent e, @NotNull Project project) {
         if (project.isDisposed()) return false;
 
-        PsiElement[] elements = getElements(e);
+        PsiElement[] elements = getElements(e, project);
         if (elements == null) return false;
 
         List<PsiClass> classes = collectClasses(elements);
@@ -144,13 +147,29 @@ public class GenerateTestAction extends AnAction implements DumbAware {
         return true;
     }
 
-    private PsiElement[] getElements(@NotNull AnActionEvent e) {
+    private PsiElement[] getElements(@NotNull AnActionEvent e, @NotNull Project project) {
         PsiElement[] elements = e.getData(LangDataKeys.PSI_ELEMENT_ARRAY);
         if (elements != null) return elements;
         PsiElement psiElement = e.getData(CommonDataKeys.PSI_ELEMENT);
         if (psiElement != null) return new PsiElement[]{psiElement};
         PsiFile psiFile = e.getData(CommonDataKeys.PSI_FILE);
         if (psiFile != null) return new PsiElement[]{psiFile};
+
+        VirtualFile[] virtualFiles = e.getData(CommonDataKeys.VIRTUAL_FILE_ARRAY);
+        if (virtualFiles != null && virtualFiles.length > 0) {
+            PsiManager psiManager = PsiManager.getInstance(project);
+            List<PsiElement> collected = new ArrayList<>(virtualFiles.length);
+            for (VirtualFile vf : virtualFiles) {
+                if (vf.isDirectory()) {
+                    PsiDirectory psiDirectory = psiManager.findDirectory(vf);
+                    if (psiDirectory != null) collected.add(psiDirectory);
+                } else {
+                    PsiFile vfPsiFile = psiManager.findFile(vf);
+                    if (vfPsiFile != null) collected.add(vfPsiFile);
+                }
+            }
+            if (!collected.isEmpty()) return collected.toArray(PsiElement[]::new);
+        }
         return null;
     }
 
