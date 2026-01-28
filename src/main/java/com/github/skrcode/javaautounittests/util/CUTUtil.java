@@ -221,8 +221,8 @@ public final class CUTUtil {
             throw new IllegalStateException("Cannot resolve module for CUT");
         }
         VirtualFile testRoot = resolveOrCreateTestRoot(module, cutFile);
-        PsiDirectory testRootDir = PsiManager.getInstance(project).findDirectory(testRoot);
-        String relPath = getTestRelativePath(cut);
+        PsiDirectory testRootDir = ReadAction.compute(() -> PsiManager.getInstance(project).findDirectory(testRoot));
+        String relPath = ReadAction.compute(() -> getTestRelativePath(cut));
         return getOrCreateSubdirectoryPath(project, testRootDir, relPath);
     }
 
