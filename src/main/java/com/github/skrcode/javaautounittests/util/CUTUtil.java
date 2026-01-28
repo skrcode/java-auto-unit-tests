@@ -4,9 +4,14 @@
 
 package com.github.skrcode.javaautounittests.util;
 
+import com.github.javaparser.*;
+import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.InitializerDeclaration;
+import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.comments.Comment;
+import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.skrcode.javaautounittests.dto.FileInfo;
 import com.intellij.application.options.CodeStyle;
-import com.intellij.ide.highlighter.JavaFileType;
 import com.intellij.openapi.application.Application;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
@@ -29,13 +34,11 @@ import com.intellij.psi.codeStyle.JavaCodeStyleManager;
 import com.intellij.psi.codeStyle.JavaCodeStyleSettings;
 import com.intellij.psi.codeStyle.PackageEntryTable;
 import com.intellij.psi.search.GlobalSearchScope;
-import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.testIntegration.TestFinderHelper;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.jps.model.java.JavaSourceRootType;
 
 import java.lang.reflect.Field;
-import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -606,41 +609,23 @@ public final class CUTUtil {
 
         AtomicReference<String> result = new AtomicReference<>("");
 
-        ApplicationManager.getApplication().runWriteAction(() -> {
-            String sourceText = getSourceCodeOfContextClasses(project, relativePathOrFqcn);
-            if (sourceText.isBlank()) {
-                result.set("");
-                return;
-            }
+        String sourceText = getSourceCodeOfContextClasses(project, relativePathOrFqcn);
+        if (sourceText.isBlank()) {
+            return "";
+        }
 
-            PsiJavaFile psiFile = (PsiJavaFile) PsiFileFactory.getInstance(project)
-                    .createFileFromText(
-                            Paths.get(relativePathOrFqcn).getFileName().toString(), // fallback name
-                            JavaFileType.INSTANCE,
-                            sourceText
-                    );
+        JavaParser parser = new JavaParser(new ParserConfiguration().setAttributeComments(false));
+        ParseResult<CompilationUnit> parsed = parser.parse(ParseStart.COMPILATION_UNIT, Providers.provider(sourceText));
+        if (!parsed.getResult().isPresent()) {
+            return "";
+        }
 
-            for (PsiComment comment : PsiTreeUtil.findChildrenOfType(psiFile, PsiComment.class)) {
-                comment.delete();
-            }
+        CompilationUnit cu = parsed.getResult().get();
+        cu.getAllContainedComments().forEach(Comment::remove);
+        cu.findAll(MethodDeclaration.class).forEach(m -> m.setBody(new BlockStmt()));
+        cu.findAll(InitializerDeclaration.class).forEach(init -> init.setBody(new BlockStmt()));
 
-            PsiElementFactory factory = JavaPsiFacade.getInstance(project).getElementFactory();
-            for (PsiMethod method : PsiTreeUtil.findChildrenOfType(psiFile, PsiMethod.class)) {
-                PsiCodeBlock body = method.getBody();
-                if (body != null) {
-                    body.replace(factory.createCodeBlock());
-                }
-            }
-
-            for (PsiClassInitializer initializer : PsiTreeUtil.findChildrenOfType(psiFile, PsiClassInitializer.class)) {
-                PsiCodeBlock body = initializer.getBody();
-                if (body != null) {
-                    body.replace(factory.createCodeBlock());
-                }
-            }
-
-            result.set(psiFile.getText());
-        });
+        result.set(cu.toString());
 
         return result.get();
     }
