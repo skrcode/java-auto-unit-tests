@@ -194,10 +194,19 @@ public final class TestGenerationWorker {
                         Message message = outputMessages.get(i);
                         MessagesContentsRequestDTO messagesContentsRequestDTO = new MessagesContentsRequestDTO();
                         if (message == null) continue; // skipped message
-                        for (Object messageContentObject : message.getContentAsList()) {
+                        Message.MessageContent thinkingMessageContent = null;
+                        for (Object messageContentObject : message.getContentAsList()) { // to initialize thinking block for only get_file
                             Message.MessageContent messageContent = MAPPER.convertValue(messageContentObject, Message.MessageContent.class);
                             if (messageContent.getType().equals("thinking") || messageContent.getType().equals("redacted_thinking"))
-                                messagesContentsRequestDTO.addToBothModel(messageContent);
+                                thinkingMessageContent = messageContent;
+                            if (!messageContent.getType().equals("tool_use")) continue;
+                            if (messageContent.getName().equals("get_file")) {
+                                messagesContentsRequestDTO.addToBothModel(thinkingMessageContent);
+                                break;
+                            }
+                        }
+                        for (Object messageContentObject : message.getContentAsList()) {
+                            Message.MessageContent messageContent = MAPPER.convertValue(messageContentObject, Message.MessageContent.class);
                             if (!messageContent.getType().equals("tool_use")) continue;
                             Message.MessageContent.Input args = messageContent.getInput();
                             if (messageContent.getName().equals("apply_test_class")) {
