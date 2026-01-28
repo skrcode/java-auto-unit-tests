@@ -9,6 +9,7 @@ import com.intellij.application.options.CodeStyle;
 import com.intellij.ide.highlighter.JavaFileType;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.application.WriteAction;
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleUtilCore;
@@ -601,7 +602,7 @@ public final class CUTUtil {
     public static String stripCommentsAndMethodBodies(Project project, String relativePathOrFqcn) {
         if (relativePathOrFqcn == null || relativePathOrFqcn.isBlank()) return "";
 
-        return ApplicationManager.getApplication().runWriteAction((Computable<String>) () -> {
+        return ReadAction.compute(() -> {
             String sourceText = getSourceCodeOfContextClasses(project, relativePathOrFqcn);
             if (sourceText.isBlank()) return "";
 
@@ -612,24 +613,26 @@ public final class CUTUtil {
                             sourceText
                     );
 
-            for (PsiComment comment : PsiTreeUtil.findChildrenOfType(psiFile, PsiComment.class)) {
-                comment.delete();
-            }
-
-            PsiElementFactory factory = JavaPsiFacade.getInstance(project).getElementFactory();
-            for (PsiMethod method : PsiTreeUtil.findChildrenOfType(psiFile, PsiMethod.class)) {
-                PsiCodeBlock body = method.getBody();
-                if (body != null) {
-                    body.replace(factory.createCodeBlock());
+            WriteAction.run(() -> {
+                for (PsiComment comment : PsiTreeUtil.findChildrenOfType(psiFile, PsiComment.class)) {
+                    comment.delete();
                 }
-            }
 
-            for (PsiClassInitializer initializer : PsiTreeUtil.findChildrenOfType(psiFile, PsiClassInitializer.class)) {
-                PsiCodeBlock body = initializer.getBody();
-                if (body != null) {
-                    body.replace(factory.createCodeBlock());
+                PsiElementFactory factory = JavaPsiFacade.getInstance(project).getElementFactory();
+                for (PsiMethod method : PsiTreeUtil.findChildrenOfType(psiFile, PsiMethod.class)) {
+                    PsiCodeBlock body = method.getBody();
+                    if (body != null) {
+                        body.replace(factory.createCodeBlock());
+                    }
                 }
-            }
+
+                for (PsiClassInitializer initializer : PsiTreeUtil.findChildrenOfType(psiFile, PsiClassInitializer.class)) {
+                    PsiCodeBlock body = initializer.getBody();
+                    if (body != null) {
+                        body.replace(factory.createCodeBlock());
+                    }
+                }
+            });
 
             return psiFile.getText();
         });
