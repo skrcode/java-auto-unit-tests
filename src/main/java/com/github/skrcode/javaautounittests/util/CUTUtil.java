@@ -7,8 +7,10 @@ package com.github.skrcode.javaautounittests.util;
 import com.github.skrcode.javaautounittests.dto.FileInfo;
 import com.intellij.application.options.CodeStyle;
 import com.intellij.ide.highlighter.JavaFileType;
+import com.intellij.openapi.application.Application;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.application.WriteAction;
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleUtilCore;
@@ -18,7 +20,6 @@ import com.intellij.openapi.roots.libraries.Library;
 import com.intellij.openapi.roots.libraries.LibraryTable;
 import com.intellij.openapi.roots.libraries.LibraryTablesRegistrar;
 import com.intellij.openapi.util.Computable;
-import com.intellij.openapi.util.Ref;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VfsUtil;
 import com.intellij.openapi.vfs.VfsUtilCore;
@@ -35,12 +36,7 @@ import org.jetbrains.jps.model.java.JavaSourceRootType;
 
 import java.lang.reflect.Field;
 import java.nio.file.Paths;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -506,25 +502,25 @@ public final class CUTUtil {
     }
 
     private static <T> T runWrite(Project project, Computable<T> action) {
-        if (ApplicationManager.getApplication().isDispatchThread()) {
-            return ApplicationManager.getApplication().runWriteAction(action);
+        Application app = ApplicationManager.getApplication();
+        if (app.isReadAccessAllowed() && !app.isWriteAccessAllowed()) {
+            throw new IllegalStateException("runWrite called from read action; schedule outside read.");
         }
-        Ref<T> result = Ref.create();
-        ApplicationManager.getApplication().invokeAndWait(
-                () -> result.set(ApplicationManager.getApplication().runWriteAction(action))
-        );
-        return result.get();
+        if (app.isWriteAccessAllowed()) {
+            return action.compute();
+        }
+        return WriteAction.computeAndWait(action::compute);
     }
 
     private static <T> T runWriteCommand(Project project, Computable<T> action) {
-        if (ApplicationManager.getApplication().isDispatchThread()) {
+        Application app = ApplicationManager.getApplication();
+        if (app.isReadAccessAllowed() && !app.isWriteAccessAllowed()) {
+            throw new IllegalStateException("runWriteCommand called from read action; schedule outside read.");
+        }
+        if (app.isWriteAccessAllowed()) {
             return WriteCommandAction.runWriteCommandAction(project, action);
         }
-        Ref<T> result = Ref.create();
-        ApplicationManager.getApplication().invokeAndWait(
-                () -> result.set(WriteCommandAction.runWriteCommandAction(project, action))
-        );
-        return result.get();
+        return WriteCommandAction.writeCommandAction(project).compute(action::compute);
     }
 
 
