@@ -10,7 +10,6 @@ import com.intellij.ide.highlighter.JavaFileType;
 import com.intellij.openapi.application.Application;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
-import com.intellij.openapi.application.WriteAction;
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleUtilCore;
@@ -20,6 +19,7 @@ import com.intellij.openapi.roots.libraries.Library;
 import com.intellij.openapi.roots.libraries.LibraryTable;
 import com.intellij.openapi.roots.libraries.LibraryTablesRegistrar;
 import com.intellij.openapi.util.Computable;
+import com.intellij.openapi.util.Ref;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VfsUtil;
 import com.intellij.openapi.vfs.VfsUtilCore;
@@ -509,7 +509,9 @@ public final class CUTUtil {
         if (app.isWriteAccessAllowed()) {
             return action.compute();
         }
-        return WriteAction.computeAndWait(action::compute);
+        Ref<T> result = Ref.create();
+        app.invokeAndWait(() -> result.set(app.runWriteAction(action)));
+        return result.get();
     }
 
     private static <T> T runWriteCommand(Project project, Computable<T> action) {
@@ -520,7 +522,9 @@ public final class CUTUtil {
         if (app.isWriteAccessAllowed()) {
             return WriteCommandAction.runWriteCommandAction(project, action);
         }
-        return WriteCommandAction.writeCommandAction(project).compute(action::compute);
+        Ref<T> result = Ref.create();
+        app.invokeAndWait(() -> result.set(WriteCommandAction.runWriteCommandAction(project, action)));
+        return result.get();
     }
 
 
