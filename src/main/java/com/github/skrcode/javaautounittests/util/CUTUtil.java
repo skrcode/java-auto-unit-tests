@@ -606,43 +606,41 @@ public final class CUTUtil {
 
         AtomicReference<String> result = new AtomicReference<>("");
 
-        ApplicationManager.getApplication().invokeAndWait(() ->
-                ApplicationManager.getApplication().runWriteAction(() -> {
-                    String sourceText = getSourceCodeOfContextClasses(project, relativePathOrFqcn);
-                    if (sourceText.isBlank()) {
-                        result.set("");
-                        return;
-                    }
+        ApplicationManager.getApplication().runWriteAction(() -> {
+            String sourceText = getSourceCodeOfContextClasses(project, relativePathOrFqcn);
+            if (sourceText.isBlank()) {
+                result.set("");
+                return;
+            }
 
-                    PsiJavaFile psiFile = (PsiJavaFile) PsiFileFactory.getInstance(project)
-                            .createFileFromText(
-                                    Paths.get(relativePathOrFqcn).getFileName().toString(), // fallback name
-                                    JavaFileType.INSTANCE,
-                                    sourceText
-                            );
+            PsiJavaFile psiFile = (PsiJavaFile) PsiFileFactory.getInstance(project)
+                    .createFileFromText(
+                            Paths.get(relativePathOrFqcn).getFileName().toString(), // fallback name
+                            JavaFileType.INSTANCE,
+                            sourceText
+                    );
 
-                    for (PsiComment comment : PsiTreeUtil.findChildrenOfType(psiFile, PsiComment.class)) {
-                        comment.delete();
-                    }
+            for (PsiComment comment : PsiTreeUtil.findChildrenOfType(psiFile, PsiComment.class)) {
+                comment.delete();
+            }
 
-                    PsiElementFactory factory = JavaPsiFacade.getInstance(project).getElementFactory();
-                    for (PsiMethod method : PsiTreeUtil.findChildrenOfType(psiFile, PsiMethod.class)) {
-                        PsiCodeBlock body = method.getBody();
-                        if (body != null) {
-                            body.replace(factory.createCodeBlock());
-                        }
-                    }
+            PsiElementFactory factory = JavaPsiFacade.getInstance(project).getElementFactory();
+            for (PsiMethod method : PsiTreeUtil.findChildrenOfType(psiFile, PsiMethod.class)) {
+                PsiCodeBlock body = method.getBody();
+                if (body != null) {
+                    body.replace(factory.createCodeBlock());
+                }
+            }
 
-                    for (PsiClassInitializer initializer : PsiTreeUtil.findChildrenOfType(psiFile, PsiClassInitializer.class)) {
-                        PsiCodeBlock body = initializer.getBody();
-                        if (body != null) {
-                            body.replace(factory.createCodeBlock());
-                        }
-                    }
+            for (PsiClassInitializer initializer : PsiTreeUtil.findChildrenOfType(psiFile, PsiClassInitializer.class)) {
+                PsiCodeBlock body = initializer.getBody();
+                if (body != null) {
+                    body.replace(factory.createCodeBlock());
+                }
+            }
 
-                    result.set(psiFile.getText());
-                })
-        );
+            result.set(psiFile.getText());
+        });
 
         return result.get();
     }
