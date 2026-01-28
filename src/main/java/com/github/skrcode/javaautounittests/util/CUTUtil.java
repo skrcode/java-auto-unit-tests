@@ -188,9 +188,10 @@ public final class CUTUtil {
         PsiJavaFile scratch  = (PsiJavaFile) original.copy();
 
         // 2️⃣  Expand star imports on the scratch only
-        WriteCommandAction.runWriteCommandAction(project, () -> {
-                    expandAll(project, scratch);          // ← your expander from earlier
-                });
+        runWriteCommand(project, () -> {
+            expandAll(project, scratch);          // ← your expander from earlier
+            return null;
+        });
 
         // 3️⃣  Harvest the source and return; the scratch is GC-eligible
         return scratch.getText();
