@@ -6,8 +6,8 @@ package com.github.skrcode.javaautounittests.util;
 
 import com.github.skrcode.javaautounittests.dto.FileInfo;
 import com.intellij.application.options.CodeStyle;
-import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.ide.highlighter.JavaFileType;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.module.Module;
@@ -601,41 +601,38 @@ public final class CUTUtil {
     public static String stripCommentsAndMethodBodies(Project project, String relativePathOrFqcn) {
         if (relativePathOrFqcn == null || relativePathOrFqcn.isBlank()) return "";
 
-        // --- Reuse existing utility to get raw source code text ---
-        String sourceText = getSourceCodeOfContextClasses(project, relativePathOrFqcn);
-        if (sourceText.isBlank()) return "";
+        return ApplicationManager.getApplication().runWriteAction((Computable<String>) () -> {
+            String sourceText = getSourceCodeOfContextClasses(project, relativePathOrFqcn);
+            if (sourceText.isBlank()) return "";
 
-        // --- Create temporary PSI file from text ---
-        PsiJavaFile psiFile = (PsiJavaFile) PsiFileFactory.getInstance(project)
-                .createFileFromText(
-                        Paths.get(relativePathOrFqcn).getFileName().toString(), // fallback name
-                        JavaFileType.INSTANCE,
-                        sourceText
-                );
+            PsiJavaFile psiFile = (PsiJavaFile) PsiFileFactory.getInstance(project)
+                    .createFileFromText(
+                            Paths.get(relativePathOrFqcn).getFileName().toString(), // fallback name
+                            JavaFileType.INSTANCE,
+                            sourceText
+                    );
 
-        // --- Remove all comments (Javadoc, line, block) ---
-        for (PsiComment comment : PsiTreeUtil.findChildrenOfType(psiFile, PsiComment.class)) {
-            comment.delete();
-        }
-
-        // --- Replace all method/constructor bodies with "{}" ---
-        PsiElementFactory factory = JavaPsiFacade.getInstance(project).getElementFactory();
-        for (PsiMethod method : PsiTreeUtil.findChildrenOfType(psiFile, PsiMethod.class)) {
-            PsiCodeBlock body = method.getBody();
-            if (body != null) {
-                body.replace(factory.createCodeBlock());
+            for (PsiComment comment : PsiTreeUtil.findChildrenOfType(psiFile, PsiComment.class)) {
+                comment.delete();
             }
-        }
 
-        // --- Replace all static/instance initializer bodies with "{}" ---
-        for (PsiClassInitializer initializer : PsiTreeUtil.findChildrenOfType(psiFile, PsiClassInitializer.class)) {
-            PsiCodeBlock body = initializer.getBody();
-            if (body != null) {
-                body.replace(factory.createCodeBlock());
+            PsiElementFactory factory = JavaPsiFacade.getInstance(project).getElementFactory();
+            for (PsiMethod method : PsiTreeUtil.findChildrenOfType(psiFile, PsiMethod.class)) {
+                PsiCodeBlock body = method.getBody();
+                if (body != null) {
+                    body.replace(factory.createCodeBlock());
+                }
             }
-        }
 
-        return psiFile.getText();
+            for (PsiClassInitializer initializer : PsiTreeUtil.findChildrenOfType(psiFile, PsiClassInitializer.class)) {
+                PsiCodeBlock body = initializer.getBody();
+                if (body != null) {
+                    body.replace(factory.createCodeBlock());
+                }
+            }
+
+            return psiFile.getText();
+        });
     }
 
 
