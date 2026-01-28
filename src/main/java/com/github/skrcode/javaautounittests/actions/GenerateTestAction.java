@@ -175,6 +175,10 @@ public class GenerateTestAction extends AnAction implements DumbAware {
 
 
     private List<PsiClass> collectClasses(PsiElement[] elements) {
+        if (!ApplicationManager.getApplication().isReadAccessAllowed()) {
+            return ReadAction.compute(() -> collectClasses(elements));
+        }
+
         List<PsiClass> classes = new ArrayList<>();
         for (PsiElement element : elements) {
             if (element instanceof PsiClass psiClass) {
