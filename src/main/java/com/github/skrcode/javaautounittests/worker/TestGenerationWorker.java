@@ -18,6 +18,7 @@ import com.github.skrcode.javaautounittests.util.ConsolePrinter;
 import com.github.skrcode.javaautounittests.util.Telemetry;
 import com.intellij.execution.ui.ConsoleView;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
@@ -45,6 +46,13 @@ public final class TestGenerationWorker {
 
     private static final int MAX_ATTEMPTS = 100;
     private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    private static PsiClass[] safeClasses(PsiJavaFile file) {
+        if (ApplicationManager.getApplication().isReadAccessAllowed()) {
+            return file.getClasses();
+        }
+        return ReadAction.compute(file::getClasses);
+    }
 
     public static void process(Project project, List<PsiClass> cuts, @NotNull ConsoleView myConsole, @NotNull ProgressIndicator indicator, GenerationType generationType) {
         int attempt = 1;
@@ -102,7 +110,7 @@ public final class TestGenerationWorker {
             allState = TransitionStateClassAll.INITIAL_ALL_BUILD_SUCCESS;
             for(int i=0;i<testFileInfos.size();i++) {
                 PsiJavaFile testFile = testFileInfos.get(i).psiFile();
-                if(testFile.getClasses().length == 0) {
+                if(safeClasses(testFile).length == 0) {
                     state.get(i).setCurrentState(TransitionStateClass.INITIAL_BUILD_FAILURE);
                     allState = TransitionStateClassAll.INITIAL_ALL_BUILD_FAILURE;
                     continue; // class not found but file present
@@ -125,7 +133,7 @@ public final class TestGenerationWorker {
                 allState = TransitionStateClassAll.INITIAL_ALL_EXECUTION_SUCCESS;
                 for (int i = 0; i < testFileInfos.size(); i++) {
                     PsiJavaFile testFile = testFileInfos.get(i).psiFile();
-                    if (testFile.getClasses().length == 0) {
+                    if (safeClasses(testFile).length == 0) {
                         state.get(i).setCurrentState(TransitionStateClass.INITIAL_EXECUTION_FAILURE);
                         allState = TransitionStateClassAll.INITIAL_ALL_EXECUTION_FAILURE;
                         continue; // class not found but file present

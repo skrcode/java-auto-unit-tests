@@ -22,6 +22,7 @@ import com.intellij.execution.runners.ExecutionEnvironmentBuilder;
 import com.intellij.execution.runners.ProgramRunner;
 import com.intellij.execution.ui.ConsoleView;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.compiler.CompilerManager;
 import com.intellij.openapi.compiler.CompilerMessage;
@@ -59,6 +60,13 @@ public class BuilderUtil {
 
     private BuilderUtil() {}
 
+    private static PsiClass[] safeClasses(PsiJavaFile file) {
+        if (ApplicationManager.getApplication().isReadAccessAllowed()) {
+            return file.getClasses();
+        }
+        return ReadAction.compute(file::getClasses);
+    }
+
     // --- Run JUnit class silently and parse TeamCity output ---
     public static String runJUnitClass(Project project, PsiJavaFile psiJavaFile) throws Exception {
         AtomicReference<ExecutionEnvironment> envRef = new AtomicReference<>();
@@ -75,8 +83,9 @@ public class BuilderUtil {
             @Nullable Module module = ModuleUtil.findModuleForPsiElement(psiJavaFile);
             if (module != null) configuration.setModule(module);
 
-            if (psiJavaFile.getClasses().length > 0) {
-                configuration.setMainClass(psiJavaFile.getClasses()[0]);
+            PsiClass[] classes = safeClasses(psiJavaFile);
+            if (classes.length > 0) {
+                configuration.setMainClass(classes[0]);
             }
 
             Executor executor = DefaultRunExecutor.getRunExecutorInstance();
@@ -281,9 +290,8 @@ public class BuilderUtil {
                 // --- Step 0: Extract old test methods as TEXT ---
                 List<String> oldTestMethodTexts = new ArrayList<>();
 
-                PsiClass psiClass = psiJavaFile.getClasses().length > 0
-                        ? psiJavaFile.getClasses()[0]
-                        : null;
+                PsiClass[] classes = safeClasses(psiJavaFile);
+                PsiClass psiClass = classes.length > 0 ? classes[0] : null;
 
                 if (psiClass != null) {
                     for (PsiMethod old : psiClass.getMethods()) {
@@ -314,10 +322,11 @@ public class BuilderUtil {
                     psiDocMgr.commitDocument(doc);
 
                     // re-resolve class after rewrite
-                    if (psiJavaFile.getClasses().length == 0) {
+                    classes = safeClasses(psiJavaFile);
+                    if (classes.length == 0) {
                         throw new IllegalStateException("Skeleton produced no class");
                     }
-                    psiClass = psiJavaFile.getClasses()[0];
+                    psiClass = classes[0];
                 }
 
                 // --- Step 2: Restore old test methods ---
