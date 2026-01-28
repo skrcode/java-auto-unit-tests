@@ -196,12 +196,25 @@ public final class CUTUtil {
     }
 
     public static PsiDirectory resolveTestPackageDir(Project project, PsiClass cut) {
-        PsiClass existingTest = findExistingTestClass(cut);
-        if (existingTest != null) {
-            return existingTest.getContainingFile().getContainingDirectory();
+        PsiDirectory existingDir = ReadAction.compute(() -> {
+            PsiClass existingTest = findExistingTestClass(cut);
+            if (existingTest == null) return null;
+            PsiFile file = existingTest.getContainingFile();
+            return file != null ? file.getContainingDirectory() : null;
+        });
+        if (existingDir != null) {
+            return existingDir;
         }
-        VirtualFile cutFile = cut.getContainingFile().getVirtualFile();
-        @Nullable Module module = ModuleUtilCore.findModuleForFile(cutFile, project);
+
+        VirtualFile cutFile = ReadAction.compute(() -> {
+            PsiFile file = cut.getContainingFile();
+            return file != null ? file.getVirtualFile() : null;
+        });
+        if (cutFile == null) {
+            throw new IllegalStateException("Cannot locate CUT virtual file");
+        }
+
+        @Nullable Module module = ReadAction.compute(() -> ModuleUtilCore.findModuleForFile(cutFile, project));
         if (module == null) {
             throw new IllegalStateException("Cannot resolve module for CUT");
         }
@@ -518,12 +531,15 @@ public final class CUTUtil {
 
     @Nullable
     private static PsiClass findExistingTestClass(PsiClass cut) {
-        for (PsiElement test : TestFinderHelper.findTestsForClass(cut)) {
-            if (test.isValid()) {
-                return (PsiClass) test;
+        return ReadAction.compute(() -> {
+            if (cut == null || !cut.isValid()) return null;
+            for (PsiElement test : TestFinderHelper.findTestsForClass(cut)) {
+                if (test instanceof PsiClass psiClass && psiClass.isValid()) {
+                    return psiClass;
+                }
             }
-        }
-        return null;
+            return null;
+        });
     }
 
     private static @Nullable String getTestRelativePath(PsiClass cut) {
