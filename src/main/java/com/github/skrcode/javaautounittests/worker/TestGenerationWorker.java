@@ -77,6 +77,7 @@ public final class TestGenerationWorker {
             List<Set<String>> classPathFetchedFlags = new ArrayList<>();
             List<String> cutSources = cutFileInfos.stream().map(cut -> CUTUtil.cleanedSourceForLLM(project, cut.cutClass())).toList();
             List<ClassGenerationMetadataStateDTO> state = new ArrayList<>();
+            List<GenerationType> generationTypeDuringGeneration = Arrays.asList(generationType);
             for(int i=0;i<cutFileInfos.size();i++) {
                 MessagesRequestDTO messagesRequestDTO = new MessagesRequestDTO();
                 messagesRequestDTO
@@ -196,7 +197,7 @@ public final class TestGenerationWorker {
                         }
                         else messageRequestsToLLM.add(null);
                     }
-                    List<Message> outputMessages = GenerateTestsLLMService.generate(getCombinedClassName(testFileInfos), messageRequestsToLLM, myConsole, attempt, indicator, generationType);
+                    List<Message> outputMessages = GenerateTestsLLMService.generate(getCombinedClassName(testFileInfos), messageRequestsToLLM, myConsole, attempt, indicator, generationTypeDuringGeneration);
                     for (MessagesRequestDTO messagesRequestDTO : messagesRequestDTOs) messagesRequestDTO.setActualMessages(messagesRequestDTO.getMessages()); // initialize
                     for (int i = 0; i < outputMessages.size(); i++) {
                         Message message = outputMessages.get(i);
@@ -221,6 +222,7 @@ public final class TestGenerationWorker {
                                 indicator.checkCanceled();
                                 state.get(i).setCurrentState(TransitionStateClass.APPLY_DONE);
                                 state.get(i).setNewTestSource(handleApplyTestClass(project, myConsole, args, generateTestsGetFilesCache, cutFileInfos.get(i).qualifiedName(), state.get(i).getNewTestSource(), messagesContentsRequestDTO, testFileInfos.get(i)));
+                                generationTypeDuringGeneration.set(i,GenerationType.fix);
                             }
                             if (messageContent.getName().equals("get_file")) handleGetFile(project, myConsole, args, messageContent.getId(), testFileInfos.get(i).filePath(), cutFileInfos.get(i).filePath(), classPathFetchedFlags.get(i), messagesContentsRequestDTO, generateTestsGetFilesCache, cutFileInfos.get(i).qualifiedName(), messageContent.getName());
                             if (messageContent.getName().equals("terminate_call")) {

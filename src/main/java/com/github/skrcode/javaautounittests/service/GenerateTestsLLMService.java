@@ -43,7 +43,7 @@ public final class GenerateTestsLLMService {
 
     private GenerateTestsLLMService() {}
 
-    public static List<Message> generate(String combinedClassName, List<List<Message>> requests, ConsoleView myConsole, int attempt, ProgressIndicator indicator, GenerationType generationType) throws Exception {
+    public static List<Message> generate(String combinedClassName, List<List<Message>> requests, ConsoleView myConsole, int attempt, ProgressIndicator indicator, List<GenerationType> generationTypeDuringGeneration) throws Exception {
         Telemetry.bulkStart(requests.size());
         long bulkStart = System.nanoTime();
         indicator.checkCanceled();
@@ -54,7 +54,7 @@ public final class GenerateTestsLLMService {
             int from = start;
             int to = Math.min(start + DEFAULT_BATCH_SIZE, requests.size());
             List<List<Message>> batch = requests.subList(from, to);
-            futures.add(CompletableFuture.supplyAsync(() -> processBatch(combinedClassName, batch, from, myConsole, attempt, indicator, generationType), BULK_EXECUTOR));
+            futures.add(CompletableFuture.supplyAsync(() -> processBatch(combinedClassName, batch, from, myConsole, attempt, indicator, generationTypeDuringGeneration), BULK_EXECUTOR));
         }
         try {
             for (CompletableFuture<BatchResult> future : futures) {
@@ -69,7 +69,7 @@ public final class GenerateTestsLLMService {
         }
     }
 
-    private static BatchResult processBatch(String combinedClassName, List<List<Message>> batch, int startIndex, ConsoleView myConsole, int attempt, ProgressIndicator indicator, GenerationType generationType) {
+    private static BatchResult processBatch(String combinedClassName, List<List<Message>> batch, int startIndex, ConsoleView myConsole, int attempt, ProgressIndicator indicator, List<GenerationType> generationTypeDuringGeneration) {
         Map<Integer, Message> batchResponses = new HashMap<>();
         List<String> failures = new ArrayList<>();
 
@@ -86,12 +86,24 @@ public final class GenerateTestsLLMService {
         }
         if (payload.isEmpty()) return new BatchResult(batchResponses, failures);
 
+        List<GenerationType> batchGenerationTypes = null;
+        if (generationTypeDuringGeneration != null) {
+            batchGenerationTypes = new ArrayList<>(payload.size());
+            for (int position : payloadPositions) {
+                int globalIndex = startIndex + position;
+                if (globalIndex >= generationTypeDuringGeneration.size()) {
+                    throw new IllegalArgumentException("generationTypeDuringGeneration size mismatch with requests");
+                }
+                batchGenerationTypes.add(generationTypeDuringGeneration.get(globalIndex));
+            }
+        }
+
         long start = System.nanoTime();
         Telemetry.genStarted(combinedClassName, String.valueOf(attempt));
         long backoffMillis = 1000;
         for (int retries = 0;; retries++) {
             try {
-                PromptResponseOutput output = sendRequest(attempt, indicator, payload, generationType);
+                PromptResponseOutput output = sendRequest(attempt, indicator, payload, batchGenerationTypes);
                 Telemetry.genCompleted(combinedClassName, String.valueOf(attempt), (System.nanoTime() - start) / 1_000_000);
                 if (output == null) throw new Exception("Empty response from server");
 
@@ -137,13 +149,13 @@ public final class GenerateTestsLLMService {
         }
     }
 
-    private static PromptResponseOutput sendRequest(int attempt, ProgressIndicator indicator, List<List<Message>> messages, GenerationType generationType) throws Exception {
-        Map<String, Object> body = Map.of("attemptNumber", attempt, "requests", messages);
+    private static PromptResponseOutput sendRequest(int attempt, ProgressIndicator indicator, List<List<Message>> messages, List<GenerationType> generationTypeDuringGeneration) throws Exception {
+        Map<String, Object> body = Map.of("attemptNumber", attempt, "requests", messages, "generationTypeDuringGeneration", generationTypeDuringGeneration);
         String requestJson = MAPPER.writeValueAsString(body);
         String headerValue = "Bearer " + AISettings.getInstance().getProKey();
         indicator.checkCanceled();
 
-        HttpRequest createJobReq = buildInitialRequest(requestJson, headerValue, generationType);
+        HttpRequest createJobReq = buildInitialRequest(requestJson, headerValue);
         HttpResponse<String> createJobResp = HTTP_CLIENT.send(createJobReq, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         if (createJobResp.statusCode() / 100 == 4) {
             PromptResponseOutput promptResponseOutput = new PromptResponseOutput();
@@ -153,7 +165,7 @@ public final class GenerateTestsLLMService {
         }
         if (createJobResp.statusCode() / 100 != 2) throw new Exception("Error : " + createJobResp.statusCode() + " " + createJobResp.body());
 
-        if (generationType != null) return handleResponse(createJobResp, headerValue, indicator);
+        if (generationTypeDuringGeneration != null) return handleResponse(createJobResp, headerValue, indicator);
 
         JsonNode jsonNode = MAPPER.readTree(createJobResp.body());
         PromptResponseOutput result = MAPPER.treeToValue(jsonNode, PromptResponseOutput.class);
@@ -161,14 +173,13 @@ public final class GenerateTestsLLMService {
         return result;
     }
 
-    private static HttpRequest buildInitialRequest(String requestJson, String headerValue, GenerationType generationType) {
+    private static HttpRequest buildInitialRequest(String requestJson, String headerValue) {
         HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .timeout(Duration.ofSeconds(30))
                 .header("Accept", "application/json")
                 .header("Content-Type", "application/json")
                 .header("Authorization", headerValue == null ? "" : headerValue)
                 .POST(HttpRequest.BodyPublishers.ofString(requestJson, StandardCharsets.UTF_8));
-        if(generationType != null) return builder.uri(URI.create(GENERATE_URL + "?type=" + generationType)).build();
         return builder.uri(URI.create(PLAN_URL)).build();
     }
 
