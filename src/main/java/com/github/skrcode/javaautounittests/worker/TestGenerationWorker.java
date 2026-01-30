@@ -77,8 +77,9 @@ public final class TestGenerationWorker {
             List<Set<String>> classPathFetchedFlags = new ArrayList<>();
             List<String> cutSources = cutFileInfos.stream().map(cut -> CUTUtil.cleanedSourceForLLM(project, cut.cutClass())).toList();
             List<ClassGenerationMetadataStateDTO> state = new ArrayList<>();
-            List<GenerationType> generationTypeDuringGeneration = Arrays.asList(generationType);
+            List<GenerationType> generationTypeDuringGeneration = new ArrayList<>();
             for(int i=0;i<cutFileInfos.size();i++) {
+                generationTypeDuringGeneration.add(generationType);
                 MessagesRequestDTO messagesRequestDTO = new MessagesRequestDTO();
                 messagesRequestDTO
                         .addMessage((getMessage(GenerateTestsLLMService.USER_ROLE, testFileInfos.get(i).simpleName())))

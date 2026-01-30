@@ -34,7 +34,7 @@ public final class GenerateTestsLLMService {
     private static final int MAX_RETRIES = 10;
     private static final int DEFAULT_BATCH_SIZE = 5;
     private static final String GENERATE_URL = API_HOST+"invoke-junit-llm";
-    private static final String PLAN_URL = API_HOST+"invoke-junit-llm-fetch-plan";
+//    private static final String PLAN_URL = API_HOST+"invoke-junit-llm-fetch-plan";
     private static final int POLL_SLEEP_MILLIS = 2000;
     private static final int MAX_POLLING_TIME_MILLIS = 450000;
     private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(30)).build();
@@ -180,7 +180,7 @@ public final class GenerateTestsLLMService {
                 .header("Content-Type", "application/json")
                 .header("Authorization", headerValue == null ? "" : headerValue)
                 .POST(HttpRequest.BodyPublishers.ofString(requestJson, StandardCharsets.UTF_8));
-        return builder.uri(URI.create(PLAN_URL)).build();
+        return builder.uri(URI.create(GENERATE_URL)).build();
     }
 
     private static PromptResponseOutput handleResponse(HttpResponse<String> createJobResp, String headerValue, ProgressIndicator indicator) throws Exception {
