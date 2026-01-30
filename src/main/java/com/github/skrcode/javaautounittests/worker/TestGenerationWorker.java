@@ -19,7 +19,6 @@ import com.github.skrcode.javaautounittests.util.Telemetry;
 import com.intellij.execution.ui.ConsoleView;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
-import com.intellij.openapi.application.WriteAction;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
@@ -155,19 +154,19 @@ public final class TestGenerationWorker {
             }
             else ConsolePrinter.info(myConsole, "Found compilation errors " + failedClassNamesBuilder);
 
-            if (generationType.equals(GenerationType.generate)) { // only for plan generation
-                List<List<Message>> messageRequestsToLLM = new ArrayList<>();
-                for (int i = 0; i < testFileInfos.size(); i++) messageRequestsToLLM.add(messagesRequestDTOs.get(i).getActualMessages());
-                ConsolePrinter.info(myConsole, "Fetching test plan....");
-                List<Message> planOutputMessages = GenerateTestsLLMService.generate(getCombinedClassName(testFileInfos), messageRequestsToLLM, myConsole, attempt, indicator, null);
-                for (int i = 0; i < planOutputMessages.size(); i++) {
-                    Message message = planOutputMessages.get(i);
-                    if (message == null) continue;
-                    Message.MessageContent messageContent = MAPPER.convertValue(message.getContentAsList().get(0), Message.MessageContent.class);
-                    ConsolePrinter.info(myConsole, "Fetched test plan: "+testFileInfos.get(i).simpleName() + "\n" + messageContent.getText());
-                    messagesRequestDTOs.get(i).addToBoth(getMessage(USER_ROLE, messageContent.getText(), true));
-                }
-            }
+//            if (generationType.equals(GenerationType.generate)) { // only for plan generation
+//                List<List<Message>> messageRequestsToLLM = new ArrayList<>();
+//                for (int i = 0; i < testFileInfos.size(); i++) messageRequestsToLLM.add(messagesRequestDTOs.get(i).getActualMessages());
+//                ConsolePrinter.info(myConsole, "Fetching test plan....");
+//                List<Message> planOutputMessages = GenerateTestsLLMService.generate(getCombinedClassName(testFileInfos), messageRequestsToLLM, myConsole, attempt, indicator, null);
+//                for (int i = 0; i < planOutputMessages.size(); i++) {
+//                    Message message = planOutputMessages.get(i);
+//                    if (message == null) continue;
+//                    Message.MessageContent messageContent = MAPPER.convertValue(message.getContentAsList().get(0), Message.MessageContent.class);
+//                    ConsolePrinter.info(myConsole, "Fetched test plan: "+testFileInfos.get(i).simpleName() + "\n" + messageContent.getText());
+//                    messagesRequestDTOs.get(i).addToBoth(getMessage(USER_ROLE, messageContent.getText(), true));
+//                }
+//            }
 
             if(generationType.equals(GenerationType.generate) || allState.equals(TransitionStateClassAll.INITIAL_ALL_BUILD_FAILURE) || allState.equals(TransitionStateClassAll.INITIAL_ALL_EXECUTION_FAILURE)) {
                 for (; ; attempt++) {
