@@ -22,7 +22,7 @@ import static com.github.skrcode.javaautounittests.util.LLMMessageContentUtil.*;
 
 public class ToolHandlerUtil {
 
-    public static String handleApplyTestClass(Project project, @NotNull ConsoleView myConsole, Message.MessageContent.Input args, GenerateTestsGetFilesCache generateTestsGetFilesCache, String cutFqn, String oldTestSource, MessagesContentsRequestDTO messagesContentsRequestDTO, FileInfo testFileInfo) {
+    public static String handleApplyTestClass(Project project, @NotNull ConsoleView myConsole, Message.MessageContent.Input args, GenerateTestsGetFilesCache generateTestsGetFilesCache, String cutFqn, String oldTestSource, FileInfo testFileInfo) {
         try {
             String classSkeleton = args.getClassSkeleton();
             List<BuilderUtil.TestMethod> methods = new ArrayList<>();
@@ -36,7 +36,6 @@ public class ToolHandlerUtil {
             }
             // Build and write the test class
             String newTestSource = BuilderUtil.buildAndWriteTestClass(project, testFileInfo.psiFile(), classSkeleton, methods, myConsole);
-            messagesContentsRequestDTO.addActualMessageContentModel(getMessageTextContent(testFileInfo.simpleName() + " = \n" + (newTestSource != null?newTestSource.stripTrailing():oldTestSource)));
             if (CollectionUtils.isNotEmpty(args.getFilesUsed())) setCachedGetFilesCachedPaths(generateTestsGetFilesCache, cutFqn, args.getFilesUsed());
             return (newTestSource != null ? newTestSource : oldTestSource);
         }

@@ -36,8 +36,7 @@ import static com.github.skrcode.javaautounittests.service.ReviewService.showRev
 import static com.github.skrcode.javaautounittests.util.CUTUtil.testFileExists;
 import static com.github.skrcode.javaautounittests.util.GetFilesCacheUtil.getCachedGetFilesCachedPaths;
 import static com.github.skrcode.javaautounittests.util.GetFilesCacheUtil.getCachedGetFilesMessages;
-import static com.github.skrcode.javaautounittests.util.LLMMessageContentUtil.getMessage;
-import static com.github.skrcode.javaautounittests.util.LLMMessageContentUtil.getMessageTool;
+import static com.github.skrcode.javaautounittests.util.LLMMessageContentUtil.*;
 import static com.github.skrcode.javaautounittests.util.Telemetry.getCombinedClassName;
 import static com.github.skrcode.javaautounittests.util.ToolHandlerUtil.handleApplyTestClass;
 import static com.github.skrcode.javaautounittests.util.ToolHandlerUtil.handleGetFile;
@@ -156,20 +155,6 @@ public final class TestGenerationWorker {
             }
             else ConsolePrinter.info(myConsole, "Found compilation errors " + failedClassNamesBuilder);
 
-//            if (generationType.equals(GenerationType.generate)) { // only for plan generation
-//                List<List<Message>> messageRequestsToLLM = new ArrayList<>();
-//                for (int i = 0; i < testFileInfos.size(); i++) messageRequestsToLLM.add(messagesRequestDTOs.get(i).getActualMessages());
-//                ConsolePrinter.info(myConsole, "Fetching test plan....");
-//                List<Message> planOutputMessages = GenerateTestsLLMService.generate(getCombinedClassName(testFileInfos), messageRequestsToLLM, myConsole, attempt, indicator, null);
-//                for (int i = 0; i < planOutputMessages.size(); i++) {
-//                    Message message = planOutputMessages.get(i);
-//                    if (message == null) continue;
-//                    Message.MessageContent messageContent = MAPPER.convertValue(message.getContentAsList().get(0), Message.MessageContent.class);
-//                    ConsolePrinter.info(myConsole, "Fetched test plan: "+testFileInfos.get(i).simpleName() + "\n" + messageContent.getText());
-//                    messagesRequestDTOs.get(i).addToBoth(getMessage(USER_ROLE, messageContent.getText(), true));
-//                }
-//            }
-
             if(generationType.equals(GenerationType.generate) || allState.equals(TransitionStateClassAll.INITIAL_ALL_BUILD_FAILURE) || allState.equals(TransitionStateClassAll.INITIAL_ALL_EXECUTION_FAILURE)) {
                 for (; ; attempt++) {
                     ConsolePrinter.section(myConsole, "Attempting");
@@ -222,7 +207,7 @@ public final class TestGenerationWorker {
                             if (messageContent.getName().equals("apply_test_class")) {
                                 indicator.checkCanceled();
                                 state.get(i).setCurrentState(TransitionStateClass.APPLY_DONE);
-                                state.get(i).setNewTestSource(handleApplyTestClass(project, myConsole, args, generateTestsGetFilesCache, cutFileInfos.get(i).qualifiedName(), state.get(i).getNewTestSource(), messagesContentsRequestDTO, testFileInfos.get(i)));
+                                state.get(i).setNewTestSource(handleApplyTestClass(project, myConsole, args, generateTestsGetFilesCache, cutFileInfos.get(i).qualifiedName(), state.get(i).getNewTestSource(), testFileInfos.get(i)));
                                 generationTypeDuringGeneration.set(i,GenerationType.fix);
                             }
                             if (messageContent.getName().equals("get_file")) handleGetFile(project, myConsole, args, messageContent.getId(), testFileInfos.get(i).filePath(), cutFileInfos.get(i).filePath(), classPathFetchedFlags.get(i), messagesContentsRequestDTO, generateTestsGetFilesCache, cutFileInfos.get(i).qualifiedName(), messageContent.getName());
@@ -232,6 +217,7 @@ public final class TestGenerationWorker {
                                 Telemetry.allGenError(String.valueOf(attempt), "terminate call");
                             }
                         }
+                        if(state.get(i).getNewTestSource() != null) messagesContentsRequestDTO.addActualMessageContentUser(getMessageTextContent(testFileInfos.get(i).simpleName() + " = \n" + (state.get(i).getNewTestSource().stripTrailing())));
                         messagesRequestDTOs.get(i)
                                 .addMessage(getMessageTool(MODEL_ROLE, messagesContentsRequestDTO.getMessageContentsModel())).addMessage(getMessageTool(USER_ROLE, messagesContentsRequestDTO.getMessageContentsUser()))
                                 .addActualMessage(getMessageTool(MODEL_ROLE, messagesContentsRequestDTO.getActualMessageContentsModel())).addActualMessage(getMessageTool(USER_ROLE, messagesContentsRequestDTO.getActualMessageContentsUser()));
