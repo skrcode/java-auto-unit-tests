@@ -5,6 +5,7 @@
 package com.github.skrcode.javaautounittests.util;
 
 import com.github.javaparser.JavaParser;
+import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.skrcode.javaautounittests.dto.FileInfo;
 import com.intellij.codeInsight.actions.ReformatCodeProcessor;
 import com.intellij.compiler.CompilerMessageImpl;
@@ -190,7 +191,15 @@ public class BuilderUtil {
         CountDownLatch latch = new CountDownLatch(1);
         StringBuilder result = new StringBuilder();
         try {
-            VirtualFile file = testFile.getVirtualFile();
+            VirtualFile file = ReadAction.compute(() -> {
+                if (testFile == null || !testFile.isValid()) {
+                    return null;
+                }
+                return testFile.getVirtualFile();
+            });
+            if (file == null) {
+                return "Test Class not found";
+            }
 
             ApplicationManager.getApplication().invokeAndWait(() -> {
                 CompilerManager.getInstance(project).compile(new VirtualFile[]{file}, (aborted, errors, warnings, context) -> {
@@ -363,6 +372,7 @@ public class BuilderUtil {
                         PsiDocumentManager.getInstance(project);
                 PsiElementFactory elementFactory =
                         JavaPsiFacade.getInstance(project).getElementFactory();
+                String originalSource = psiJavaFile.getText();
 
                 // --- Step 0: Extract old test methods as TEXT ---
                 List<String> oldTestMethodTexts = new ArrayList<>();
@@ -401,9 +411,17 @@ public class BuilderUtil {
                     // re-resolve class after rewrite
                     classes = safeClasses(psiJavaFile);
                     if (classes.length == 0) {
+                        Document rollbackDoc = psiDocMgr.getDocument(psiJavaFile);
+                        if (rollbackDoc != null) {
+                            rollbackDoc.setText(originalSource);
+                            psiDocMgr.commitDocument(rollbackDoc);
+                        }
                         throw new IllegalStateException("Skeleton produced no class");
                     }
                     psiClass = classes[0];
+                }
+                if (psiClass == null) {
+                    throw new IllegalStateException("No class found in target test file");
                 }
 
                 // --- Step 2: Restore old test methods ---
@@ -435,7 +453,7 @@ public class BuilderUtil {
                         String name = m.methodName.trim();
                         String impl = m.fullImplementation == null
                                 ? ""
-                                : m.fullImplementation.trim();
+                                : normalizeMethodImplementation(name, m.fullImplementation);
 
                         if (impl.isEmpty()) deletes.add(name);
                         else response.put(name, impl);
@@ -513,5 +531,54 @@ public class BuilderUtil {
 
         return finalSourceRef.get();
     }
+
+    private static String normalizeMethodImplementation(String methodName, String implementation) {
+        if (implementation == null) return "";
+        String impl = implementation.trim();
+        if (impl.isEmpty()) return "";
+
+        if (looksLikeTypeDeclaration(impl)) {
+            String extracted = extractMethodFromType(methodName, impl);
+            if (extracted != null && !extracted.isBlank()) {
+                return extracted;
+            }
+        }
+        return impl;
+    }
+
+    private static boolean looksLikeTypeDeclaration(String text) {
+        return text.startsWith("class ")
+                || text.startsWith("public class ")
+                || text.startsWith("interface ")
+                || text.startsWith("public interface ")
+                || text.startsWith("enum ")
+                || text.startsWith("public enum ")
+                || text.contains("\nclass ")
+                || text.contains("\ninterface ")
+                || text.contains("\nenum ");
+    }
+
+    @Nullable
+    private static String extractMethodFromType(String methodName, String typeSource) {
+        try {
+            JavaParser parser = new JavaParser();
+            var parseResult = parser.parse(typeSource);
+            if (parseResult.getResult().isEmpty()) return null;
+            List<MethodDeclaration> declarations = parseResult.getResult().get().findAll(MethodDeclaration.class);
+            if (declarations.isEmpty()) return null;
+
+            if (methodName != null && !methodName.isBlank()) {
+                for (MethodDeclaration declaration : declarations) {
+                    if (methodName.equals(declaration.getNameAsString())) {
+                        return declaration.toString();
+                    }
+                }
+            }
+            return declarations.get(0).toString();
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
     private static String joinLines(List<String> list) { if (list == null || list.isEmpty()) return ""; return String.join("\n", list); }
 }

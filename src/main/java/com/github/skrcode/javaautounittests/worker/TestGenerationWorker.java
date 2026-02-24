@@ -68,6 +68,10 @@ public final class TestGenerationWorker {
                 FileInfo testFileInfo = generationType.equals(GenerationType.generate)
                         ? CUTUtil.getOrCreateTestFile(project, cutFileInfo)
                         : cutFileInfo;
+                if (testFileInfo == null || testFileInfo.psiFile() == null) {
+                    throw new IllegalStateException("Unable to resolve test file for " +
+                            (cutFileInfo != null ? cutFileInfo.simpleName() : "<unknown>"));
+                }
                 testFileInfos.add(testFileInfo);
             }
             GenerateTestsGetFilesCache generateTestsGetFilesCache = GenerateTestsGetFilesCache.getInstance(project);
@@ -103,11 +107,15 @@ public final class TestGenerationWorker {
                 ConsolePrinter.error(myConsole, "Please fix build failures and retry." + firstBuildFailure);
             }
             for(int i=0;i<testFileInfos.size();i++) {
-                testFileInfos.set(i, CUTUtil.getOrCreateTestFile(project, cutFileInfos.get(i)));
-                if (!testFileExists(testFileInfos.get(i).psiFile())) {
-                    ConsolePrinter.warn(myConsole, "File corrupted during run. Please retry. " + testFileInfos.get(i).simpleName());
+                FileInfo refreshed = generationType.equals(GenerationType.generate)
+                        ? CUTUtil.getOrCreateTestFile(project, cutFileInfos.get(i))
+                        : testFileInfos.get(i);
+                if (refreshed == null || !testFileExists(refreshed.psiFile())) {
+                    ConsolePrinter.warn(myConsole, "File corrupted during run. Please retry. " + cutFileInfos.get(i).simpleName());
                     allState = TransitionStateClassAll.CORRUPTED;
+                    continue;
                 }
+                testFileInfos.set(i, refreshed);
             }
             if(allState.equals(TransitionStateClassAll.CORRUPTED)) throw new Exception("File Corrupted");
             ConsolePrinter.info(myConsole, "Compiling Tests ");
@@ -168,11 +176,15 @@ public final class TestGenerationWorker {
 
                     boolean isFileCorrupted = false;
                     for (int i = 0; i < testFileInfos.size(); i++) {
-                        testFileInfos.set(i, CUTUtil.getOrCreateTestFile(project, cutFileInfos.get(i)));
-                        if (!testFileExists(testFileInfos.get(i).psiFile())) {
-                            ConsolePrinter.warn(myConsole, "File corrupted during run. Please retry. " + testFileInfos.get(i).simpleName());
+                        FileInfo refreshed = generationType.equals(GenerationType.generate)
+                                ? CUTUtil.getOrCreateTestFile(project, cutFileInfos.get(i))
+                                : testFileInfos.get(i);
+                        if (refreshed == null || !testFileExists(refreshed.psiFile())) {
+                            ConsolePrinter.warn(myConsole, "File corrupted during run. Please retry. " + cutFileInfos.get(i).simpleName());
                             isFileCorrupted = true;
+                            continue;
                         }
+                        testFileInfos.set(i, refreshed);
                     }
                     if (isFileCorrupted) break;
                     if (attempt > MAX_ATTEMPTS) {
