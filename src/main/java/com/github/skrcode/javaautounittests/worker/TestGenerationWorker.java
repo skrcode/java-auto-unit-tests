@@ -105,6 +105,7 @@ public final class TestGenerationWorker {
             String firstBuildFailure = compileAndCollectExternalErrors(project, testFileInfos);
             if(!firstBuildFailure.isEmpty()) {
                 ConsolePrinter.error(myConsole, "Please fix build failures and retry." + firstBuildFailure);
+                throw new Exception("Please fix build failures and retry.");
             }
             for(int i=0;i<testFileInfos.size();i++) {
                 FileInfo refreshed = generationType.equals(GenerationType.generate)
