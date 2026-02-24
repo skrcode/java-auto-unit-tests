@@ -20,6 +20,8 @@ import java.util.List;
 import java.util.Set;
 
 import static com.github.skrcode.javaautounittests.service.GenerateTestsLLMService.USER_ROLE;
+import static com.github.skrcode.javaautounittests.util.CUTUtil.getSourceCode;
+import static com.github.skrcode.javaautounittests.util.CUTUtil.isCutForTest;
 import static com.github.skrcode.javaautounittests.util.CUTUtil.stripCommentsAndMethodBodies;
 import static com.github.skrcode.javaautounittests.util.LLMMessageContentUtil.getMessage;
 
@@ -65,11 +67,32 @@ public class GetFilesCacheUtil {
     }
 
     public static String getFileContentFromCache(Project project, String cachedFilePath,  String testFilePath, String cutFilePath, Set<String> isClassPathFetched) {
-        if(isClassPathFetched.contains(cachedFilePath) || cachedFilePath.contains(testFilePath) || cachedFilePath.contains(cutFilePath)) return null;
+        if (isClassPathFetched.contains(cachedFilePath)) return null;
+
+        boolean isCutFilePath = isPathMatch(cachedFilePath, cutFilePath);
+        if (!isCutFilePath) {
+            isCutFilePath = isCutForTest(project, cachedFilePath, testFilePath);
+        }
+        boolean isTestFilePath = isPathMatch(cachedFilePath, testFilePath);
+        if (isTestFilePath && !isCutFilePath) return null;
+
         isClassPathFetched.add(cachedFilePath);
+        final boolean shouldReturnFullSource = isCutFilePath;
         if (ApplicationManager.getApplication().isReadAccessAllowed()) {
+            if (shouldReturnFullSource) return getSourceCode(project, cachedFilePath);
             return stripCommentsAndMethodBodies(project, cachedFilePath);
         }
-        return ReadAction.compute(() -> stripCommentsAndMethodBodies(project, cachedFilePath));
+        return ReadAction.compute(() -> shouldReturnFullSource
+                ? getSourceCode(project, cachedFilePath)
+                : stripCommentsAndMethodBodies(project, cachedFilePath));
+    }
+
+    private static boolean isPathMatch(String cachedFilePath, String targetPath) {
+        if (StringUtils.isEmpty(cachedFilePath) || StringUtils.isEmpty(targetPath)) return false;
+        String normalizedCached = cachedFilePath.replace('\\', '/');
+        String normalizedTarget = targetPath.replace('\\', '/');
+        return normalizedCached.equals(normalizedTarget)
+                || normalizedCached.endsWith("/" + normalizedTarget)
+                || normalizedCached.contains(normalizedTarget);
     }
 }

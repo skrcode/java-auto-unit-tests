@@ -603,6 +603,81 @@ public final class CUTUtil {
         return "";
     }
 
+    public static String getSourceCode(Project project, String relativePathOrFqcn) {
+        return getSourceCodeOfContextClasses(project, relativePathOrFqcn);
+    }
+
+    public static boolean isCutForTest(Project project, String maybeCutPathOrFqcn, String testPathOrFqcn) {
+        if (maybeCutPathOrFqcn == null || maybeCutPathOrFqcn.isBlank() || testPathOrFqcn == null || testPathOrFqcn.isBlank()) {
+            return false;
+        }
+
+        if (!ApplicationManager.getApplication().isReadAccessAllowed()) {
+            return ReadAction.compute(() -> isCutForTest(project, maybeCutPathOrFqcn, testPathOrFqcn));
+        }
+
+        PsiClass cut = resolveClass(project, maybeCutPathOrFqcn);
+        if (cut == null || !cut.isValid()) return false;
+
+        PsiClass existingTest =
+                ReadAction.compute(() -> findExistingTestClass(cut));
+        if (existingTest == null || !existingTest.isValid()) return false;
+
+        String existingTestPath = getRelativePathForPsiClass(existingTest);
+        String existingTestFqcn = existingTest.getQualifiedName();
+        return matchesPathOrFqcn(testPathOrFqcn, existingTestPath, existingTestFqcn);
+    }
+
+    private static @Nullable PsiClass resolveClass(Project project, String relativePathOrFqcn) {
+        String normPath = relativePathOrFqcn.replace("\\", "/");
+
+        VirtualFile vf = findInProjectAndLibraries(project, normPath);
+        if (vf != null) {
+            PsiFile psiFile = PsiManager.getInstance(project).findFile(vf);
+            if (psiFile instanceof PsiJavaFile javaFile) {
+                PsiClass[] classes = javaFile.getClasses();
+                if (classes.length > 0) {
+                    return classes[0];
+                }
+            }
+        }
+
+        JavaPsiFacade psiFacade = JavaPsiFacade.getInstance(project);
+        return psiFacade.findClass(relativePathOrFqcn.replace("/", ".").replace(".java", ""), GlobalSearchScope.allScope(project));
+    }
+
+    private static @Nullable String getRelativePathForPsiClass(PsiClass psiClass) {
+        PsiFile file = psiClass.getContainingFile();
+        if (!(file instanceof PsiJavaFile javaFile)) return null;
+        PsiDirectory dir = javaFile.getContainingDirectory();
+        PsiPackage pkg = dir != null ? JavaDirectoryService.getInstance().getPackage(dir) : null;
+        String pkgPath = pkg != null ? pkg.getQualifiedName().replace('.', '/') : "";
+        return pkgPath.isEmpty() ? javaFile.getName() : pkgPath + "/" + javaFile.getName();
+    }
+
+    private static boolean matchesPathOrFqcn(String targetPathOrFqcn, @Nullable String path, @Nullable String fqcn) {
+        if (targetPathOrFqcn == null || targetPathOrFqcn.isBlank()) return false;
+
+        String normalizedTarget = targetPathOrFqcn.replace("\\", "/");
+        if (path != null && !path.isBlank()) {
+            String normalizedPath = path.replace("\\", "/");
+            if (normalizedTarget.equals(normalizedPath)
+                    || normalizedTarget.endsWith("/" + normalizedPath)
+                    || normalizedTarget.contains(normalizedPath)) {
+                return true;
+            }
+        }
+
+        if (fqcn == null || fqcn.isBlank()) return false;
+        String targetFqcn = normalizedTarget.replace("/", ".");
+        if (targetFqcn.endsWith(".java")) {
+            targetFqcn = targetFqcn.substring(0, targetFqcn.length() - ".java".length());
+        }
+        return targetFqcn.equals(fqcn)
+                || targetFqcn.endsWith("." + fqcn)
+                || targetFqcn.contains(fqcn);
+    }
+
 
     public static String stripCommentsAndMethodBodies(Project project, String relativePathOrFqcn) {
         if (relativePathOrFqcn == null || relativePathOrFqcn.isBlank()) return "";
