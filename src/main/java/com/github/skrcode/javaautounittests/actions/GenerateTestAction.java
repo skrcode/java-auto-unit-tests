@@ -123,7 +123,8 @@ public class GenerateTestAction extends AnAction implements DumbAware {
         }
         if (classes.size() > 1) { // > 50
             Telemetry.uiSettingsFailureClick("more than max classes selected");
-            Messages.showErrorDialog(project, "Please select fewer than 1 java classes.", "JAIPilot");
+            Messages.showErrorDialog(project, "Please select only 1 java class.", "JAIPilot");
+//            Messages.showErrorDialog(project, "Please select fewer than 1 java classes.", "JAIPilot");
             return false;
         }
         if (AISettings.getInstance().getProKey().isEmpty()) {

@@ -40,7 +40,7 @@
 //
 //    // TODO: replace with your public Supabase anon key
 //    private static final String SUPABASE_URL = "https://otxfylhjrlaesjagfhfi.supabase.co";
-//    private static final String SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eGZ5bGhqcmxhZXNqYWdmaGZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI5MDI3ODEsImV4cCI6MjA2ODQ3ODc4MX0.Dk1oQwpwerf1Xw0ejb00a6Su-jhyZ4hOWwQyiCMzHU8";
+//    private static final String SUPABASE_ANON_KEY = ";
 //    private static final long REFRESH_SKEW_SECONDS = 60; // refresh 1 min before expiry
 //
 //    private SupabaseAuthManager() {}

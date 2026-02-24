@@ -5,6 +5,7 @@
 package com.github.skrcode.javaautounittests.util;
 
 import com.github.javaparser.JavaParser;
+import com.github.skrcode.javaautounittests.dto.FileInfo;
 import com.intellij.codeInsight.actions.ReformatCodeProcessor;
 import com.intellij.compiler.CompilerMessageImpl;
 import com.intellij.execution.ExecutionException;
@@ -185,7 +186,6 @@ public class BuilderUtil {
     }
 
     // --- Compile JUnit class silently ---
-    // TODO : get error only from this testFile and not others
     public static String compileJUnitClass(Project project, PsiJavaFile testFile) {
         CountDownLatch latch = new CountDownLatch(1);
         StringBuilder result = new StringBuilder();
@@ -233,6 +233,83 @@ public class BuilderUtil {
         }
 
         return result.toString().trim();
+    }
+
+    private static String resolveErrorOwner(Project project, @Nullable VirtualFile file) {
+        if (file == null) return "<unknown>";
+        PsiFile psiFile = ReadAction.compute(() -> PsiManager.getInstance(project).findFile(file));
+        if (psiFile instanceof PsiJavaFile javaFile) {
+            PsiClass[] classes = safeClasses(javaFile);
+            if (classes.length > 0) {
+                String qName = classes[0].getQualifiedName();
+                if (qName != null && !qName.isBlank()) {
+                    return qName;
+                }
+            }
+        }
+        return file.getPath();
+    }
+
+    private static String formatCompilerMessage(Project project, CompilerMessage msg) {
+        VirtualFile file = msg.getVirtualFile();
+        int line = (msg instanceof CompilerMessageImpl impl) ? impl.getLine() : -1;
+        String lineText = line > 0 ? Integer.toString(line) : "?";
+        String codeLine = (line > 0 && file != null)
+                ? getLineFromVirtualFile(project, file, line)
+                : "<unknown>";
+        return "Line " + lineText + ": " + codeLine + "\n" + msg.getMessage();
+    }
+
+    /**
+     * Rebuilds the entire project and returns the first compilation error that belongs
+     * to a file outside the provided input set. Returns empty string when none found.
+     */
+    public static String compileAndCollectExternalErrors(Project project, List<FileInfo> inputFiles) {
+        if (inputFiles == null || inputFiles.isEmpty()) return "";
+
+        Set<String> inputPaths = new HashSet<>();
+        for (FileInfo inputFile : inputFiles) {
+            if (inputFile == null || inputFile.psiFile() == null) continue;
+            VirtualFile vf = inputFile.psiFile().getVirtualFile();
+            if (vf == null) continue;
+            inputPaths.add(vf.getPath());
+        }
+        if (inputPaths.isEmpty()) return "";
+
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<String> firstExternalError = new AtomicReference<>("");
+
+        try {
+            ApplicationManager.getApplication().invokeAndWait(() -> {
+                CompilerManager.getInstance(project).rebuild((aborted, errors, warnings, context) -> {
+                    if (aborted) {
+                        firstExternalError.compareAndSet("", "COMPILATION_ABORTED");
+                    } else if (errors > 0) {
+                        for (CompilerMessage msg : context.getMessages(CompilerMessageCategory.ERROR)) {
+                            VirtualFile msgFile = msg.getVirtualFile();
+                            String msgPath = msgFile != null ? msgFile.getPath() : null;
+                            if (msgPath == null || !inputPaths.contains(msgPath)) {
+                                String owner = resolveErrorOwner(project, msgFile);
+                                firstExternalError.compareAndSet("", owner + ":\n" + formatCompilerMessage(project, msg));
+                                break;
+                            }
+                        }
+                    }
+                    latch.countDown();
+                });
+            });
+
+            if (!latch.await(1000, TimeUnit.SECONDS)) {
+                return "COMPILATION_TIMEOUT";
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return "COMPILATION_INTERRUPTED";
+        } catch (Exception e) {
+            return "COMPILATION_FAILED: " + e.getMessage();
+        }
+
+        return firstExternalError.get();
     }
 
     private static String getLineFromVirtualFile(Project project, VirtualFile file, int lineNumber) {

@@ -33,6 +33,7 @@ import static com.github.skrcode.javaautounittests.service.GenerateTestsLLMServi
 import static com.github.skrcode.javaautounittests.service.GenerateTestsLLMService.USER_ROLE;
 import static com.github.skrcode.javaautounittests.service.QuotaService.printQuotaWarning;
 import static com.github.skrcode.javaautounittests.service.ReviewService.showReviewAfterTestGeneration;
+import static com.github.skrcode.javaautounittests.util.BuilderUtil.compileAndCollectExternalErrors;
 import static com.github.skrcode.javaautounittests.util.CUTUtil.testFileExists;
 import static com.github.skrcode.javaautounittests.util.GetFilesCacheUtil.getCachedGetFilesCachedPaths;
 import static com.github.skrcode.javaautounittests.util.GetFilesCacheUtil.getCachedGetFilesMessages;
@@ -97,6 +98,10 @@ public final class TestGenerationWorker {
             // initial build
             TransitionStateClassAll allState = INITIAL;
             ConsolePrinter.section(myConsole, "Initial checks");
+            String firstBuildFailure = compileAndCollectExternalErrors(project, testFileInfos);
+            if(!firstBuildFailure.isEmpty()) {
+                ConsolePrinter.error(myConsole, "Please fix build failures and retry." + firstBuildFailure);
+            }
             for(int i=0;i<testFileInfos.size();i++) {
                 testFileInfos.set(i, CUTUtil.getOrCreateTestFile(project, cutFileInfos.get(i)));
                 if (!testFileExists(testFileInfos.get(i).psiFile())) {
