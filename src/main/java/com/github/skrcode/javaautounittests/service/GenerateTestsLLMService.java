@@ -34,7 +34,6 @@ public final class GenerateTestsLLMService {
     private static final int MAX_RETRIES = 10;
     private static final int DEFAULT_BATCH_SIZE = 5;
     private static final String GENERATE_URL = API_HOST+"invoke-junit-llm";
-//    private static final String PLAN_URL = API_HOST+"invoke-junit-llm-fetch-plan";
     private static final int POLL_SLEEP_MILLIS = 2000;
     private static final int MAX_POLLING_TIME_MILLIS = 450000;
     private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(30)).build();
@@ -196,7 +195,7 @@ public final class GenerateTestsLLMService {
                     .GET()
                     .build();
             HttpResponse<String> pollResp = HTTP_CLIENT.send(pollReq, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-            if (pollResp.statusCode() / 100 != 2) throw new Exception("API error (job-status): " + pollResp.statusCode() + " " + pollResp.body());
+            if (pollResp.statusCode() / 100 != 2) throw new Exception("Error: " + pollResp.statusCode() + " Retrying..");
             JsonNode pollJson = MAPPER.readTree(pollResp.body());
             String status = pollJson.get("status").asText();
             if ("done".equalsIgnoreCase(status)) {
@@ -207,7 +206,7 @@ public final class GenerateTestsLLMService {
             } else if ("error".equalsIgnoreCase(status)) throw new Exception("Job failed: " + pollJson.get("output").asText());
             Thread.sleep(POLL_SLEEP_MILLIS);
         }
-        throw new Exception("Job timed out after " + MAX_POLLING_TIME_MILLIS + "seconds");
+        throw new Exception("Job timed out after " + MAX_POLLING_TIME_MILLIS/1000 + "seconds");
     }
 
     private record BatchResult(Map<Integer, Message> responses, List<String> failures) {}
