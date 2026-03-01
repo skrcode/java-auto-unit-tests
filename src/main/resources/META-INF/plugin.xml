@@ -18,9 +18,8 @@
     <ul>
       <li><strong>Understands your code</strong> — analyzes method logic, parameters, dependencies, and edge cases to generate meaningful tests</li>
       <li><strong>One-click generation</strong> — right-click any class or method to instantly create high-coverage, runnable JUnit tests</li>
-      <li><strong>Autonomous refinement</strong> — automatically runs tests, detects failures, and fixes them until they pass</li>
+      <li><strong>Autonomous refinement</strong> — automatically finds the test class file location, runs tests, detects failures, and generates or fixes tests until they pass, including fixing current test cases with compilation or execution failures</li>
       <li><strong>Optimized AI models</strong> — dynamically picks the best AI model per class for speed and accuracy</li>
-      <li><strong>Custom test root</strong> — choose where tests go (e.g., <code>src/test/java</code>)</li>
       <li><strong>Seamless JUnit integration</strong> — works out-of-the-box with your existing Java projects</li>
     </ul>
 

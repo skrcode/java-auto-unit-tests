@@ -23,18 +23,13 @@
 
 -  **Understands your code** — analyzes method logic, parameters, dependencies, and edge cases to generate meaningful tests
 -  **One-click generation** — right-click any class or method to instantly create high-coverage, runnable JUnit tests
--  **Autonomous refinement** — automatically runs tests, detects failures, and fixes them until they pass
+-  **Autonomous refinement** — automatically finds the test class file location, runs tests, detects failures, and generates or fixes tests until they pass, including fixing current test cases with compilation or execution failures
 -  **Optimized AI models** — dynamically picks the best AI model per class for speed and accuracy
--  **Custom test root** — choose where tests go (e.g., `src/test/java`)
 -  **Seamless JUnit integration** — works out-of-the-box with your existing Java projects
 
 Skip the repetitive test writing. Let JAIPilot handle the heavy lifting — so you can focus on real engineering.  
 Join other developers using JAIPilot to **ship faster, test smarter, and build with confidence.**
 <!-- Plugin description end -->
-
-
-
-
 
 ## Installation
 
