@@ -95,5 +95,5 @@
     </extensions>
 
     <resource-bundle>messages.MyBundle</resource-bundle>
-    <idea-version since-build="231"/>
+    <idea-version since-build="243"/>
 </idea-plugin>
