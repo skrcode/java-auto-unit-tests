@@ -5,7 +5,7 @@
  */
 package com.github.skrcode.javaautounittests.service;
 
-import com.github.skrcode.javaautounittests.state.AISettings;
+import com.github.skrcode.javaautounittests.util.auth.JAIPilotAuthService;
 import com.intellij.ide.BrowserUtil;
 import com.intellij.notification.NotificationGroupManager;
 import com.intellij.notification.NotificationType;
@@ -46,12 +46,12 @@ public class ReviewService {
                             notification.expire();
                         }
                         case "good" -> {
-                            sendFeedback(AISettings.getInstance().getProKey(), 5, getAppVersion());
+                            sendFeedback(5, getAppVersion());
                             showThanks(project);
                             notification.expire();
                         }
                         case "bad" -> {
-                            sendFeedback(AISettings.getInstance().getProKey(), 1, getAppVersion());
+                            sendFeedback(1, getAppVersion());
                             showThanks(project);
                             notification.expire();
                         }
@@ -60,20 +60,22 @@ public class ReviewService {
                 .notify(project);
     }
 
-    private static void sendFeedback(String usageKey, int rating, String version) {
+    private static void sendFeedback(int rating, String version) {
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
             try {
+                String bearerToken = JAIPilotAuthService.getBearerToken();
+                if (bearerToken == null || bearerToken.isBlank()) return;
                 String body = """
                 {
-                  "usage_key": "%s",
                   "rating": %d,
                   "app_version": "%s"
                 }
-                """.formatted(usageKey, rating, version);
+                """.formatted(rating, version);
 
                 HttpRequest req = HttpRequest.newBuilder()
                         .uri(URI.create("https://otxfylhjrlaesjagfhfi.supabase.co/functions/v1/give-feedback"))
                         .header("Content-Type", "application/json")
+                        .header("Authorization", "Bearer " + bearerToken)
                         .POST(HttpRequest.BodyPublishers.ofString(body))
                         .build();
 

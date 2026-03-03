@@ -14,7 +14,8 @@ import org.jetbrains.annotations.Nullable;
 public class AISettings implements PersistentStateComponent<AISettings.State> {
 
     public static class State {
-        public String proKey = "";
+        public String authEmail = "";
+        public long accessTokenExpiresAtEpochSeconds = 0L;
         public boolean telemetryEnabled = true;
     }
 
@@ -37,12 +38,20 @@ public class AISettings implements PersistentStateComponent<AISettings.State> {
         this.state = state;
     }
 
-    public String getProKey() {
-        return state.proKey;
+    public String getAuthEmail() {
+        return state.authEmail == null ? "" : state.authEmail;
     }
 
-    public void setProKey(String key) {
-        state.proKey = key;
+    public void setAuthEmail(String email) {
+        state.authEmail = email == null ? "" : email;
+    }
+
+    public long getAccessTokenExpiresAtEpochSeconds() {
+        return state.accessTokenExpiresAtEpochSeconds;
+    }
+
+    public void setAccessTokenExpiresAtEpochSeconds(long epochSeconds) {
+        state.accessTokenExpiresAtEpochSeconds = Math.max(epochSeconds, 0L);
     }
 
     public boolean isTelemetryEnabled() { return state.telemetryEnabled; }
