@@ -10,6 +10,8 @@ import com.github.skrcode.javaautounittests.constants.TransitionStateClass;
 import com.github.skrcode.javaautounittests.constants.TransitionStateClassAll;
 import com.github.skrcode.javaautounittests.dto.*;
 import com.github.skrcode.javaautounittests.service.ExecutionManager;
+import com.github.skrcode.javaautounittests.service.GenerationRunListener;
+import com.github.skrcode.javaautounittests.service.GenerationRunResult;
 import com.github.skrcode.javaautounittests.service.GenerateTestsLLMService;
 import com.github.skrcode.javaautounittests.state.GenerateTestsGetFilesCache;
 import com.github.skrcode.javaautounittests.util.BuilderUtil;
@@ -19,12 +21,14 @@ import com.github.skrcode.javaautounittests.util.Telemetry;
 import com.intellij.execution.ui.ConsoleView;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiJavaFile;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 
@@ -54,11 +58,30 @@ public final class TestGenerationWorker {
         return ReadAction.compute(file::getClasses);
     }
 
-    public static void process(Project project, List<PsiClass> cuts, @NotNull ConsoleView myConsole, @NotNull ProgressIndicator indicator, GenerationType generationType) {
+    public static @NotNull GenerationRunResult process(
+            Project project,
+            List<PsiClass> cuts,
+            @Nullable ConsoleView myConsole,
+            @NotNull ProgressIndicator indicator,
+            GenerationType generationType
+    ) {
+        return process(project, cuts, myConsole, indicator, generationType, null);
+    }
+
+    public static @NotNull GenerationRunResult process(
+            Project project,
+            List<PsiClass> cuts,
+            @Nullable ConsoleView myConsole,
+            @NotNull ProgressIndicator indicator,
+            GenerationType generationType,
+            @Nullable GenerationRunListener listener
+    ) {
         int attempt = 1;
+        long start = System.nanoTime();
+        notifyStage(listener, "Initializing", "Preparing generation context");
+        notifyProgress(listener, 5);
         try {
             printQuotaWarning(myConsole);
-            long start = System.nanoTime();
             List<FileInfo> cutFileInfos = cuts.stream()
                     .map(CUTUtil::getCutFileInfo)
                     .filter(Objects::nonNull)
@@ -102,6 +125,7 @@ public final class TestGenerationWorker {
             // initial build
             TransitionStateClassAll allState = INITIAL;
             ConsolePrinter.section(myConsole, "Initial checks");
+            notifyStage(listener, "Initial checks", "Running project pre-checks");
             String firstBuildFailure = compileAndCollectExternalErrors(project, testFileInfos);
             if(!firstBuildFailure.isEmpty()) {
                 ConsolePrinter.error(myConsole, "Please fix build failures and retry." + firstBuildFailure);
@@ -120,6 +144,8 @@ public final class TestGenerationWorker {
             }
             if(allState.equals(TransitionStateClassAll.CORRUPTED)) throw new Exception("File Corrupted");
             ConsolePrinter.info(myConsole, "Compiling Tests ");
+            notifyStage(listener, "Compiling", "Compiling generated tests");
+            notifyProgress(listener, 25);
             StringBuilder failedClassNamesBuilder = new StringBuilder();
             indicator.checkCanceled();
             allState = TransitionStateClassAll.INITIAL_ALL_BUILD_SUCCESS;
@@ -144,6 +170,8 @@ public final class TestGenerationWorker {
             // execute all classes
             if(allState.equals(TransitionStateClassAll.INITIAL_ALL_BUILD_SUCCESS)) {
                 ConsolePrinter.success(myConsole, "Compilation Successful. Running Tests");
+                notifyStage(listener, "Running", "Executing tests");
+                notifyProgress(listener, 40);
                 indicator.checkCanceled();
                 allState = TransitionStateClassAll.INITIAL_ALL_EXECUTION_SUCCESS;
                 for (int i = 0; i < testFileInfos.size(); i++) {
@@ -173,6 +201,8 @@ public final class TestGenerationWorker {
                 for (; ; attempt++) {
                     ConsolePrinter.section(myConsole, "Attempting");
                     ConsolePrinter.info(myConsole, "Generating tests " + getCombinedClassName(testFileInfos) + ". Please wait....");
+                    notifyStage(listener, "Generating", "Attempt " + attempt + " in progress");
+                    notifyProgress(listener, 55);
                     indicator.checkCanceled();
 
                     boolean isFileCorrupted = false;
@@ -224,6 +254,8 @@ public final class TestGenerationWorker {
                             Message.MessageContent.Input args = messageContent.getInput();
                             if (messageContent.getName().equals("apply_test_class")) {
                                 indicator.checkCanceled();
+                                notifyStage(listener, "Applying", "Applying updated test class");
+                                notifyDetail(listener, "Applying " + testFileInfos.get(i).simpleName());
                                 state.get(i).setCurrentState(TransitionStateClass.APPLY_DONE);
                                 state.get(i).setNewTestSource(handleApplyTestClass(project, myConsole, args, generateTestsGetFilesCache, cutFileInfos.get(i).qualifiedName(), state.get(i).getNewTestSource(), testFileInfos.get(i)));
                                 generationTypeDuringGeneration.set(i,GenerationType.fix);
@@ -243,6 +275,8 @@ public final class TestGenerationWorker {
                     if(allState.equals(TERMINATED)) break;
                     // build all classes
                     ConsolePrinter.info(myConsole, "Compiling Tests ");
+                    notifyStage(listener, "Compiling", "Compiling updated tests");
+                    notifyProgress(listener, 75);
                     failedClassNamesBuilder = new StringBuilder();
                     indicator.checkCanceled();
                     allState = ALL_BUILD_SUCCESS;
@@ -264,6 +298,8 @@ public final class TestGenerationWorker {
                     // execute all classes
                     if (allState.equals(ALL_BUILD_SUCCESS)) {
                         ConsolePrinter.success(myConsole, "Compilation Successful. Running Tests");
+                        notifyStage(listener, "Running", "Executing updated tests");
+                        notifyProgress(listener, 90);
                         indicator.checkCanceled();
                         allState = ALL_EXECUTION_SUCCESS;
                         for (int i = 0; i < testFileInfos.size(); i++) {
@@ -283,6 +319,7 @@ public final class TestGenerationWorker {
                         }
                         if (allState.equals(ALL_EXECUTION_SUCCESS)) {
                             ConsolePrinter.success(myConsole, "Tests execution successful");
+                            notifyDetail(listener, "All tests executed successfully.");
                             if (generationType.equals(GenerationType.fix)) break;
                             boolean areAllInFinalExecutionState = true;
                             for (int i = 0; i < testFileInfos.size(); i++) {
@@ -293,16 +330,84 @@ public final class TestGenerationWorker {
                     } else ConsolePrinter.info(myConsole, "Found compilation errors " + failedClassNamesBuilder);
                 }
             }
-            Telemetry.allGenDone(getCombinedClassName(testFileInfos), String.valueOf(attempt), (System.nanoTime() - start) / 1_000_000);
+            long durationMs = (System.nanoTime() - start) / 1_000_000;
+            Telemetry.allGenDone(getCombinedClassName(testFileInfos), String.valueOf(attempt), durationMs);
             ConsolePrinter.section(myConsole, "Summary");
-            ConsolePrinter.success(myConsole, "Successfully generated Test Class " + getCombinedClassName(testFileInfos));
-            showReviewAfterTestGeneration(project);
+            boolean success = allState.equals(INITIAL_ALL_EXECUTION_SUCCESS) || allState.equals(ALL_EXECUTION_SUCCESS);
+            if (success) {
+                ConsolePrinter.success(myConsole, "Successfully generated Test Class " + getCombinedClassName(testFileInfos));
+                notifyStage(listener, "Completed", "Generation finished successfully");
+                notifyProgress(listener, 100);
+                showReviewAfterTestGeneration(project);
+                return GenerationRunResult.success(
+                        "Successfully generated test class for " + getCombinedClassName(testFileInfos),
+                        attempt,
+                        durationMs
+                );
+            }
+            ConsolePrinter.warn(myConsole, "Generation ended with pending failures for " + getCombinedClassName(testFileInfos));
+            notifyStage(listener, "Failed", "Generation completed with pending failures");
+            notifyProgress(listener, 100);
+            return GenerationRunResult.failed(
+                    "Generation completed with pending failures for " + getCombinedClassName(testFileInfos),
+                    attempt,
+                    durationMs
+            );
 
+        } catch (ProcessCanceledException cancelled) {
+            long durationMs = (System.nanoTime() - start) / 1_000_000;
+            notifyStage(listener, "Cancelled", "Generation cancelled by user");
+            notifyProgress(listener, 100);
+            return GenerationRunResult.cancelled("Generation cancelled by user.", attempt, durationMs);
         } catch (Throwable t) {
             Telemetry.allGenError(String.valueOf(attempt), t.getMessage());
             ConsolePrinter.error(myConsole, "Generation failed: Please retry in a few minutes.");
             ApplicationManager.getApplication().invokeLater(() -> Messages.showErrorDialog(t.getMessage(), "Error. Please retry in a few minutes."));
+            long durationMs = (System.nanoTime() - start) / 1_000_000;
+            notifyStage(listener, "Failed", "Generation failed: " + sanitizeMessage(t.getMessage()));
+            notifyDetail(listener, sanitizeMessage(t.getMessage()));
+            notifyProgress(listener, 100);
+            return GenerationRunResult.failed(
+                    sanitizeMessage(t.getMessage()),
+                    attempt,
+                    durationMs
+            );
         }
+    }
+
+    private static void notifyStage(@Nullable GenerationRunListener listener, @NotNull String stage, @NotNull String message) {
+        if (listener == null) return;
+        try {
+            listener.onStage(stage, message);
+        } catch (Throwable ignored) {
+            // Listener failures must not break generation.
+        }
+    }
+
+    private static void notifyProgress(@Nullable GenerationRunListener listener, int progress) {
+        if (listener == null) return;
+        int safeProgress = Math.max(0, Math.min(100, progress));
+        try {
+            listener.onProgress(safeProgress);
+        } catch (Throwable ignored) {
+            // Listener failures must not break generation.
+        }
+    }
+
+    private static void notifyDetail(@Nullable GenerationRunListener listener, @NotNull String detail) {
+        if (listener == null) return;
+        try {
+            listener.onDetail(detail);
+        } catch (Throwable ignored) {
+            // Listener failures must not break generation.
+        }
+    }
+
+    private static @NotNull String sanitizeMessage(@Nullable String message) {
+        if (message == null || message.isBlank()) return "Generation failed.";
+        String singleLine = message.replace('\n', ' ').replace('\r', ' ').trim();
+        if (singleLine.length() <= 220) return singleLine;
+        return singleLine.substring(0, 220) + "...";
     }
 
     private TestGenerationWorker() {}

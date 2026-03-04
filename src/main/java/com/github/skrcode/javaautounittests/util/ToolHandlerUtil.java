@@ -14,6 +14,7 @@ import com.intellij.openapi.project.Project;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 
@@ -22,7 +23,7 @@ import static com.github.skrcode.javaautounittests.util.LLMMessageContentUtil.*;
 
 public class ToolHandlerUtil {
 
-    public static String handleApplyTestClass(Project project, @NotNull ConsoleView myConsole, Message.MessageContent.Input args, GenerateTestsGetFilesCache generateTestsGetFilesCache, String cutFqn, String oldTestSource, FileInfo testFileInfo) {
+    public static String handleApplyTestClass(Project project, @Nullable ConsoleView myConsole, Message.MessageContent.Input args, GenerateTestsGetFilesCache generateTestsGetFilesCache, String cutFqn, String oldTestSource, FileInfo testFileInfo) {
         try {
             String classSkeleton = args.getClassSkeleton();
             List<BuilderUtil.TestMethod> methods = new ArrayList<>();
@@ -45,7 +46,7 @@ public class ToolHandlerUtil {
         }
     }
 
-    public static void handleGetFile(Project project, @NotNull ConsoleView myConsole, Message.MessageContent.Input args, String toolUseId, String testFilePath, String cutFilePath, Set<String> isClassPathFetched, MessagesContentsRequestDTO messagesContentsRequestDTO, GenerateTestsGetFilesCache generateTestsGetFilesCache, String cutFqn, String fn) {
+    public static void handleGetFile(Project project, @Nullable ConsoleView myConsole, Message.MessageContent.Input args, String toolUseId, String testFilePath, String cutFilePath, Set<String> isClassPathFetched, MessagesContentsRequestDTO messagesContentsRequestDTO, GenerateTestsGetFilesCache generateTestsGetFilesCache, String cutFqn, String fn) {
         String filePath = args.getFilePath();
         ConsolePrinter.info(myConsole, "Fetching file details: " + filePath);
         String toolResult = getFileContentFromCache(project, filePath,testFilePath, cutFilePath ,isClassPathFetched);
