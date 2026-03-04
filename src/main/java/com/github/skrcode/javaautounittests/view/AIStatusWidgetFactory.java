@@ -5,8 +5,7 @@
 package com.github.skrcode.javaautounittests.view;
 
 import com.github.skrcode.javaautounittests.util.Telemetry;
-import com.github.skrcode.javaautounittests.state.AIProjectSettings;
-import com.github.skrcode.javaautounittests.state.AISettings;
+import com.github.skrcode.javaautounittests.util.auth.JAIPilotAuthService;
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.options.ShowSettingsUtil;
 import com.intellij.openapi.project.Project;
@@ -88,10 +87,7 @@ public class AIStatusWidgetFactory implements StatusBarWidgetFactory {
         }
 
         private boolean isConfigured() {
-            AISettings s = AISettings.getInstance();
-            AIProjectSettings ps = AIProjectSettings.getInstance(project);
-//            if (ps.getTestDirectory() == null || ps.getTestDirectory().isEmpty()) return false;
-            return s.getProKey() != null && !s.getProKey().isBlank();
+            return JAIPilotAuthService.hasConfiguredCredentials();
         }
 
     }

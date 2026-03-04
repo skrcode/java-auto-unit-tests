@@ -7,22 +7,20 @@ package com.github.skrcode.javaautounittests.view;
 import com.github.skrcode.javaautounittests.dto.QuotaResponse;
 import com.github.skrcode.javaautounittests.service.QuotaService;
 import com.github.skrcode.javaautounittests.state.AISettings;
+import com.github.skrcode.javaautounittests.util.auth.JAIPilotAuthService;
+import com.intellij.icons.AllIcons;
 import com.intellij.openapi.options.Configurable;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.roots.ProjectFileIndex;
-import com.intellij.openapi.roots.ProjectRootManager;
-import com.intellij.openapi.ui.TextFieldWithBrowseButton;
-import com.intellij.openapi.util.text.StringUtil;
-import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.ui.components.JBPasswordField;
+import com.intellij.ui.JBColor;
 import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
-import javax.swing.border.LineBorder;
 import java.awt.*;
 import java.net.URI;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class AISettingsConfigurable implements Configurable {
 
@@ -34,20 +32,25 @@ public class AISettingsConfigurable implements Configurable {
 
     // Root + main sections
     private JPanel rootPanel;
-    private JPanel jaipilotPanel;
-    private JPanel modeCards;
-    private CardLayout cardLayout;
 
     private JLabel creditsLabel;
-
-    private JBPasswordField jaipilotKeyField;
-//    private TextFieldWithBrowseButton testDirField;
+    private JLabel authStateIconLabel;
+    private JLabel authStatusLabel;
+    private JLabel authEmailLabel;
+    private JButton signInButton;
+    private JButton signOutButton;
 
     private JCheckBox telemetryCheck;
 
     private static final int GAP_BETWEEN_BLOCKS = 8;
     private static final int GAP_LABEL_TO_CONTROL = 4;
     private static final String ACCOUNT_URL = "https://www.jaipilot.com/account";
+    private static final Pattern URL_PATTERN = Pattern.compile("href=['\"](https?://[^'\"]+)['\"]");
+    private static final Color PRIMARY_TEXT = new JBColor(new Color(35, 37, 39), new Color(220, 223, 228));
+    private static final Color MUTED_TEXT = new JBColor(new Color(95, 99, 104), new Color(151, 151, 156));
+    private static final Color SUCCESS_TEXT = new JBColor(new Color(30, 130, 76), new Color(121, 218, 167));
+    private static final Color ERROR_TEXT = new JBColor(new Color(180, 40, 40), new Color(255, 128, 128));
+    private static final Color PANEL_BORDER = new JBColor(new Color(210, 214, 220), new Color(67, 70, 75));
 
     @Override
     public @Nls(capitalization = Nls.Capitalization.Title) String getDisplayName() {
@@ -63,156 +66,122 @@ public class AISettingsConfigurable implements Configurable {
         contentPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         rootPanel.add(contentPanel, BorderLayout.NORTH);
 
-        // ===== How to use JAIPilot box =====
-        JPanel howToBox = new JPanel();
-        howToBox.setLayout(new BoxLayout(howToBox, BoxLayout.Y_AXIS));
-        howToBox.setAlignmentX(Component.LEFT_ALIGNMENT);
-        howToBox.setBorder(BorderFactory.createCompoundBorder(
-                new LineBorder(new Color(200, 200, 200)), new EmptyBorder(10, 10, 10, 10)
-        ));
+        JPanel setupPanel = createSectionPanel();
+        JLabel setupTitle = new JLabel("Get Started");
+        setupTitle.setFont(setupTitle.getFont().deriveFont(Font.BOLD, setupTitle.getFont().getSize() + 1f));
+        addFormBlock(setupPanel, null, setupTitle);
 
-        JLabel howToTitle = new JLabel(
-                "<html><div style='width:520px;'>"
-                        + "After setup, you can right-click any Java class and instantly generate Tests with JAIPilot.<br>"
-                        + "<span style='color:#4CAF50;'><b>No credit card required.</b> Free credits included on signup.</span>"
+        JLabel setupBody = new JLabel(
+                "<html><div style='width:560px;'>"
+                        + "Right-click any Java class to generate tests with JAIPilot.<br>"
+                        + "<span style='color:#3BAF66;'><b>No credit card required.</b> Free credits are included at signup.</span>"
                         + "</div></html>"
         );
-        howToTitle.setAlignmentX(Component.LEFT_ALIGNMENT);
+        setupBody.setAlignmentX(Component.LEFT_ALIGNMENT);
+        addFormBlock(setupPanel, null, setupBody);
+        contentPanel.add(setupPanel);
+        contentPanel.add(Box.createVerticalStrut(10));
 
-        howToBox.add(howToTitle);
-        howToBox.add(Box.createVerticalStrut(4));
+        JPanel accountPanel = createSectionPanel();
+        JLabel accountTitle = new JLabel("Account");
+        accountTitle.setFont(accountTitle.getFont().deriveFont(Font.BOLD, accountTitle.getFont().getSize() + 1f));
+        addFormBlock(accountPanel, null, accountTitle);
 
-        contentPanel.add(howToBox);
-        contentPanel.add(Box.createVerticalStrut(12));
-
-        // ===== Header =====
-        JPanel header = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-        header.setAlignmentX(Component.LEFT_ALIGNMENT);
-        contentPanel.add(header);
-        contentPanel.add(Box.createVerticalStrut(6));
-
-        // ===== Common Settings =====
-        JPanel commonPanel = new JPanel();
-        commonPanel.setLayout(new BoxLayout(commonPanel, BoxLayout.Y_AXIS));
-        commonPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-        telemetryCheck = new JCheckBox("Help improve JAIPilot with anonymous usage statistics");
-        telemetryCheck.setToolTipText("Sends only anonymized feature usage (no source code or personal data).");
-        telemetryCheck.setAlignmentX(Component.LEFT_ALIGNMENT);
-        addFormBlock(commonPanel, "General:", telemetryCheck);
-        contentPanel.add(commonPanel);
-        contentPanel.add(Box.createVerticalStrut(8));
-
-        // ===== Test Directory =====
-        Dimension fieldSize = new Dimension(520, 30);
-//        testDirField = new TextFieldWithBrowseButton();
-//        sizeBrowse(testDirField, fieldSize);
-//        testDirField.addBrowseFolderListener(
-//                new TextBrowseFolderListener(FileChooserDescriptorFactory.createSingleFolderDescriptor())
-//        );
-//        addFormBlock(contentPanel, "Select Test Root (e.g., src/test/java):", testDirField);
-        contentPanel.add(Box.createVerticalStrut(8));
-
-        // ===== Mode Cards =====
-        cardLayout = new CardLayout();
-        modeCards = new JPanel(cardLayout);
-        modeCards.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-        // JAIPilot panel
-        jaipilotPanel = new JPanel();
-        jaipilotPanel.setLayout(new BoxLayout(jaipilotPanel, BoxLayout.Y_AXIS));
-
-        JLabel jaipilotSteps = new JLabel(
-                "<html><div style='width:520px; text-align:left;'>"
+        JLabel steps = new JLabel(
+                "<html><div style='width:560px;'>"
                         + "<b>Quick steps</b>"
                         + "<ol style='margin-top:4px;'>"
-                        + "<li>Click <i>Open Account</i> to sign in or sign up (takes seconds)</li>"
-                        + "<li>You’ll instantly get <b>free credits</b> – no credit card required</li>"
-                        + "<li>Copy your <b>License Key</b> from the Account page</li>"
-                        + "<li>Paste it below</li>"
+                        + "<li>Click <i>Sign in to JAIPilot</i></li>"
+                        + "<li>Complete sign-in in your browser, then return here</li>"
+                        + "<li>Start generating tests right away with free trial credits</li>"
                         + "</ol>"
                         + "</div></html>"
         );
+        addFormBlock(accountPanel, null, steps);
 
-        addFormBlock(jaipilotPanel, null, jaipilotSteps);
+        authStateIconLabel = new JLabel();
+        authStatusLabel = new JLabel();
+        JPanel statusRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        statusRow.setOpaque(false);
+        statusRow.add(authStateIconLabel);
+        statusRow.add(authStatusLabel);
+        addFormBlock(accountPanel, null, statusRow);
 
-        JButton openAccountBtn = new JButton("Open Account");
-        openAccountBtn.setFocusable(false);
-        openAccountBtn.addActionListener(e -> open(ACCOUNT_URL));
-        JPanel accountCtaRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-        accountCtaRow.add(openAccountBtn);
-        addFormBlock(jaipilotPanel, null, accountCtaRow);
+        authEmailLabel = new JLabel();
+        authEmailLabel.setBorder(new EmptyBorder(0, 22, 0, 0));
+        addFormBlock(accountPanel, null, authEmailLabel);
 
-        // ===== License Key Input =====
-        jaipilotKeyField = new JBPasswordField();
-        sizeField(jaipilotKeyField, fieldSize);
-        JPanel keyRow = new JPanel();
-        keyRow.setLayout(new BoxLayout(keyRow, BoxLayout.X_AXIS));
-        keyRow.add(jaipilotKeyField);
+        signInButton = new JButton("Sign in to JAIPilot");
+        signInButton.setFocusable(false);
+        signInButton.addActionListener(e -> JAIPilotAuthService.startLogin(project, () -> {
+            refreshAuthStatus();
+            fetchAndPopulateQuotaAsync();
+        }));
 
-        keyRow.add(Box.createHorizontalStrut(6));
-        JCheckBox showKey = new JCheckBox("Show");
-        showKey.setFocusable(false);
-        showKey.addActionListener(ev -> setReveal(jaipilotKeyField, showKey.isSelected()));
-        keyRow.add(showKey);
+        signOutButton = new JButton("Sign out");
+        signOutButton.setFocusable(false);
+        signOutButton.addActionListener(e -> {
+            JAIPilotAuthService.signOut();
+            refreshAuthStatus();
+            fetchAndPopulateQuotaAsync();
+        });
 
-        addFormBlock(jaipilotPanel, "JAIPilot License Key:", keyRow);
+        JButton openAccountButton = new JButton("Manage account");
+        openAccountButton.setFocusable(false);
+        openAccountButton.addActionListener(e -> open(ACCOUNT_URL));
 
-        // Tip / link
-        JLabel tip = new JLabel(
-                "<html><div style='width:520px; color:#888;'>"
-                        + "Tip: You can always reopen <a href='" + ACCOUNT_URL + "'>https://www.jaipilot.com/account</a> to manage your key.<br>"
-                        + "Signup is free – you’ll always start with trial credits."
+        JPanel actionsRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        actionsRow.setOpaque(false);
+        actionsRow.add(signInButton);
+        actionsRow.add(signOutButton);
+        actionsRow.add(openAccountButton);
+        addFormBlock(accountPanel, null, actionsRow);
+
+        JLabel accountTip = new JLabel(
+                "<html><div style='width:560px; color:#8A8D91;'>"
+                        + "You can always open <a href='" + ACCOUNT_URL + "'>" + ACCOUNT_URL + "</a> to manage your account."
                         + "</div></html>"
         );
-        tip.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        tip.addMouseListener(new java.awt.event.MouseAdapter() {
+        accountTip.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        accountTip.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override public void mouseClicked(java.awt.event.MouseEvent e) { open(ACCOUNT_URL); }
         });
-        addFormBlock(jaipilotPanel, null, tip);
+        addFormBlock(accountPanel, null, accountTip);
 
-// ===== Ultra Minimal Credits Line =====
-        creditsLabel = new JLabel("[Credits] Request Attempts remaining: – ");
+        creditsLabel = new JLabel("Request attempts remaining: Loading...");
         creditsLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-        creditsLabel.setForeground(new Color(200, 200, 200));
-        creditsLabel.setBorder(new EmptyBorder(4, 0, 0, 0));
+        creditsLabel.setForeground(MUTED_TEXT);
+        creditsLabel.setBorder(new EmptyBorder(6, 0, 0, 0));
         creditsLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         creditsLabel.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
             public void mouseClicked(java.awt.event.MouseEvent e) {
-                String text = creditsLabel.getText();
-
-                java.util.regex.Matcher m =
-                        java.util.regex.Pattern.compile("href=['\"](https?://[^'\"]+)['\"]")
-                                .matcher(text);
-
-                if (m.find()) {
-                    try {
-                        Desktop.getDesktop().browse(new URI(m.group(1)));
-                    } catch (Exception ignored) {}
+                Matcher matcher = URL_PATTERN.matcher(creditsLabel.getText());
+                if (matcher.find()) {
+                    open(matcher.group(1));
                 }
             }
         });
+        addFormBlock(accountPanel, "Credits:", creditsLabel);
 
+        contentPanel.add(accountPanel);
+        contentPanel.add(Box.createVerticalStrut(10));
 
-        addFormBlock(jaipilotPanel, null, creditsLabel);
+        JPanel commonPanel = createSectionPanel();
+        JLabel generalTitle = new JLabel("General");
+        generalTitle.setFont(generalTitle.getFont().deriveFont(Font.BOLD, generalTitle.getFont().getSize() + 1f));
+        addFormBlock(commonPanel, null, generalTitle);
 
-
-        modeCards.add(jaipilotPanel, "JAIPilot");
-        contentPanel.add(modeCards);
+        telemetryCheck = new JCheckBox("Help improve JAIPilot with anonymous usage statistics");
+        telemetryCheck.setToolTipText("Sends only anonymized feature usage (no source code or personal data).");
+        telemetryCheck.setAlignmentX(Component.LEFT_ALIGNMENT);
+        addFormBlock(commonPanel, null, telemetryCheck);
+        contentPanel.add(commonPanel);
 
         // Load persisted state
         AISettings app = AISettings.getInstance();
-        jaipilotKeyField.setText(app.getProKey());
         telemetryCheck.setSelected(app.isTelemetryEnabled());
-
-//        String projectTestDir = AIProjectSettings.getInstance(project).getTestDirectory();
-//        if (StringUtil.isEmptyOrSpaces(projectTestDir)) {
-//            String auto = detectTestRoot(project);
-//            if (!StringUtil.isEmptyOrSpaces(auto)) testDirField.setText(auto);
-//        } else {
-//            testDirField.setText(projectTestDir);
-//        }
+        refreshAuthStatus();
 
         // Async quota fetch
         fetchAndPopulateQuotaAsync();
@@ -221,10 +190,9 @@ public class AISettingsConfigurable implements Configurable {
     }
 
     private void fetchAndPopulateQuotaAsync() {
-        String key = jaipilotKeyField.getText();
-        if (StringUtil.isEmptyOrSpaces(key)) {
-            creditsLabel.setText("Credits remaining: Enter license key to fetch credits.");
-            creditsLabel.setForeground(new Color(200, 200, 200));
+        if (!JAIPilotAuthService.hasConfiguredCredentials()) {
+            creditsLabel.setText("Sign in to view your remaining request attempts.");
+            creditsLabel.setForeground(MUTED_TEXT);
             return;
         }
 
@@ -233,35 +201,70 @@ public class AISettingsConfigurable implements Configurable {
                 QuotaResponse quota = QuotaService.fetchQuota();
                 SwingUtilities.invokeLater(() -> {
                     StringBuilder sb = new StringBuilder("<html>");
-                    sb.append("[Credits] Request Attempts remaining: – ").append(quota.quotaRemaining);
+                    sb.append("<b>Request attempts remaining:</b> ").append(quota.quotaRemaining);
 
                     String message = null;
-                    if(quota.message != null && !quota.message.isEmpty()) message = quota.message;
-                    if(quota.error != null && !quota.error.isEmpty()) message = quota.error;
+                    if (quota.message != null && !quota.message.isEmpty()) message = quota.message;
+                    if (quota.error != null && !quota.error.isEmpty()) message = quota.error;
 
-                    if ((message != null && !message.isEmpty())) {
-                        String htmlMsg = message.replaceAll(
-                                "(https?://[^ ]+)",
+                    if (message != null && !message.isEmpty()) {
+                        String htmlMsg = escapeHtml(message).replaceAll(
+                                "(https?://\\S+)",
                                 "<a href='$1'>$1</a>"
                         );
                         sb.append("<br>").append(htmlMsg);
-                        creditsLabel.setForeground(new Color(200, 200, 200));
                     }
 
                     sb.append("</html>");
                     creditsLabel.setText(sb.toString());
+                    creditsLabel.setForeground(MUTED_TEXT);
                 });
-
-
-
-
             } catch (Exception ex) {
                 SwingUtilities.invokeLater(() -> {
-                    creditsLabel.setText("Credits remaining: Unable to fetch credits.");
-                    creditsLabel.setForeground(new Color(150, 0, 0));
+                    creditsLabel.setText("Unable to fetch request attempts right now.");
+                    creditsLabel.setForeground(ERROR_TEXT);
                 });
             }
         }).start();
+    }
+
+    private void refreshAuthStatus() {
+        String email = JAIPilotAuthService.getAuthEmail();
+        boolean loggedIn = JAIPilotAuthService.hasConfiguredCredentials();
+        String displayEmail = email == null || email.isBlank() ? "No email found" : email;
+
+        authStateIconLabel.setIcon(loggedIn ? AllIcons.General.InspectionsOK : AllIcons.General.Warning);
+        authStatusLabel.setText(loggedIn ? "Signed in" : "Not signed in");
+        authStatusLabel.setForeground(loggedIn ? SUCCESS_TEXT : MUTED_TEXT);
+
+        if (loggedIn) {
+            authEmailLabel.setText("Account: " + displayEmail);
+            Color labelForeground = UIManager.getColor("Label.foreground");
+            authEmailLabel.setForeground(labelForeground != null ? labelForeground : PRIMARY_TEXT);
+        } else {
+            authEmailLabel.setText("Account: Sign in to view your JAIPilot email");
+            authEmailLabel.setForeground(MUTED_TEXT);
+        }
+
+        signInButton.setVisible(!loggedIn);
+        signInButton.setEnabled(!loggedIn);
+        signOutButton.setVisible(loggedIn);
+        signOutButton.setEnabled(loggedIn);
+        if (signInButton.getParent() != null) {
+            signInButton.getParent().revalidate();
+            signInButton.getParent().repaint();
+        }
+    }
+
+    private JPanel createSectionPanel() {
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        panel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(PANEL_BORDER),
+                new EmptyBorder(12, 12, 12, 12)
+        ));
+        return panel;
     }
 
     private void addFormBlock(JPanel panel, String label, JComponent control) {
@@ -276,40 +279,17 @@ public class AISettingsConfigurable implements Configurable {
         panel.add(control);
     }
 
-    private void sizeField(JTextField field, Dimension d) {
-        field.setPreferredSize(d);
-        field.setMaximumSize(d);
-    }
-
-    private void sizeBrowse(TextFieldWithBrowseButton b, Dimension d) {
-        b.setPreferredSize(d);
-        b.setMaximumSize(d);
-    }
-
-    private String detectTestRoot(Project project) {
-        for (VirtualFile root : ProjectRootManager.getInstance(project).getContentSourceRoots()) {
-            if (ProjectFileIndex.getInstance(project).isInTestSourceContent(root)) {
-                return root.getPath();
-            }
-        }
-        return "";
-    }
-
     @Override
     public boolean isModified() {
-        AISettings.State app = AISettings.getInstance().getState();
-//        String projTestDir = AIProjectSettings.getInstance(project).getTestDirectory();
-
-        return !StringUtil.equals(jaipilotKeyField.getText(), StringUtil.notNullize(app.proKey))
-//                || !StringUtil.equals(StringUtil.notNullize(testDirField.getText()), StringUtil.notNullize(projTestDir))
-                || telemetryCheck.isSelected() != AISettings.getInstance().isTelemetryEnabled();
+        return telemetryCheck.isSelected() != AISettings.getInstance().isTelemetryEnabled();
     }
 
     @Override
     public void apply() {
         AISettings app = AISettings.getInstance();
-        app.setProKey(jaipilotKeyField.getText());
         app.setTelemetryEnabled(telemetryCheck.isSelected());
+        refreshAuthStatus();
+        fetchAndPopulateQuotaAsync();
 
 //        AIProjectSettings proj = AIProjectSettings.getInstance(project);
 //        proj.setTestDirectory(StringUtil.notNullize(testDirField.getText()));
@@ -317,26 +297,25 @@ public class AISettingsConfigurable implements Configurable {
 
     @Override
     public void reset() {
-        AISettings.State app = AISettings.getInstance().getState();
-        jaipilotKeyField.setText(StringUtil.notNullize(app.proKey));
-
 //        String projTestDir = AIProjectSettings.getInstance(project).getTestDirectory();
 //        testDirField.setText(StringUtil.notNullize(projTestDir));
         telemetryCheck.setSelected(AISettings.getInstance().isTelemetryEnabled());
+        refreshAuthStatus();
+        fetchAndPopulateQuotaAsync();
     }
 
     private void open(String url) {
         try { Desktop.getDesktop().browse(new URI(url)); } catch (Exception ignored) {}
     }
 
-    private void setReveal(JPasswordField f, boolean reveal) {
-        if (reveal) {
-            if (f.getClientProperty("echoBackup") == null)
-                f.putClientProperty("echoBackup", f.getEchoChar());
-            f.setEchoChar((char) 0);
-        } else {
-            Object b = f.getClientProperty("echoBackup");
-            if (b instanceof Character) f.setEchoChar((Character) b);
-        }
+    private static String escapeHtml(String value) {
+        if (value == null || value.isBlank()) return "";
+        return value
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&#39;");
     }
+
 }

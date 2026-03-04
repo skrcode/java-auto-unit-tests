@@ -9,7 +9,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.github.skrcode.javaautounittests.constants.GenerationType;
 import com.github.skrcode.javaautounittests.dto.Message;
 import com.github.skrcode.javaautounittests.dto.PromptResponseOutput;
-import com.github.skrcode.javaautounittests.state.AISettings;
+import com.github.skrcode.javaautounittests.util.auth.JAIPilotAuthService;
 import com.github.skrcode.javaautounittests.util.ConsolePrinter;
 import com.github.skrcode.javaautounittests.util.Telemetry;
 import com.intellij.execution.ui.ConsoleView;
@@ -151,7 +151,11 @@ public final class GenerateTestsLLMService {
     private static PromptResponseOutput sendRequest(int attempt, ProgressIndicator indicator, List<List<Message>> messages, List<GenerationType> generationTypeDuringGeneration) throws Exception {
         Map<String, Object> body = Map.of("attemptNumber", attempt, "requests", messages, "generationTypeDuringGeneration", generationTypeDuringGeneration);
         String requestJson = MAPPER.writeValueAsString(body);
-        String headerValue = "Bearer " + AISettings.getInstance().getProKey();
+        String bearerToken = JAIPilotAuthService.getBearerToken();
+        if (bearerToken == null || bearerToken.isBlank()) {
+            throw new Exception("JAIPilot session expired. Please sign in again in Settings.");
+        }
+        String headerValue = "Bearer " + bearerToken;
         indicator.checkCanceled();
 
         HttpRequest createJobReq = buildInitialRequest(requestJson, headerValue);

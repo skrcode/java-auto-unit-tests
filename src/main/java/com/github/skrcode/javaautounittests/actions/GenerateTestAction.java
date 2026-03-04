@@ -6,7 +6,7 @@ package com.github.skrcode.javaautounittests.actions;
 
 import com.github.skrcode.javaautounittests.constants.GenerationType;
 import com.github.skrcode.javaautounittests.service.BulkGeneratorService;
-import com.github.skrcode.javaautounittests.state.AISettings;
+import com.github.skrcode.javaautounittests.util.auth.JAIPilotAuthService;
 import com.github.skrcode.javaautounittests.util.Telemetry;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
@@ -127,9 +127,9 @@ public class GenerateTestAction extends AnAction implements DumbAware {
 //            Messages.showErrorDialog(project, "Please select fewer than 1 java classes.", "JAIPilot");
             return false;
         }
-        if (AISettings.getInstance().getProKey().isEmpty()) {
-            Telemetry.uiSettingsFailureClick("license key not configured in settings");
-            Messages.showErrorDialog(project, "Please configure license key in settings.", "JAIPilot");
+        if (!JAIPilotAuthService.hasConfiguredCredentials()) {
+            Telemetry.uiSettingsFailureClick("authentication not configured in settings");
+            Messages.showErrorDialog(project, "Please sign in to JAIPilot in Settings.", "JAIPilot");
             ApplicationManager.getApplication().invokeLater(() -> {
                 ShowSettingsUtil.getInstance()
                         .showSettingsDialog(

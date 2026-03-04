@@ -8,12 +8,11 @@ package com.github.skrcode.javaautounittests.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.skrcode.javaautounittests.dto.QuotaResponse;
-import com.github.skrcode.javaautounittests.state.AISettings;
 import com.github.skrcode.javaautounittests.util.ConsolePrinter;
+import com.github.skrcode.javaautounittests.util.auth.JAIPilotAuthService;
 import com.intellij.execution.ui.ConsoleView;
 
 import java.net.URI;
-import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -24,8 +23,7 @@ public class QuotaService {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     public static QuotaResponse fetchQuota()  {
-        String baseUrl = "https://otxfylhjrlaesjagfhfi.supabase.co/functions/v1/fetch-quota";
-        String url = baseUrl + "?licenseKey=" + URLEncoder.encode(AISettings.getInstance().getState().proKey, StandardCharsets.UTF_8);
+        String url = "https://otxfylhjrlaesjagfhfi.supabase.co/functions/v1/fetch-quota";
         HttpClient http = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(30))
                 .build();
@@ -35,10 +33,16 @@ public class QuotaService {
         while (true) {
             try {
                 QuotaResponse out = new QuotaResponse();
+                String bearerToken = JAIPilotAuthService.getBearerToken();
+                if (bearerToken.isBlank()) {
+                    out.error = "Session expired. Please sign in again in Settings.";
+                    return out;
+                }
                 HttpRequest req = HttpRequest.newBuilder()
                         .uri(URI.create(url))
                         .timeout(Duration.ofSeconds(20))
                         .header("Accept", "application/json")
+                        .header("Authorization", "Bearer " + bearerToken)
                         .GET()
                         .build();
                 HttpResponse<String> resp =
