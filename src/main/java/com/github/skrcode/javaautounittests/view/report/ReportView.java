@@ -386,86 +386,59 @@ public final class ReportView implements Disposable {
 
     private List<ClassTestReportRow> buildStructuralReport(@NotNull ProgressIndicator indicator) {
         CoverageCalculator coverage = new CoverageCalculator();
-        JavaPsiFacade psiFacade = JavaPsiFacade.getInstance(project);
-        GlobalSearchScope scope = GlobalSearchScope.projectScope(project);
-
-        List<String> cutFqns = findAllTopLevelClassFqns(indicator);
-        List<ClassTestReportRow> out = new ArrayList<>(cutFqns.size());
+        StructuralScan scan = scanProjectStructure(indicator, coverage);
+        List<ClassTestReportRow> out = new ArrayList<>(scan.cutCandidates().size());
 
         int i = 0;
-        for (String cutFqn : cutFqns) {
+        for (CutCandidate cut : scan.cutCandidates()) {
             indicator.checkCanceled();
-            indicator.setFraction(cutFqns.isEmpty() ? 1.0 : i / (double) cutFqns.size());
-            indicator.setText2("Scanning " + cutFqn);
+            indicator.setFraction(scan.cutCandidates().isEmpty() ? 1.0 : i / (double) scan.cutCandidates().size());
+            if (i % 50 == 0) {
+                indicator.setText2("Mapping tests: " + cut.cutFqn());
+            }
 
-            CutBuildSnapshot snapshot = ReadAction.compute(
-                    () -> buildCutSnapshot(cutFqn, coverage, psiFacade, scope)
-            );
-            i++;
-            if (snapshot == null) continue;
-
-            if (snapshot.testClasses.isEmpty()) {
+            List<PsiClass> tests = resolveTestClassesForCut(cut, scan.testsByCutFqn(), scan.testsByCutSimpleName());
+            if (tests.isEmpty()) {
                 out.add(new ClassTestReportRow(
-                        snapshot.cutFqn,
-                        snapshot.cutSimpleName,
-                        snapshot.cutPackageName,
+                        cut.cutFqn(),
+                        cut.cutSimpleName(),
+                        cut.cutPackageName(),
                         null,
                         null,
-                        snapshot.totalPublicMethods,
+                        cut.totalPublicMethods(),
                         0,
                         0,
                         List.of(),
-                        snapshot.cutPsi,
+                        cut.cutPsi(),
                         null,
                         ClassTestReportRow.CoverageStatus.NOT_ANALYZED
                 ));
+                i++;
                 continue;
             }
 
-            for (PsiClass testClass : snapshot.testClasses) {
+            for (PsiClass testClass : tests) {
                 String testFqn = testClass.getQualifiedName();
                 out.add(new ClassTestReportRow(
-                        snapshot.cutFqn,
-                        snapshot.cutSimpleName,
-                        snapshot.cutPackageName,
+                        cut.cutFqn(),
+                        cut.cutSimpleName(),
+                        cut.cutPackageName(),
                         testFqn,
                         Objects.toString(testClass.getName(), ""),
-                        snapshot.totalPublicMethods,
+                        cut.totalPublicMethods(),
                         0,
                         failureCountFor(testFqn),
                         List.of(),
-                        snapshot.cutPsi,
+                        cut.cutPsi(),
                         testClass,
                         ClassTestReportRow.CoverageStatus.NOT_ANALYZED
                 ));
             }
+            i++;
         }
 
         out.sort(ROW_COMPARATOR);
         return out;
-    }
-
-    private @Nullable CutBuildSnapshot buildCutSnapshot(
-            @NotNull String cutFqn,
-            @NotNull CoverageCalculator coverage,
-            @NotNull JavaPsiFacade psiFacade,
-            @NotNull GlobalSearchScope scope
-    ) {
-        PsiClass cut = psiFacade.findClass(cutFqn, scope);
-        if (cut == null || !cut.isValid()) return null;
-
-        int totalPublicMethods = coverage.countCoverablePublicMethods(cut);
-        if (totalPublicMethods <= 0) return null;
-
-        List<PsiClass> testClasses = coverage.findTestClassesFor(cut);
-        return new CutBuildSnapshot(
-                cut,
-                cutFqn,
-                Objects.toString(cut.getName(), ""),
-                packageOf(cutFqn),
-                totalPublicMethods,
-                testClasses
-        );
     }
 
     private int failureCountFor(@Nullable String testFqn) {
@@ -474,44 +447,216 @@ public final class ReportView implements Disposable {
         return testState == null ? 0 : Math.max(0, testState.failureCount);
     }
 
-    private List<String> findAllTopLevelClassFqns(@NotNull ProgressIndicator indicator) {
+    private @NotNull StructuralScan scanProjectStructure(
+            @NotNull ProgressIndicator indicator,
+            @NotNull CoverageCalculator coverage
+    ) {
         ProjectFileIndex index = ProjectRootManager.getInstance(project).getFileIndex();
         PsiManager psiManager = PsiManager.getInstance(project);
+        String projectBasePath = normalizedProjectBasePath();
 
         Collection<VirtualFile> javaFiles = ReadAction.compute(
                 () -> FileTypeIndex.getFiles(JavaFileType.INSTANCE, GlobalSearchScope.projectScope(project))
         );
-        List<String> result = new ArrayList<>(javaFiles.size());
+        List<CutCandidate> cutCandidates = new ArrayList<>(javaFiles.size());
+        Map<String, List<PsiClass>> testsByCutFqn = new HashMap<>();
+        Map<String, List<PsiClass>> testsByCutSimpleName = new HashMap<>();
+
         int i = 0;
         for (VirtualFile file : javaFiles) {
             indicator.checkCanceled();
             if (i % 100 == 0) {
-                indicator.setText2("Discovering classes: " + file.getName());
+                indicator.setText2("Indexing files: " + file.getName());
             }
+            indicator.setFraction(javaFiles.isEmpty() ? 1.0 : i / (double) javaFiles.size());
 
-            List<String> fileClasses = ReadAction.compute(() -> {
-                if (!file.isValid()) return Collections.emptyList();
-                if (!index.isInSourceContent(file) || index.isInTestSourceContent(file)) return Collections.emptyList();
+            FileScanResult scan = ReadAction.compute(() -> {
+                if (!file.isValid()) return FileScanResult.empty();
+                if (!isInMainProjectRoot(file, projectBasePath)) return FileScanResult.empty();
+                if (!index.isInSourceContent(file)) return FileScanResult.empty();
+
                 PsiFile psiFile = psiManager.findFile(file);
-                if (!(psiFile instanceof PsiJavaFile javaFile)) return Collections.emptyList();
+                if (!(psiFile instanceof PsiJavaFile javaFile)) return FileScanResult.empty();
+                boolean testSource = index.isInTestSourceContent(file);
 
-                List<String> out = new ArrayList<>();
+                List<CutCandidate> cuts = new ArrayList<>();
+                Map<String, List<PsiClass>> testsForCutFqn = testSource ? new HashMap<>() : Collections.emptyMap();
+                Map<String, List<PsiClass>> testsForCutSimpleName = testSource ? new HashMap<>() : Collections.emptyMap();
                 for (PsiClass cls : javaFile.getClasses()) {
-                    String qn = cls.getQualifiedName();
-                    if (qn != null && !qn.isBlank()) {
-                        out.add(qn);
+                    if (cls == null || !cls.isValid()) continue;
+                    String classFqn = cls.getQualifiedName();
+                    if (classFqn == null || classFqn.isBlank()) continue;
+                    String simpleName = Objects.toString(cls.getName(), "");
+                    if (simpleName.isBlank()) continue;
+
+                    if (testSource) {
+                        for (String cutFqn : inferredCutFqnsForTest(classFqn, simpleName)) {
+                            testsForCutFqn.computeIfAbsent(cutFqn, ignored -> new ArrayList<>()).add(cls);
+                        }
+                        String strippedSimpleName = stripKnownTestSuffix(simpleName);
+                        if (strippedSimpleName != null && !strippedSimpleName.isBlank()) {
+                            testsForCutSimpleName.computeIfAbsent(strippedSimpleName, ignored -> new ArrayList<>()).add(cls);
+                        }
+                        continue;
                     }
+
+                    int totalPublicMethods = coverage.countCoverablePublicMethods(cls);
+                    if (totalPublicMethods <= 0) continue;
+                    cuts.add(new CutCandidate(
+                            cls,
+                            classFqn,
+                            simpleName,
+                            packageOf(classFqn),
+                            totalPublicMethods
+                    ));
                 }
-                return out;
+                if (testSource) {
+                    return new FileScanResult(Collections.emptyList(), testsForCutFqn, testsForCutSimpleName);
+                }
+                return new FileScanResult(cuts, Collections.emptyMap(), Collections.emptyMap());
             });
 
-            result.addAll(fileClasses);
+            if (!scan.cuts().isEmpty()) {
+                cutCandidates.addAll(scan.cuts());
+            }
+            if (!scan.testsByCutFqn().isEmpty()) {
+                for (Map.Entry<String, List<PsiClass>> entry : scan.testsByCutFqn().entrySet()) {
+                    testsByCutFqn.computeIfAbsent(entry.getKey(), ignored -> new ArrayList<>()).addAll(entry.getValue());
+                }
+            }
+            if (!scan.testsByCutSimpleName().isEmpty()) {
+                for (Map.Entry<String, List<PsiClass>> entry : scan.testsByCutSimpleName().entrySet()) {
+                    testsByCutSimpleName.computeIfAbsent(entry.getKey(), ignored -> new ArrayList<>()).addAll(entry.getValue());
+                }
+            }
+
             i++;
         }
 
-        result.sort(Comparator.naturalOrder());
-        return result;
+        Map<String, CutCandidate> uniqueCuts = new LinkedHashMap<>();
+        for (CutCandidate cut : cutCandidates) {
+            uniqueCuts.putIfAbsent(cut.cutFqn(), cut);
+        }
+
+        List<CutCandidate> dedupedCuts = new ArrayList<>(uniqueCuts.values());
+        dedupedCuts.sort(Comparator.comparing(CutCandidate::cutFqn));
+        return new StructuralScan(dedupedCuts, testsByCutFqn, testsByCutSimpleName);
     }
+
+    private @NotNull List<PsiClass> resolveTestClassesForCut(
+            @NotNull CutCandidate cut,
+            @NotNull Map<String, List<PsiClass>> testsByCutFqn,
+            @NotNull Map<String, List<PsiClass>> testsByCutSimpleName
+    ) {
+        List<PsiClass> direct = testsByCutFqn.get(cut.cutFqn());
+        if (direct != null && !direct.isEmpty()) {
+            return sortedUniqueValidClasses(direct);
+        }
+
+        List<PsiClass> bySimpleName = testsByCutSimpleName.get(cut.cutSimpleName());
+        if (bySimpleName == null || bySimpleName.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<PsiClass> samePackage = new ArrayList<>();
+        for (PsiClass test : bySimpleName) {
+            if (test == null || !test.isValid()) continue;
+            String testFqn = test.getQualifiedName();
+            if (testFqn == null || testFqn.isBlank()) continue;
+            if (packageOf(testFqn).equals(cut.cutPackageName())) {
+                samePackage.add(test);
+            }
+        }
+        if (!samePackage.isEmpty()) {
+            return sortedUniqueValidClasses(samePackage);
+        }
+
+        if (bySimpleName.size() == 1) {
+            return sortedUniqueValidClasses(bySimpleName);
+        }
+        return Collections.emptyList();
+    }
+
+    private static @NotNull List<PsiClass> sortedUniqueValidClasses(@NotNull List<PsiClass> input) {
+        Map<String, PsiClass> unique = new LinkedHashMap<>();
+        for (PsiClass cls : input) {
+            if (cls == null || !cls.isValid()) continue;
+            String qn = cls.getQualifiedName();
+            String key = qn == null || qn.isBlank()
+                    ? Objects.toString(cls.getName(), "") + "@" + System.identityHashCode(cls)
+                    : qn;
+            if (key.isBlank()) continue;
+            unique.putIfAbsent(key, cls);
+        }
+
+        List<PsiClass> out = new ArrayList<>(unique.values());
+        out.sort(Comparator.comparing(c -> Objects.toString(c.getQualifiedName(), "")));
+        return out;
+    }
+
+    private static @NotNull List<String> inferredCutFqnsForTest(
+            @NotNull String testFqn,
+            @NotNull String testSimpleName
+    ) {
+        String strippedSimpleName = stripKnownTestSuffix(testSimpleName);
+        if (strippedSimpleName == null || strippedSimpleName.isBlank()) {
+            return Collections.emptyList();
+        }
+        String pkg = packageOf(testFqn);
+        String cutFqn = pkg.isBlank() ? strippedSimpleName : pkg + "." + strippedSimpleName;
+        return List.of(cutFqn);
+    }
+
+    private static @Nullable String stripKnownTestSuffix(@NotNull String className) {
+        String[] suffixes = {"Test", "Tests", "IT", "ITCase", "Spec"};
+        for (String suffix : suffixes) {
+            if (!className.endsWith(suffix)) continue;
+            if (className.length() <= suffix.length()) continue;
+            return className.substring(0, className.length() - suffix.length());
+        }
+        return null;
+    }
+
+    private static boolean isInMainProjectRoot(@NotNull VirtualFile file, @Nullable String normalizedBasePath) {
+        if (normalizedBasePath == null || normalizedBasePath.isBlank()) return true;
+        String path = file.getPath().replace('\\', '/');
+        if (path.equals(normalizedBasePath)) return true;
+        return path.startsWith(normalizedBasePath + "/");
+    }
+
+    private @Nullable String normalizedProjectBasePath() {
+        String basePath = project.getBasePath();
+        if (basePath == null || basePath.isBlank()) return null;
+        String normalized = basePath.replace('\\', '/');
+        while (normalized.endsWith("/")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized.isBlank() ? null : normalized;
+    }
+
+    private record FileScanResult(
+            @NotNull List<CutCandidate> cuts,
+            @NotNull Map<String, List<PsiClass>> testsByCutFqn,
+            @NotNull Map<String, List<PsiClass>> testsByCutSimpleName
+    ) {
+        private static @NotNull FileScanResult empty() {
+            return new FileScanResult(Collections.emptyList(), Collections.emptyMap(), Collections.emptyMap());
+        }
+    }
+
+    private record StructuralScan(
+            @NotNull List<CutCandidate> cutCandidates,
+            @NotNull Map<String, List<PsiClass>> testsByCutFqn,
+            @NotNull Map<String, List<PsiClass>> testsByCutSimpleName
+    ) {}
+
+    private record CutCandidate(
+            @NotNull PsiClass cutPsi,
+            @NotNull String cutFqn,
+            @NotNull String cutSimpleName,
+            @NotNull String cutPackageName,
+            int totalPublicMethods
+    ) {}
 
     private void applyCoverageUpdates(@NotNull Map<String, CoverageCalculator.CoverageResult> updatesByCut) {
         if (updatesByCut.isEmpty()) return;
@@ -1325,15 +1470,6 @@ public final class ReportView implements Disposable {
         inlineFixQueue.clear();
         inlineStateByCutFqn.clear();
     }
-
-    private record CutBuildSnapshot(
-            @NotNull PsiClass cutPsi,
-            @NotNull String cutFqn,
-            @NotNull String cutSimpleName,
-            @NotNull String cutPackageName,
-            int totalPublicMethods,
-            @NotNull List<PsiClass> testClasses
-    ) {}
 
     private record CutCoverageWorkItem(
             @NotNull String cutFqn,
