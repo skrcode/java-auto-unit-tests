@@ -5,6 +5,7 @@
 package com.github.skrcode.javaautounittests.actions;
 
 import com.github.skrcode.javaautounittests.view.report.ReportView;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.wm.ToolWindow;
@@ -33,6 +34,9 @@ public class TestGenerationToolWindowFactory implements ToolWindowFactory, DumbA
         Content content = ContentFactory.getInstance().createContent(contentComponent, "Overview", false);
         content.setCloseable(false);
         toolWindow.getContentManager().addContent(content);
+        if (reportView != null) {
+            ApplicationManager.getApplication().invokeLater(() -> reportView.refreshAsync("toolwindow_open"));
+        }
     }
 
     private static JComponent buildFallbackPanel() {

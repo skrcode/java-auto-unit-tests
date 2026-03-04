@@ -65,9 +65,6 @@ public final class ReportView implements Disposable {
         buildUI();
         hookListeners();
         addListener(this, this::onRowsUpdated);
-
-        // Initial refresh so the table is populated when opened
-        ApplicationManager.getApplication().invokeLater(() -> refreshAsync("init"));
     }
 
     public ReportState getState() {
