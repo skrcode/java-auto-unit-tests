@@ -44,10 +44,10 @@ public final class RunEvaluatorAction extends AnAction {
     static void runTestClass(Project project, String testFqn) {
         ReportView view = ReportView.getInstance(project);
 
-        // mark RUNNING
+        // Mark running without rebuilding the entire report.
         var state = view.getState().getOrCreate(testFqn);
         state.failureCount = 0;
-        view.refreshAsync("test_running");
+        view.updateExecutionResult(testFqn, 0);
 
         PsiClass testPsi =
                 JavaPsiFacade.getInstance(project)
@@ -113,7 +113,7 @@ public final class RunEvaluatorAction extends AnAction {
                         ReportView view = ReportView.getInstance(project);
                         var st = view.getState().getOrCreate(testFqn);
                         st.failureCount = exitCode == 0 ? 0 : 1;
-                        view.refreshAsync("test_finished");
+                        view.updateExecutionResult(testFqn, st.failureCount);
                         connection.disconnect();
                     }
                 }

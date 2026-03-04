@@ -242,6 +242,12 @@ public final class ReportTableRenderers {
 
             panel.setBackground(isSelected ? table.getSelectionBackground() : table.getBackground());
 
+            if (r.coverageStatus() == ClassTestReportRow.CoverageStatus.NOT_ANALYZED) {
+                label.setText("Not analyzed");
+                label.setToolTipText("Click Analyze Coverage to compute method coverage");
+                return panel;
+            }
+
             int total = r.totalPublicMethods();
             int cov = r.coveredPublicMethods();
             int pct = total <= 0 ? 0 : (int) Math.round((cov * 100.0) / total);
