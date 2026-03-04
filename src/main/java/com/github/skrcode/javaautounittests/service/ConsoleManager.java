@@ -87,6 +87,7 @@ public final class ConsoleManager {
         // Add console with toolbar to tool window as a new tab
         ContentFactory contentFactory = ContentFactory.getInstance();
         Content content = contentFactory.createContent(panel, title, true);
+        content.setCloseable(true);
         toolWindow.getContentManager().addContent(content);
         toolWindow.getContentManager().setSelectedContent(content);
         toolWindow.show();
