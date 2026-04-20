@@ -148,6 +148,10 @@ public class GenerateTestAction extends AnAction implements DumbAware {
         return true;
     }
 
+    public static boolean runForClass(@NotNull Project project, @NotNull PsiClass psiClass) {
+        return runForClasses(project, List.of(psiClass), GenerationType.generate);
+    }
+
     private PsiElement[] getElements(@NotNull AnActionEvent e, @NotNull Project project) {
         PsiElement[] elements = e.getData(LangDataKeys.PSI_ELEMENT_ARRAY);
         if (elements != null) return elements;

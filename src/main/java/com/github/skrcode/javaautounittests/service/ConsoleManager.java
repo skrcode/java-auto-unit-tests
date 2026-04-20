@@ -8,15 +8,18 @@ import com.intellij.execution.impl.ConsoleViewImpl;
 import com.intellij.execution.ui.ConsoleView;
 import com.intellij.execution.ui.ConsoleViewContentType;
 import com.intellij.icons.AllIcons;
+import com.intellij.openapi.Disposable;
 import com.intellij.openapi.actionSystem.*;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentFactory;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
 import java.awt.*;
@@ -45,6 +48,10 @@ public final class ConsoleManager {
      * Opens a new console tab with a cancel button wired to the given ProgressIndicator.
      */
     public static ConsoleView openNewConsole(Project project, String title) {
+        return openNewConsole(project, title, null);
+    }
+
+    public static ConsoleView openNewConsole(Project project, String title, @Nullable Runnable onClose) {
         ToolWindow toolWindow = ToolWindowManager.getInstance(project).getToolWindow("JAIPilot Console");
         if (toolWindow == null) return null;
 
@@ -87,6 +94,12 @@ public final class ConsoleManager {
         // Add console with toolbar to tool window as a new tab
         ContentFactory contentFactory = ContentFactory.getInstance();
         Content content = contentFactory.createContent(panel, title, true);
+        if (onClose != null) {
+            Disposable disposer = Disposer.newDisposable("jaipilot.console.tab");
+            Disposer.register(disposer, onClose::run);
+            content.setDisposer(disposer);
+        }
+        content.setCloseable(true);
         toolWindow.getContentManager().addContent(content);
         toolWindow.getContentManager().setSelectedContent(content);
         toolWindow.show();

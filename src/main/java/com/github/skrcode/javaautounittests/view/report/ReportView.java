@@ -1,464 +1,1504 @@
-//package com.github.skrcode.javaautounittests.view.report;
-//
-//import com.github.skrcode.javaautounittests.actions.RunEvaluatorAction;
-//import com.github.skrcode.javaautounittests.dto.ClassTestReportRow;
-//import com.github.skrcode.javaautounittests.service.ReportState;
-//import com.github.skrcode.javaautounittests.util.CoverageCalculator;
-//import com.intellij.icons.AllIcons;
-//import com.intellij.openapi.Disposable;
-//import com.intellij.openapi.application.ApplicationManager;
-//import com.intellij.openapi.fileEditor.OpenFileDescriptor;
-//import com.intellij.openapi.progress.ProgressIndicator;
-//import com.intellij.openapi.project.Project;
-//import com.intellij.openapi.util.Disposer;
-//import com.intellij.openapi.util.IconLoader;
-//import com.intellij.openapi.vfs.VirtualFile;
-//import com.intellij.openapi.vfs.VirtualFileEvent;
-//import com.intellij.openapi.vfs.VirtualFileListener;
-//import com.intellij.openapi.vfs.VirtualFileManager;
-//import com.intellij.psi.*;
-//import com.intellij.psi.search.GlobalSearchScope;
-//import com.intellij.ui.DoubleClickListener;
-//import com.intellij.ui.JBColor;
-//import com.intellij.ui.LayeredIcon;
-//import com.intellij.ui.components.JBScrollPane;
-//import com.intellij.ui.table.JBTable;
-//import com.intellij.util.ui.JBUI;
-//import com.intellij.util.ui.UIUtil;
-//import org.jetbrains.annotations.NotNull;
-//
-//import javax.swing.*;
-//import java.awt.*;
-//import java.awt.event.MouseEvent;
-//import java.util.List;
-//import java.util.*;
-//import java.util.concurrent.CopyOnWriteArrayList;
-//import java.util.function.Consumer;
-//
-//public final class ReportView implements Disposable {
-//
-//    private final Project project;
-//    private final ReportState state = new ReportState();
-//
-//    private final List<Consumer<List<ClassTestReportRow>>> listeners =
-//            new CopyOnWriteArrayList<>();
-//
-//    private volatile List<ClassTestReportRow> lastRows = Collections.emptyList();
-//    public static ReportView getInstance(Project project) {
-//        return project.getService(ReportView.class);
-//    }
-//
-//    public ReportView(Project project) {
-//        this.project = project;
-//        buildUI();
-//        hookListeners();
-//        addListener(this, this::onRowsUpdated);
-//
-//        // Initial refresh so the table is populated when opened
-//        ApplicationManager.getApplication().invokeLater(() -> refreshAsync("init"));
-//    }
-//
-//    public ReportState getState() {
-//        return state;
-//    }
-//
-//    public List<ClassTestReportRow> getLastRows() {
-//        return lastRows;
-//    }
-//
-//    public List<ClassTestReportRow> getSelectedRows() {
-//        return tableModel.getRowsAt(table.getSelectedRows());
-//    }
-//
-//    public void addListener(@NotNull Disposable parent,
-//                            @NotNull Consumer<List<ClassTestReportRow>> listener) {
-//        listeners.add(listener);
-//        Disposer.register(parent, () -> listeners.remove(listener));
-//    }
-//
-//    /* =======================
-//       Background refresh
-//       ======================= */
-//
-//    public void refreshAsync(@NotNull String reason) {
-//        if (!project.isInitialized()) return;
-//
-////        DumbService.getInstance(project).runWhenSmart(() ->
-////                ProgressManager.getInstance().run(
-////                        new Task.Backgroundable(project,
-////                                "JAIPilot: Building Test Report", false) {
-////
-////                            @Override
-////                            public void run(@NotNull ProgressIndicator indicator) {
-////                                indicator.setIndeterminate(false);
-////
-////                                List<ClassTestReportRow> rows =
-////                                        ReadAction.compute(() -> buildReport(indicator));
-////
-////                                lastRows = rows;
-////
-////                                ApplicationManager.getApplication().invokeLater(() -> {
-////                                    for (Consumer<List<ClassTestReportRow>> l : listeners) {
-////                                        try {
-////                                            l.accept(rows);
-////                                        } catch (Throwable ignored) {}
-////                                    }
-////                                });
-////                            }
-////                        })
-////        );
-//    }
-//
-//    private List<ClassTestReportRow> buildReport(@NotNull ProgressIndicator indicator) {
-//        CoverageCalculator coverage = new CoverageCalculator(project);
-//
-//        List<PsiClass> cuts = findAllClasses();
-//        List<ClassTestReportRow> out = new ArrayList<>(cuts.size());
-//
-//        int i = 0;
-//        for (PsiClass cut : cuts) {
-//            indicator.checkCanceled();
-//            indicator.setFraction(cuts.isEmpty() ? 1.0 : i / (double) cuts.size());
-//            indicator.setText2("Scanning " + safeName(cut));
-//
-//            String fqn = Objects.toString(cut.getQualifiedName(), "");
-//            String simple = Objects.toString(cut.getName(), "");
-//            String pkg = packageOf(fqn);
-//
-//            List<PsiClass> testClasses = coverage.findTestClassesFor(cut);
-//            if (testClasses.isEmpty()) {
-//                CoverageCalculator.CoverageResult cov = coverage.computePublicMethodCoverage(cut, null);
-//                if (cov.totalPublicMethods > 0) {
-//                    out.add(new ClassTestReportRow(
-//                            fqn,
-//                            simple,
-//                            pkg,
-//                            null,
-//                            null,
-//                            cov.totalPublicMethods,
-//                            cov.coveredPublicMethods,
-//                            0,
-//                            cov.uncoveredMethodSignatures,
-//                            cut,
-//                            null
-//                    ));
-//                }
-//                i++;
-//                continue;
-//            }
-//
-//            for (PsiClass testClass : testClasses) {
-//                CoverageCalculator.CoverageResult cov = coverage.computePublicMethodCoverage(cut, testClass);
-//                if (cov.totalPublicMethods <= 0) {
-//                    continue; // Skip classes with no public methods
-//                }
-//
-//                String testFqn = testClass.getQualifiedName();
-//                String testSimple = testClass.getName();
-//
-//                int fails = 0;
-//                if (testFqn != null) {
-//                    var st = state.get(testFqn);
-//                    if (st != null) {
-//                        fails = st.failureCount;
-//                    }
-//                }
-//
-//                out.add(new ClassTestReportRow(
-//                        fqn,
-//                        simple,
-//                        pkg,
-//                        testFqn,
-//                        testSimple,
-//                        cov.totalPublicMethods,
-//                        cov.coveredPublicMethods,
-//                        fails,
-//                        cov.uncoveredMethodSignatures,
-//                        cut,
-//                        testClass
-//                ));
-//            }
-//            i++;
-//        }
-//
-//        out.sort(Comparator
-//                .comparing(ClassTestReportRow::isMissingTestClass).reversed()
-//                .thenComparing((ClassTestReportRow r) -> r.lastFailureCount() > 0).reversed()
-//                .thenComparingDouble(ClassTestReportRow::coverageRatio)
-//                .thenComparing(ClassTestReportRow::cutFqn)
-//        );
-//
-//        return out;
-//    }
-//
-//    private static String safeName(PsiClass c) {
-//        return c.getQualifiedName() != null
-//                ? c.getQualifiedName()
-//                : Objects.toString(c.getName(), "<anonymous>");
-//    }
-//
-//    private List<PsiClass> findAllClasses() {
-//        List<PsiClass> result = new ArrayList<>();
-//        JavaPsiFacade facade = JavaPsiFacade.getInstance(project);
-//        PsiPackage root = facade.findPackage("");
-//        if (root != null) {
-//            collectRecursively(root, result);
-//        }
-//        return result;
-//    }
-//
-//    private void collectRecursively(PsiPackage pkg, List<PsiClass> out) {
-//        for (PsiClass cls : pkg.getClasses(GlobalSearchScope.projectScope(project))) {
-//            if (cls.getQualifiedName() != null) {
-//                out.add(cls);
-//            }
-//        }
-//        for (PsiPackage sub : pkg.getSubPackages(GlobalSearchScope.projectScope(project))) {
-//            collectRecursively(sub, out);
-//        }
-//    }
-//
-//    private static String packageOf(String fqn) {
-//        if (fqn == null) return "";
-//        int idx = fqn.lastIndexOf('.');
-//        return idx <= 0 ? "" : fqn.substring(0, idx);
-//    }
-//
-//    /* =======================
-//       UI
-//       ======================= */
-//
-//    private final JPanel root = new JPanel(new BorderLayout());
-//    private final JPanel centerPanel = new JPanel(new CardLayout());
-//    private final ReportTableModel tableModel = new ReportTableModel();
-//    private final JBTable table = new JBTable(tableModel);
-//    private final JBScrollPane tableScrollPane = new JBScrollPane(table);
-//    private final JLabel emptyState = new JLabel("All good! No failing classes found.", SwingConstants.CENTER);
-//    private final JButton regenerateButton = new JButton("Force Analyse Tests", AllIcons.Actions.Refresh);
-//    private final PillLabel healthLabel = new PillLabel("Test health: —", SwingConstants.CENTER);
-//    private final Icon baseIcon = IconLoader.getIcon("/icons/jaipilot.svg", ReportView.class);
-//    private final Icon staleIcon = new LayeredIcon(baseIcon, AllIcons.General.WarningDecorator);
-//    private volatile boolean stale = false;
-//
-//    public JComponent getComponent() {
-//        return root;
-//    }
-//
-//    private void buildUI() {
-//        root.setBorder(JBUI.Borders.empty());
-//
-//        table.setRowHeight(JBUI.scale(28));
-//        table.setShowGrid(true);
-//        table.setGridColor(UIUtil.getTableGridColor());
-//        table.setIntercellSpacing(new Dimension(JBUI.scale(1), JBUI.scale(1)));
-//        table.setStriped(true);
-//        ReportTableRenderers.install(table, project);
-//
-//        // Keep rows compact but tall enough for two lines (name + package)
-//        int twoLine = table.getFontMetrics(table.getFont()).getHeight() * 2 + JBUI.scale(4);
-//        int rowHeight = Math.max(JBUI.scale(32), twoLine);
-//        table.setRowHeight(rowHeight);
-//
-//        emptyState.setBorder(JBUI.Borders.empty(32));
-//        emptyState.setForeground(JBColor.GRAY);
-//        emptyState.setFont(emptyState.getFont().deriveFont(Font.BOLD, emptyState.getFont().getSize() + 1));
-//
-//        JPanel header = new JPanel(new BorderLayout());
-//        header.setBorder(JBUI.Borders.empty(8, 12));
-//
-//        healthLabel.setVisible(false);
-//
-////        regenerateButton.addActionListener(e -> refreshAsync("manual"));
-//        JButton fixAllButton = new JButton("Fix Tests for all classes", AllIcons.Actions.RunAll);
-//        fixAllButton.addActionListener(e -> {
-//            var model = tableModel.getFilteredRows();
-//            var runnable = model.stream()
-//                    .filter(r -> r.hasFailures() && r.testFqn() != null)
-//                    .toList();
-//            RunEvaluatorAction.runTests(project, runnable);
-//        });
-//
-//        JPanel actionsLeft = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(12), 0));
-//        actionsLeft.setOpaque(false);
-//        actionsLeft.add(regenerateButton);
-//        actionsLeft.add(fixAllButton);
-//
-//        JPanel actionsRight = new JPanel(new FlowLayout(FlowLayout.RIGHT, JBUI.scale(8), 0));
-//        actionsRight.setOpaque(false);
-//        actionsRight.add(healthLabel);
-//
-//        JPanel actionsRow = new JPanel(new BorderLayout());
-//        actionsRow.setOpaque(false);
-//        actionsRow.add(actionsLeft, BorderLayout.WEST);
-//        actionsRow.add(actionsRight, BorderLayout.EAST);
-//
-//        header.add(actionsRow, BorderLayout.CENTER);
-//
-//        centerPanel.add(tableScrollPane, "table");
-//        centerPanel.add(emptyState, "empty");
-//        root.add(header, BorderLayout.NORTH);
-//        root.add(centerPanel, BorderLayout.CENTER);
-//    }
-//
-//    private void hookListeners() {
-//        new DoubleClickListener() {
-//            @Override
-//            protected boolean onDoubleClick(MouseEvent event) {
-//                ClassTestReportRow row = tableModel.getRowAt(table.getSelectedRow());
-//                if (row != null && row.cutPsi() != null) {
-//                    openPsi(row.cutPsi());
-//                }
-//                return true;
-//            }
-//        }.installOn(table);
-//
-//        PsiManager.getInstance(project).addPsiTreeChangeListener(new PsiTreeChangeAdapter() {
-//            @Override
-//            public void childrenChanged(@NotNull PsiTreeChangeEvent event) {
-//                PsiFile file = event.getFile();
-//                if (file instanceof PsiJavaFile) {
-//                    markStale();
-//                }
-//            }
-//        }, this);
-//
-//        VirtualFileManager.getInstance().addVirtualFileListener(new VirtualFileListener() {
-//            @Override
-//            public void contentsChanged(@NotNull VirtualFileEvent event) {
-//                maybeMarkStale(event.getFile());
-//            }
-//
-//            @Override
-//            public void fileDeleted(@NotNull VirtualFileEvent event) {
-//                maybeMarkStale(event.getFile());
-//            }
-//
-//            @Override
-//            public void fileCreated(@NotNull VirtualFileEvent event) {
-//                maybeMarkStale(event.getFile());
-//            }
-//
-//            private void maybeMarkStale(VirtualFile file) {
-//                if (file != null && "java".equalsIgnoreCase(file.getExtension())) {
-//                    markStale();
-//                }
-//            }
-//        }, this);
-//    }
-//
-//    private void onRowsUpdated(List<ClassTestReportRow> rows) {
-//        List<ClassTestReportRow> failing = rows == null
-//                ? Collections.emptyList()
-//                : rows.stream().filter(ClassTestReportRow::hasFailures).toList();
-//
-//        tableModel.setRows(failing);
-//        updateSummary(tableModel.getFilteredRows());
-//        showEmptyState(failing.isEmpty());
-//        updateHealthIndicator(failing.size(), rows == null ? 0 : rows.size());
-//        markFresh();
-//    }
-//
-//    private void updateSummary(List<ClassTestReportRow> rows) {}
-//
-//    private void showEmptyState(boolean empty) {
-//        CardLayout cl = (CardLayout) centerPanel.getLayout();
-//        cl.show(centerPanel, empty ? "empty" : "table");
-//    }
-//
-//    private void updateHealthIndicator(int failing, int total) {
-//        if (total <= 0) {
-//            healthLabel.setVisible(false);
-//            return;
-//        }
-//        double ratio = total == 0 ? 0.0 : (failing / (double) total);
-//        String text;
-//        JBColor bg;
-//        JBColor fg;
-//        if (failing == 0) {
-//            text = "Test health: Perfect";
-//            bg = new JBColor(new Color(223, 243, 229), new Color(60, 90, 70));
-//            fg = new JBColor(new Color(30, 120, 70), new Color(200, 255, 220));
-//        } else if (ratio > 0.66) {
-//            text = "Test health: Poor";
-//            bg = new JBColor(new Color(255, 230, 230), new Color(90, 50, 50));
-//            fg = new JBColor(new Color(160, 40, 40), new Color(255, 200, 200));
-//        } else if (ratio > 0.33) {
-//            text = "Test health: Moderate";
-//            bg = new JBColor(new Color(255, 244, 214), new Color(90, 80, 50));
-//            fg = new JBColor(new Color(150, 110, 20), new Color(255, 230, 180));
-//        } else {
-//            text = "Test health: Good";
-//            bg = new JBColor(new Color(230, 244, 230), new Color(70, 90, 70));
-//            fg = new JBColor(new Color(50, 120, 70), new Color(200, 230, 200));
-//        }
-//        healthLabel.setText(text);
-//        healthLabel.setBackground(bg);
-//        healthLabel.setForeground(fg);
-//        healthLabel.setVisible(true);
-//    }
-//
-//    private void markStale() {
-//        if (stale) return;
-//        stale = true;
-//        updateStatusLine();
-//        updateToolWindowIcon(staleIcon);
-//    }
-//
-//    private void markFresh() {
-//        stale = false;
-//        updateStatusLine();
-//        updateToolWindowIcon(baseIcon);
-//    }
-//
-//    private void updateToolWindowIcon(Icon icon) {
-//        ApplicationManager.getApplication().invokeLater(() -> {
-//            var toolWindow = com.intellij.openapi.wm.ToolWindowManager.getInstance(project)
-//                    .getToolWindow("JAIPilot Console");
-//            if (toolWindow != null && icon != null) {
-//                toolWindow.setIcon(icon);
-//            }
-//        });
-//    }
-//
-//    private void updateStatusLine() {
-//        if (stale) {
-//            regenerateButton.setText("Re-analyse Stale Tests");
-//            regenerateButton.setIcon(AllIcons.Actions.ForceRefresh);
-//            return;
-//        }
-//        regenerateButton.setText("Force Analyse Tests");
-//        regenerateButton.setIcon(AllIcons.Actions.Refresh);
-//    }
-//
-//    private void openPsi(PsiElement el) {
-//        PsiFile f = el.getContainingFile();
-//        if (f == null) return;
-//        VirtualFile vf = f.getVirtualFile();
-//        if (vf == null) return;
-//        new OpenFileDescriptor(project, vf, el.getTextOffset()).navigate(true);
-//    }
-//
-//    @Override
-//    public void dispose() {}
-//
-//    /** Simple pill-style label with rounded background. */
-//    private static final class PillLabel extends JLabel {
-//        PillLabel(String text, int alignment) {
-//            super(text, alignment);
-//            setOpaque(false);
-//            setBorder(JBUI.Borders.empty(4, 10));
-//        }
-//
-//        @Override
-//        protected void paintComponent(Graphics g) {
-//            Graphics2D g2 = (Graphics2D) g.create();
-//            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-//            Color bg = getBackground() == null ? getParent().getBackground() : getBackground();
-//            g2.setColor(bg);
-//            int arc = JBUI.scale(12);
-//            g2.fillRoundRect(0, 0, getWidth(), getHeight(), arc, arc);
-//            g2.dispose();
-//            super.paintComponent(g);
-//        }
-//    }
-//}
+package com.github.skrcode.javaautounittests.view.report;
+
+import com.github.skrcode.javaautounittests.dto.ClassTestReportRow;
+import com.github.skrcode.javaautounittests.service.BulkGeneratorService;
+import com.github.skrcode.javaautounittests.service.GenerationJobHandle;
+import com.github.skrcode.javaautounittests.service.GenerationRunListener;
+import com.github.skrcode.javaautounittests.service.GenerationRunResult;
+import com.github.skrcode.javaautounittests.service.ReportState;
+import com.github.skrcode.javaautounittests.service.RunOutputMode;
+import com.github.skrcode.javaautounittests.constants.GenerationType;
+import com.github.skrcode.javaautounittests.util.CoverageCalculator;
+import com.intellij.icons.AllIcons;
+import com.intellij.ide.highlighter.JavaFileType;
+import com.intellij.openapi.Disposable;
+import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.fileEditor.OpenFileDescriptor;
+import com.intellij.openapi.progress.ProcessCanceledException;
+import com.intellij.openapi.progress.ProgressIndicator;
+import com.intellij.openapi.progress.ProgressManager;
+import com.intellij.openapi.progress.Task;
+import com.intellij.openapi.project.DumbService;
+import com.intellij.openapi.project.Project;
+import com.intellij.openapi.roots.ProjectFileIndex;
+import com.intellij.openapi.roots.ProjectRootManager;
+import com.intellij.openapi.util.Disposer;
+import com.intellij.openapi.util.IconLoader;
+import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.openapi.vfs.VirtualFileEvent;
+import com.intellij.openapi.vfs.VirtualFileListener;
+import com.intellij.openapi.vfs.VirtualFileManager;
+import com.intellij.psi.JavaPsiFacade;
+import com.intellij.psi.PsiClass;
+import com.intellij.psi.PsiFile;
+import com.intellij.psi.PsiJavaFile;
+import com.intellij.psi.PsiManager;
+import com.intellij.psi.SmartPointerManager;
+import com.intellij.psi.SmartPsiElementPointer;
+import com.intellij.psi.PsiTreeChangeAdapter;
+import com.intellij.psi.PsiTreeChangeEvent;
+import com.intellij.psi.search.FileTypeIndex;
+import com.intellij.psi.search.GlobalSearchScope;
+import com.intellij.ui.DoubleClickListener;
+import com.intellij.ui.JBColor;
+import com.intellij.ui.LayeredIcon;
+import com.intellij.ui.SearchTextField;
+import com.intellij.ui.components.JBScrollPane;
+import com.intellij.ui.table.JBTable;
+import com.intellij.util.ui.JBUI;
+import com.intellij.util.ui.UIUtil;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import javax.swing.*;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
+
+public final class ReportView implements Disposable {
+
+    private static final int COVERAGE_UI_BATCH_SIZE = 20;
+    private static final Comparator<ClassTestReportRow> ROW_COMPARATOR = Comparator
+            .comparing(ClassTestReportRow::isMissingTestClass).reversed()
+            .thenComparing((ClassTestReportRow r) -> r.lastFailureCount() > 0).reversed()
+            .thenComparing(ClassTestReportRow::cutFqn)
+            .thenComparing(r -> Objects.toString(r.testFqn(), ""));
+
+    private final Project project;
+    private final ReportState state = new ReportState();
+
+    private final List<Consumer<List<ClassTestReportRow>>> listeners =
+            new CopyOnWriteArrayList<>();
+    private final Object rowsLock = new Object();
+
+    private volatile List<ClassTestReportRow> lastRows = Collections.emptyList();
+    private final AtomicBoolean refreshInProgress = new AtomicBoolean(false);
+    private final AtomicBoolean refreshPending = new AtomicBoolean(false);
+    private final AtomicBoolean coverageInProgress = new AtomicBoolean(false);
+    private final AtomicReference<ProgressIndicator> coverageIndicatorRef = new AtomicReference<>();
+    private final Map<String, CoverageCalculator.CoverageResult> coverageCache = new ConcurrentHashMap<>();
+
+    private final Object inlineFixLock = new Object();
+    private final Map<String, InlineFixRowState> inlineStateByCutFqn = new ConcurrentHashMap<>();
+    private final Deque<InlineFixRequest> inlineFixQueue = new ArrayDeque<>();
+    private final AtomicReference<GenerationJobHandle> activeInlineHandle = new AtomicReference<>();
+    private volatile String activeInlineCutFqn = null;
+    private volatile boolean inlineRefreshRequested = false;
+    private volatile int inlineAnimationFrame = 0;
+    private final Timer inlineAnimationTimer = new Timer(120, e -> onInlineAnimationTick());
+
+    public static ReportView getInstance(Project project) {
+        return project.getService(ReportView.class);
+    }
+
+    public ReportView(Project project) {
+        this.project = project;
+        inlineAnimationTimer.setRepeats(true);
+        inlineAnimationTimer.setCoalesce(true);
+        buildUI();
+        hookListeners();
+        addListener(this, this::onRowsUpdated);
+        updateActionButtons();
+    }
+
+    public ReportState getState() {
+        return state;
+    }
+
+    public List<ClassTestReportRow> getLastRows() {
+        return lastRows;
+    }
+
+    public List<ClassTestReportRow> getSelectedRows() {
+        return tableModel.getRowsAt(table.getSelectedRows());
+    }
+
+    public void addListener(
+            @NotNull Disposable parent,
+            @NotNull Consumer<List<ClassTestReportRow>> listener
+    ) {
+        listeners.add(listener);
+        Disposer.register(parent, () -> listeners.remove(listener));
+    }
+
+    public void requestInlineFix(@NotNull ClassTestReportRow row) {
+        String cutFqn = row.cutFqn();
+        PsiClass cutPsi = row.cutPsi();
+        if (cutFqn.isBlank() || cutPsi == null) return;
+
+        synchronized (inlineFixLock) {
+            InlineFixRowState existing = inlineStateByCutFqn.get(cutFqn);
+            if (existing != null && (existing.status() == InlineFixRowState.Status.QUEUED
+                    || existing.status() == InlineFixRowState.Status.RUNNING)) {
+                return;
+            }
+            boolean alreadyQueued = inlineFixQueue.stream().anyMatch(req -> req.cutFqn().equals(cutFqn));
+            if (alreadyQueued) return;
+
+            SmartPsiElementPointer<PsiClass> pointer = SmartPointerManager.getInstance(project).createSmartPsiElementPointer(cutPsi);
+            inlineFixQueue.addLast(new InlineFixRequest(cutFqn, pointer));
+            inlineStateByCutFqn.put(cutFqn, InlineFixRowState.queued(cutFqn));
+        }
+
+        refreshInlineUi(cutFqn);
+        startNextInlineFixIfIdle();
+    }
+
+    public void requestInlineCancel(@NotNull ClassTestReportRow row) {
+        String cutFqn = row.cutFqn();
+        if (cutFqn.isBlank()) return;
+
+        GenerationJobHandle toCancel = null;
+        synchronized (inlineFixLock) {
+            if (cutFqn.equals(activeInlineCutFqn)) {
+                toCancel = activeInlineHandle.get();
+                InlineFixRowState existing = inlineStateByCutFqn.get(cutFqn);
+                if (existing != null) {
+                    inlineStateByCutFqn.put(
+                            cutFqn,
+                            existing.withStatus(
+                                    InlineFixRowState.Status.RUNNING,
+                                    "Cancelling",
+                                    "Cancellation requested.",
+                                    false
+                            ).appendDetail("Cancellation requested by user.")
+                    );
+                }
+            } else {
+                InlineFixRequest target = null;
+                for (InlineFixRequest req : inlineFixQueue) {
+                    if (req.cutFqn().equals(cutFqn)) {
+                        target = req;
+                        break;
+                    }
+                }
+                if (target != null) {
+                    inlineFixQueue.remove(target);
+                    InlineFixRowState current = inlineStateByCutFqn.get(cutFqn);
+                    if (current != null) {
+                        inlineStateByCutFqn.put(
+                                cutFqn,
+                                current.withStatus(
+                                        InlineFixRowState.Status.CANCELLED,
+                                        "Cancelled",
+                                        "Cancelled before execution.",
+                                        false
+                                ).appendDetail("Cancelled before start.")
+                        );
+                    }
+                }
+            }
+        }
+
+        if (toCancel != null) {
+            toCancel.cancel();
+        }
+        refreshInlineUi(cutFqn);
+        if (isInlineQueueDrained()) {
+            scheduleInlineQueueRefreshIfNeeded();
+        }
+    }
+
+    public void toggleInlineDetails(@NotNull ClassTestReportRow row) {
+        String cutFqn = row.cutFqn();
+        if (cutFqn.isBlank()) return;
+        synchronized (inlineFixLock) {
+            InlineFixRowState existing = inlineStateByCutFqn.get(cutFqn);
+            if (existing == null || existing.detailLines().isEmpty()) return;
+            inlineStateByCutFqn.put(cutFqn, existing.toggleExpanded());
+        }
+        refreshInlineUi(cutFqn);
+    }
+
+    public @Nullable InlineFixRowState getInlineState(@NotNull ClassTestReportRow row) {
+        String cutFqn = row.cutFqn();
+        if (cutFqn.isBlank()) return null;
+        return inlineStateByCutFqn.get(cutFqn);
+    }
+
+    public int getInlineAnimationFrame() {
+        return inlineAnimationFrame;
+    }
+
+    public void refreshAsync(@NotNull String reason) {
+        if (!project.isInitialized()) return;
+
+        if (isInlineQueueDrained()) {
+            inlineStateByCutFqn.clear();
+            inlineRefreshRequested = false;
+        }
+        cancelCoverageAnalysis();
+        coverageCache.clear();
+
+        if (!refreshInProgress.compareAndSet(false, true)) {
+            refreshPending.set(true);
+            return;
+        }
+        updateActionButtonsAsync();
+
+        DumbService.getInstance(project).runWhenSmart(() ->
+                ProgressManager.getInstance().run(new Task.Backgroundable(
+                        project,
+                        "JAIPilot: Building Test Report",
+                        true
+                ) {
+                    @Override
+                    public void run(@NotNull ProgressIndicator indicator) {
+                        indicator.setIndeterminate(false);
+                        List<ClassTestReportRow> rows;
+                        try {
+                            rows = buildStructuralReport(indicator);
+                        } catch (ProcessCanceledException canceled) {
+                            return;
+                        } catch (Throwable ignored) {
+                            rows = Collections.emptyList();
+                        }
+
+                        updateRows(rows, false);
+                        List<ClassTestReportRow> snapshot = lastRows;
+                        ApplicationManager.getApplication().invokeLater(() -> {
+                            publishRowsOnEdt(snapshot);
+                            markFresh();
+                        });
+                    }
+
+                    @Override
+                    public void onFinished() {
+                        refreshInProgress.set(false);
+                        updateActionButtonsAsync();
+                        if (refreshPending.getAndSet(false)) {
+                            refreshAsync("coalesced");
+                        }
+                    }
+                })
+        );
+    }
+
+    public void analyzeCoverageAsync() {
+        if (!project.isInitialized()) return;
+        if (refreshInProgress.get()) return;
+        if (!coverageInProgress.compareAndSet(false, true)) return;
+
+        List<CutCoverageWorkItem> work = snapshotCoverageWork();
+        if (work.isEmpty()) {
+            coverageInProgress.set(false);
+            updateActionButtonsAsync();
+            return;
+        }
+        updateActionButtonsAsync();
+
+        DumbService.getInstance(project).runWhenSmart(() ->
+                ProgressManager.getInstance().run(new Task.Backgroundable(
+                        project,
+                        "JAIPilot: Analyzing Coverage",
+                        true
+                ) {
+                    @Override
+                    public void run(@NotNull ProgressIndicator indicator) {
+                        indicator.setIndeterminate(false);
+                        coverageIndicatorRef.set(indicator);
+
+                        CoverageCalculator coverage = new CoverageCalculator();
+                        JavaPsiFacade psiFacade = JavaPsiFacade.getInstance(project);
+                        GlobalSearchScope scope = GlobalSearchScope.projectScope(project);
+
+                        Map<String, CoverageCalculator.CoverageResult> batch = new HashMap<>();
+                        int i = 0;
+                        for (CutCoverageWorkItem item : work) {
+                            indicator.checkCanceled();
+                            indicator.setFraction(work.isEmpty() ? 1.0 : i / (double) work.size());
+                            indicator.setText2("Analyzing " + item.cutFqn);
+
+                            CoverageCalculator.CoverageResult result = ReadAction.compute(
+                                    () -> computeCoverageForCut(item, coverage, psiFacade, scope)
+                            );
+                            if (result != null) {
+                                batch.put(item.cutFqn, result);
+                            }
+
+                            i++;
+                            if (batch.size() >= COVERAGE_UI_BATCH_SIZE || i == work.size()) {
+                                Map<String, CoverageCalculator.CoverageResult> delta = new HashMap<>(batch);
+                                batch.clear();
+                                applyCoverageUpdates(delta);
+                            }
+                        }
+                    }
+
+                    @Override
+                    public void onFinished() {
+                        coverageIndicatorRef.set(null);
+                        coverageInProgress.set(false);
+                        updateActionButtonsAsync();
+                    }
+                })
+        );
+    }
+
+    public void updateExecutionResult(@NotNull String testFqn, int failureCount) {
+        if (testFqn.isBlank()) return;
+        int safeFailureCount = Math.max(0, failureCount);
+        state.getOrCreate(testFqn).failureCount = safeFailureCount;
+
+        List<ClassTestReportRow> updated = null;
+        synchronized (rowsLock) {
+            if (lastRows.isEmpty()) return;
+            boolean changed = false;
+            List<ClassTestReportRow> next = new ArrayList<>(lastRows.size());
+            for (ClassTestReportRow row : lastRows) {
+                if (!testFqn.equals(row.testFqn())) {
+                    next.add(row);
+                    continue;
+                }
+                ClassTestReportRow replacement = row.withFailureCount(safeFailureCount);
+                next.add(replacement);
+                if (replacement != row) changed = true;
+            }
+            if (!changed) return;
+            next.sort(ROW_COMPARATOR);
+            lastRows = Collections.unmodifiableList(next);
+            updated = lastRows;
+        }
+        publishRows(updated);
+    }
+
+    private List<ClassTestReportRow> buildStructuralReport(@NotNull ProgressIndicator indicator) {
+        CoverageCalculator coverage = new CoverageCalculator();
+        StructuralScan scan = scanProjectStructure(indicator, coverage);
+        List<ClassTestReportRow> out = new ArrayList<>(scan.cutCandidates().size());
+
+        int i = 0;
+        for (CutCandidate cut : scan.cutCandidates()) {
+            indicator.checkCanceled();
+            indicator.setFraction(scan.cutCandidates().isEmpty() ? 1.0 : i / (double) scan.cutCandidates().size());
+            if (i % 50 == 0) {
+                indicator.setText2("Mapping tests: " + cut.cutFqn());
+            }
+
+            List<PsiClass> tests = resolveTestClassesForCut(cut, scan.testsByCutFqn(), scan.testsByCutSimpleName());
+            if (tests.isEmpty()) {
+                out.add(new ClassTestReportRow(
+                        cut.cutFqn(),
+                        cut.cutSimpleName(),
+                        cut.cutPackageName(),
+                        null,
+                        null,
+                        cut.totalPublicMethods(),
+                        0,
+                        0,
+                        List.of(),
+                        cut.cutPsi(),
+                        null,
+                        ClassTestReportRow.CoverageStatus.NOT_ANALYZED
+                ));
+                i++;
+                continue;
+            }
+
+            for (PsiClass testClass : tests) {
+                String testFqn = testClass.getQualifiedName();
+                out.add(new ClassTestReportRow(
+                        cut.cutFqn(),
+                        cut.cutSimpleName(),
+                        cut.cutPackageName(),
+                        testFqn,
+                        Objects.toString(testClass.getName(), ""),
+                        cut.totalPublicMethods(),
+                        0,
+                        failureCountFor(testFqn),
+                        List.of(),
+                        cut.cutPsi(),
+                        testClass,
+                        ClassTestReportRow.CoverageStatus.NOT_ANALYZED
+                ));
+            }
+            i++;
+        }
+
+        out.sort(ROW_COMPARATOR);
+        return out;
+    }
+
+    private int failureCountFor(@Nullable String testFqn) {
+        if (testFqn == null || testFqn.isBlank()) return 0;
+        var testState = state.get(testFqn);
+        return testState == null ? 0 : Math.max(0, testState.failureCount);
+    }
+
+    private @NotNull StructuralScan scanProjectStructure(
+            @NotNull ProgressIndicator indicator,
+            @NotNull CoverageCalculator coverage
+    ) {
+        ProjectFileIndex index = ProjectRootManager.getInstance(project).getFileIndex();
+        PsiManager psiManager = PsiManager.getInstance(project);
+        String projectBasePath = normalizedProjectBasePath();
+
+        Collection<VirtualFile> javaFiles = ReadAction.compute(
+                () -> FileTypeIndex.getFiles(JavaFileType.INSTANCE, GlobalSearchScope.projectScope(project))
+        );
+        List<CutCandidate> cutCandidates = new ArrayList<>(javaFiles.size());
+        Map<String, List<PsiClass>> testsByCutFqn = new HashMap<>();
+        Map<String, List<PsiClass>> testsByCutSimpleName = new HashMap<>();
+
+        int i = 0;
+        for (VirtualFile file : javaFiles) {
+            indicator.checkCanceled();
+            if (i % 100 == 0) {
+                indicator.setText2("Indexing files: " + file.getName());
+            }
+            indicator.setFraction(javaFiles.isEmpty() ? 1.0 : i / (double) javaFiles.size());
+
+            FileScanResult scan = ReadAction.compute(() -> {
+                if (!file.isValid()) return FileScanResult.empty();
+                if (!isInMainProjectRoot(file, projectBasePath)) return FileScanResult.empty();
+                if (!index.isInSourceContent(file)) return FileScanResult.empty();
+
+                PsiFile psiFile = psiManager.findFile(file);
+                if (!(psiFile instanceof PsiJavaFile javaFile)) return FileScanResult.empty();
+                boolean testSource = index.isInTestSourceContent(file);
+
+                List<CutCandidate> cuts = new ArrayList<>();
+                Map<String, List<PsiClass>> testsForCutFqn = testSource ? new HashMap<>() : Collections.emptyMap();
+                Map<String, List<PsiClass>> testsForCutSimpleName = testSource ? new HashMap<>() : Collections.emptyMap();
+                for (PsiClass cls : javaFile.getClasses()) {
+                    if (cls == null || !cls.isValid()) continue;
+                    String classFqn = cls.getQualifiedName();
+                    if (classFqn == null || classFqn.isBlank()) continue;
+                    String simpleName = Objects.toString(cls.getName(), "");
+                    if (simpleName.isBlank()) continue;
+
+                    if (testSource) {
+                        for (String cutFqn : inferredCutFqnsForTest(classFqn, simpleName)) {
+                            testsForCutFqn.computeIfAbsent(cutFqn, ignored -> new ArrayList<>()).add(cls);
+                        }
+                        String strippedSimpleName = stripKnownTestSuffix(simpleName);
+                        if (strippedSimpleName != null && !strippedSimpleName.isBlank()) {
+                            testsForCutSimpleName.computeIfAbsent(strippedSimpleName, ignored -> new ArrayList<>()).add(cls);
+                        }
+                        continue;
+                    }
+
+                    int totalPublicMethods = coverage.countCoverablePublicMethods(cls);
+                    if (totalPublicMethods <= 0) continue;
+                    cuts.add(new CutCandidate(
+                            cls,
+                            classFqn,
+                            simpleName,
+                            packageOf(classFqn),
+                            totalPublicMethods
+                    ));
+                }
+                if (testSource) {
+                    return new FileScanResult(Collections.emptyList(), testsForCutFqn, testsForCutSimpleName);
+                }
+                return new FileScanResult(cuts, Collections.emptyMap(), Collections.emptyMap());
+            });
+
+            if (!scan.cuts().isEmpty()) {
+                cutCandidates.addAll(scan.cuts());
+            }
+            if (!scan.testsByCutFqn().isEmpty()) {
+                for (Map.Entry<String, List<PsiClass>> entry : scan.testsByCutFqn().entrySet()) {
+                    testsByCutFqn.computeIfAbsent(entry.getKey(), ignored -> new ArrayList<>()).addAll(entry.getValue());
+                }
+            }
+            if (!scan.testsByCutSimpleName().isEmpty()) {
+                for (Map.Entry<String, List<PsiClass>> entry : scan.testsByCutSimpleName().entrySet()) {
+                    testsByCutSimpleName.computeIfAbsent(entry.getKey(), ignored -> new ArrayList<>()).addAll(entry.getValue());
+                }
+            }
+
+            i++;
+        }
+
+        Map<String, CutCandidate> uniqueCuts = new LinkedHashMap<>();
+        for (CutCandidate cut : cutCandidates) {
+            uniqueCuts.putIfAbsent(cut.cutFqn(), cut);
+        }
+
+        List<CutCandidate> dedupedCuts = new ArrayList<>(uniqueCuts.values());
+        dedupedCuts.sort(Comparator.comparing(CutCandidate::cutFqn));
+        return new StructuralScan(dedupedCuts, testsByCutFqn, testsByCutSimpleName);
+    }
+
+    private @NotNull List<PsiClass> resolveTestClassesForCut(
+            @NotNull CutCandidate cut,
+            @NotNull Map<String, List<PsiClass>> testsByCutFqn,
+            @NotNull Map<String, List<PsiClass>> testsByCutSimpleName
+    ) {
+        List<PsiClass> direct = testsByCutFqn.get(cut.cutFqn());
+        if (direct != null && !direct.isEmpty()) {
+            return sortedUniqueValidClasses(direct);
+        }
+
+        List<PsiClass> bySimpleName = testsByCutSimpleName.get(cut.cutSimpleName());
+        if (bySimpleName == null || bySimpleName.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<PsiClass> samePackage = new ArrayList<>();
+        for (PsiClass test : bySimpleName) {
+            if (test == null || !test.isValid()) continue;
+            String testFqn = test.getQualifiedName();
+            if (testFqn == null || testFqn.isBlank()) continue;
+            if (packageOf(testFqn).equals(cut.cutPackageName())) {
+                samePackage.add(test);
+            }
+        }
+        if (!samePackage.isEmpty()) {
+            return sortedUniqueValidClasses(samePackage);
+        }
+
+        if (bySimpleName.size() == 1) {
+            return sortedUniqueValidClasses(bySimpleName);
+        }
+        return Collections.emptyList();
+    }
+
+    private static @NotNull List<PsiClass> sortedUniqueValidClasses(@NotNull List<PsiClass> input) {
+        Map<String, PsiClass> unique = new LinkedHashMap<>();
+        for (PsiClass cls : input) {
+            if (cls == null || !cls.isValid()) continue;
+            String qn = cls.getQualifiedName();
+            String key = qn == null || qn.isBlank()
+                    ? Objects.toString(cls.getName(), "") + "@" + System.identityHashCode(cls)
+                    : qn;
+            if (key.isBlank()) continue;
+            unique.putIfAbsent(key, cls);
+        }
+
+        List<PsiClass> out = new ArrayList<>(unique.values());
+        out.sort(Comparator.comparing(c -> Objects.toString(c.getQualifiedName(), "")));
+        return out;
+    }
+
+    private static @NotNull List<String> inferredCutFqnsForTest(
+            @NotNull String testFqn,
+            @NotNull String testSimpleName
+    ) {
+        String strippedSimpleName = stripKnownTestSuffix(testSimpleName);
+        if (strippedSimpleName == null || strippedSimpleName.isBlank()) {
+            return Collections.emptyList();
+        }
+        String pkg = packageOf(testFqn);
+        String cutFqn = pkg.isBlank() ? strippedSimpleName : pkg + "." + strippedSimpleName;
+        return List.of(cutFqn);
+    }
+
+    private static @Nullable String stripKnownTestSuffix(@NotNull String className) {
+        String[] suffixes = {"Test", "Tests", "IT", "ITCase", "Spec"};
+        for (String suffix : suffixes) {
+            if (!className.endsWith(suffix)) continue;
+            if (className.length() <= suffix.length()) continue;
+            return className.substring(0, className.length() - suffix.length());
+        }
+        return null;
+    }
+
+    private static boolean isInMainProjectRoot(@NotNull VirtualFile file, @Nullable String normalizedBasePath) {
+        if (normalizedBasePath == null || normalizedBasePath.isBlank()) return true;
+        String path = file.getPath().replace('\\', '/');
+        if (path.equals(normalizedBasePath)) return true;
+        return path.startsWith(normalizedBasePath + "/");
+    }
+
+    private @Nullable String normalizedProjectBasePath() {
+        String basePath = project.getBasePath();
+        if (basePath == null || basePath.isBlank()) return null;
+        String normalized = basePath.replace('\\', '/');
+        while (normalized.endsWith("/")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized.isBlank() ? null : normalized;
+    }
+
+    private record FileScanResult(
+            @NotNull List<CutCandidate> cuts,
+            @NotNull Map<String, List<PsiClass>> testsByCutFqn,
+            @NotNull Map<String, List<PsiClass>> testsByCutSimpleName
+    ) {
+        private static @NotNull FileScanResult empty() {
+            return new FileScanResult(Collections.emptyList(), Collections.emptyMap(), Collections.emptyMap());
+        }
+    }
+
+    private record StructuralScan(
+            @NotNull List<CutCandidate> cutCandidates,
+            @NotNull Map<String, List<PsiClass>> testsByCutFqn,
+            @NotNull Map<String, List<PsiClass>> testsByCutSimpleName
+    ) {}
+
+    private record CutCandidate(
+            @NotNull PsiClass cutPsi,
+            @NotNull String cutFqn,
+            @NotNull String cutSimpleName,
+            @NotNull String cutPackageName,
+            int totalPublicMethods
+    ) {}
+
+    private void applyCoverageUpdates(@NotNull Map<String, CoverageCalculator.CoverageResult> updatesByCut) {
+        if (updatesByCut.isEmpty()) return;
+
+        List<ClassTestReportRow> updated = null;
+        synchronized (rowsLock) {
+            if (lastRows.isEmpty()) return;
+            boolean changed = false;
+            List<ClassTestReportRow> next = new ArrayList<>(lastRows.size());
+            for (ClassTestReportRow row : lastRows) {
+                CoverageCalculator.CoverageResult cov = updatesByCut.get(row.cutFqn());
+                if (cov == null) {
+                    next.add(row);
+                    continue;
+                }
+                ClassTestReportRow replacement = row.withCoverage(cov);
+                next.add(replacement);
+                if (replacement != row) changed = true;
+            }
+            if (!changed) return;
+            next.sort(ROW_COMPARATOR);
+            lastRows = Collections.unmodifiableList(next);
+            updated = lastRows;
+        }
+        publishRows(updated);
+    }
+
+    private @Nullable CoverageCalculator.CoverageResult computeCoverageForCut(
+            @NotNull CutCoverageWorkItem item,
+            @NotNull CoverageCalculator coverage,
+            @NotNull JavaPsiFacade psiFacade,
+            @NotNull GlobalSearchScope scope
+    ) {
+        PsiClass cut = psiFacade.findClass(item.cutFqn, scope);
+        if (cut == null || !cut.isValid()) return null;
+
+        List<PsiClass> tests = new ArrayList<>(item.testFqns.size());
+        for (String testFqn : item.testFqns) {
+            if (testFqn == null || testFqn.isBlank()) continue;
+            PsiClass testClass = psiFacade.findClass(testFqn, scope);
+            if (testClass != null && testClass.isValid()) {
+                tests.add(testClass);
+            }
+        }
+
+        String cacheKey = buildCoverageCacheKey(cut, tests);
+        if (cacheKey != null) {
+            CoverageCalculator.CoverageResult cached = coverageCache.get(cacheKey);
+            if (cached != null) return cached;
+        }
+
+        CoverageCalculator.CoverageResult computed = coverage.computePublicMethodCoverage(cut, tests);
+        if (cacheKey != null) {
+            coverageCache.put(cacheKey, computed);
+        }
+        return computed;
+    }
+
+    private List<CutCoverageWorkItem> snapshotCoverageWork() {
+        List<ClassTestReportRow> rows = lastRows;
+        if (rows.isEmpty()) return Collections.emptyList();
+
+        Map<String, Set<String>> testsByCut = new LinkedHashMap<>();
+        for (ClassTestReportRow row : rows) {
+            String cutFqn = row.cutFqn();
+            if (cutFqn == null || cutFqn.isBlank()) continue;
+            Set<String> tests = testsByCut.computeIfAbsent(cutFqn, ignored -> new LinkedHashSet<>());
+            String testFqn = row.testFqn();
+            if (testFqn != null && !testFqn.isBlank()) {
+                tests.add(testFqn);
+            }
+        }
+
+        List<CutCoverageWorkItem> work = new ArrayList<>(testsByCut.size());
+        for (Map.Entry<String, Set<String>> entry : testsByCut.entrySet()) {
+            work.add(new CutCoverageWorkItem(entry.getKey(), new ArrayList<>(entry.getValue())));
+        }
+        return work;
+    }
+
+    private void updateRows(@NotNull List<ClassTestReportRow> rows, boolean keepOrder) {
+        List<ClassTestReportRow> next = new ArrayList<>(rows);
+        if (!keepOrder) {
+            next.sort(ROW_COMPARATOR);
+        }
+        synchronized (rowsLock) {
+            lastRows = Collections.unmodifiableList(next);
+        }
+    }
+
+    private void publishRows(@NotNull List<ClassTestReportRow> rows) {
+        ApplicationManager.getApplication().invokeLater(() -> publishRowsOnEdt(rows));
+    }
+
+    private void publishRowsOnEdt(@NotNull List<ClassTestReportRow> rows) {
+        for (Consumer<List<ClassTestReportRow>> listener : listeners) {
+            try {
+                listener.accept(rows);
+            } catch (Throwable ignored) {
+                // Keep UI responsive even if a listener fails.
+            }
+        }
+    }
+
+    private void cancelCoverageAnalysis() {
+        ProgressIndicator indicator = coverageIndicatorRef.get();
+        if (indicator != null && !indicator.isCanceled()) {
+            indicator.cancel();
+        }
+    }
+
+    private void startNextInlineFixIfIdle() {
+        ApplicationManager.getApplication().invokeLater(() -> {
+            if (project.isDisposed()) return;
+
+            InlineFixRequest request;
+            synchronized (inlineFixLock) {
+                GenerationJobHandle active = activeInlineHandle.get();
+                if (active != null && !active.isFinished()) {
+                    return;
+                }
+                request = inlineFixQueue.pollFirst();
+                if (request == null) {
+                    activeInlineHandle.set(null);
+                    activeInlineCutFqn = null;
+                    if (isInlineQueueDrainedLocked()) {
+                        scheduleInlineQueueRefreshIfNeededLocked();
+                    }
+                    return;
+                }
+                inlineRefreshRequested = false;
+                activeInlineCutFqn = request.cutFqn();
+            }
+
+            PsiClass cutPsi = request.cutPointer().getElement();
+            if (cutPsi == null || !cutPsi.isValid()) {
+                synchronized (inlineFixLock) {
+                    InlineFixRowState current = inlineStateByCutFqn.get(request.cutFqn());
+                    if (current == null) {
+                        current = InlineFixRowState.queued(request.cutFqn());
+                    }
+                    inlineStateByCutFqn.put(
+                            request.cutFqn(),
+                            current.withStatus(
+                                    InlineFixRowState.Status.FAILED,
+                                    "Skipped",
+                                    "Class is no longer valid.",
+                                    false
+                            ).appendDetail("Unable to resolve class from PSI pointer.")
+                    );
+                    activeInlineCutFqn = null;
+                    activeInlineHandle.set(null);
+                }
+                refreshInlineUi(request.cutFqn());
+                startNextInlineFixIfIdle();
+                return;
+            }
+
+            GenerationRunListener listener = new InlineRunListener(request.cutFqn());
+            GenerationJobHandle handle = BulkGeneratorService.enqueue(
+                    project,
+                    List.of(cutPsi),
+                    GenerationType.generate,
+                    RunOutputMode.INLINE_ONLY,
+                    listener
+            );
+
+            synchronized (inlineFixLock) {
+                activeInlineHandle.set(handle);
+                InlineFixRowState running = InlineFixRowState.running(request.cutFqn(), handle.runId())
+                        .withStatus(InlineFixRowState.Status.RUNNING, "Starting", "Fix run started.", true)
+                        .appendDetail("Run started.");
+                inlineStateByCutFqn.put(request.cutFqn(), running);
+            }
+            refreshInlineUi(request.cutFqn());
+        });
+    }
+
+    private boolean isInlineQueueDrained() {
+        synchronized (inlineFixLock) {
+            return isInlineQueueDrainedLocked();
+        }
+    }
+
+    private boolean isInlineQueueDrainedLocked() {
+        GenerationJobHandle active = activeInlineHandle.get();
+        boolean activeRunning = active != null && !active.isFinished();
+        return !activeRunning && inlineFixQueue.isEmpty();
+    }
+
+    private void scheduleInlineQueueRefreshIfNeeded() {
+        ApplicationManager.getApplication().invokeLater(() -> {
+            synchronized (inlineFixLock) {
+                scheduleInlineQueueRefreshIfNeededLocked();
+            }
+        });
+    }
+
+    private void scheduleInlineQueueRefreshIfNeededLocked() {
+        if (!isInlineQueueDrainedLocked()) return;
+        if (inlineRefreshRequested) return;
+        inlineRefreshRequested = true;
+        ApplicationManager.getApplication().invokeLater(() -> refreshAsync("inline_fix_queue_complete"));
+    }
+
+    private void refreshInlineUi(@Nullable String cutFqn) {
+        Runnable refreshTask = () -> {
+            updateInlineAnimationTimer();
+            if (cutFqn == null || cutFqn.isBlank()) {
+                updateInlineRowHeights();
+                table.repaint();
+                return;
+            }
+
+            List<Integer> affectedRows = findViewRowsForCut(cutFqn);
+            if (affectedRows.isEmpty()) {
+                return;
+            }
+            for (Integer viewRow : affectedRows) {
+                updateInlineRowHeight(viewRow);
+                Rectangle runRect = table.getCellRect(viewRow, ReportTableModel.Col.RUN.ordinal(), true);
+                Rectangle statusRect = table.getCellRect(viewRow, ReportTableModel.Col.STATUS.ordinal(), true);
+                table.repaint(runRect.union(statusRect));
+            }
+        };
+        if (ApplicationManager.getApplication().isDispatchThread()) {
+            refreshTask.run();
+        } else {
+            ApplicationManager.getApplication().invokeLater(refreshTask);
+        }
+    }
+
+    private void updateInlineAnimationTimer() {
+        boolean hasRunningState = false;
+        synchronized (inlineFixLock) {
+            for (InlineFixRowState state : inlineStateByCutFqn.values()) {
+                if (state.status() == InlineFixRowState.Status.RUNNING) {
+                    hasRunningState = true;
+                    break;
+                }
+            }
+        }
+        if (hasRunningState) {
+            if (!inlineAnimationTimer.isRunning()) {
+                inlineAnimationTimer.start();
+            }
+        } else if (inlineAnimationTimer.isRunning()) {
+            inlineAnimationTimer.stop();
+        }
+    }
+
+    private void onInlineAnimationTick() {
+        inlineAnimationFrame = (inlineAnimationFrame + 1) % 10_000;
+        String activeCut = activeInlineCutFqn;
+        if (activeCut != null && !activeCut.isBlank()) {
+            refreshInlineUi(activeCut);
+            return;
+        }
+
+        List<String> runningCuts = new ArrayList<>();
+        synchronized (inlineFixLock) {
+            for (Map.Entry<String, InlineFixRowState> entry : inlineStateByCutFqn.entrySet()) {
+                if (entry.getValue().status() == InlineFixRowState.Status.RUNNING) {
+                    runningCuts.add(entry.getKey());
+                }
+            }
+        }
+        if (runningCuts.isEmpty()) {
+            updateInlineAnimationTimer();
+            return;
+        }
+        for (String cut : runningCuts) {
+            refreshInlineUi(cut);
+        }
+    }
+
+    private void updateInlineRowHeights() {
+        int rows = table.getRowCount();
+        for (int viewRow = 0; viewRow < rows; viewRow++) {
+            updateInlineRowHeight(viewRow);
+        }
+    }
+
+    private void updateInlineRowHeight(int viewRow) {
+        ClassTestReportRow row = tableModel.getRowAt(viewRow);
+        int targetHeight = baseRowHeight;
+        if (row != null) {
+            InlineFixRowState state = inlineStateByCutFqn.get(row.cutFqn());
+            if (state != null && state.expanded() && !state.detailLines().isEmpty()) {
+                int detailLines = Math.min(InlineFixRowState.MAX_DETAIL_LINES, state.detailLines().size());
+                int detailHeight = detailLines * table.getFontMetrics(table.getFont()).getHeight();
+                targetHeight = Math.max(baseRowHeight, baseRowHeight + detailHeight + JBUI.scale(8));
+            }
+        }
+        if (table.getRowHeight(viewRow) != targetHeight) {
+            table.setRowHeight(viewRow, targetHeight);
+        }
+    }
+
+    private @NotNull List<Integer> findViewRowsForCut(@NotNull String cutFqn) {
+        int rowCount = table.getRowCount();
+        if (rowCount == 0) return Collections.emptyList();
+        List<Integer> indices = new ArrayList<>();
+        for (int viewRow = 0; viewRow < rowCount; viewRow++) {
+            ClassTestReportRow row = tableModel.getRowAt(viewRow);
+            if (row == null) continue;
+            if (cutFqn.equals(row.cutFqn())) {
+                indices.add(viewRow);
+            }
+        }
+        return indices;
+    }
+
+    private final class InlineRunListener implements GenerationRunListener {
+        private final String cutFqn;
+        private final long startedAtNanos = System.nanoTime();
+
+        private InlineRunListener(String cutFqn) {
+            this.cutFqn = cutFqn;
+        }
+
+        @Override
+        public void onStarted() {
+            updateInlineState(cutFqn, state -> state
+                    .withStatus(InlineFixRowState.Status.RUNNING, "Starting", "Preparing generation.", true)
+                    .appendDetail("Worker started.")
+            );
+        }
+
+        @Override
+        public void onStage(@NotNull String stage, @NotNull String message) {
+            updateInlineState(cutFqn, state -> state
+                    .withStatus(InlineFixRowState.Status.RUNNING, stage, message, true)
+                    .withElapsedMs(elapsedMs())
+                    .appendDetail(stage + ": " + message)
+            );
+        }
+
+        @Override
+        public void onProgress(int percent) {
+            updateInlineState(cutFqn, state -> state
+                    .withProgress(percent)
+                    .withElapsedMs(elapsedMs())
+            );
+        }
+
+        @Override
+        public void onDetail(@NotNull String detail) {
+            updateInlineState(cutFqn, state -> state
+                    .appendDetail(detail)
+                    .withElapsedMs(elapsedMs())
+            );
+        }
+
+        @Override
+        public void onFinished(@NotNull GenerationRunResult result) {
+            ApplicationManager.getApplication().invokeLater(() -> {
+                synchronized (inlineFixLock) {
+                    InlineFixRowState current = inlineStateByCutFqn.get(cutFqn);
+                    if (current == null) {
+                        current = InlineFixRowState.running(cutFqn, "");
+                    }
+                    InlineFixRowState.Status finalStatus = switch (result.status()) {
+                        case SUCCESS -> InlineFixRowState.Status.SUCCESS;
+                        case FAILED -> InlineFixRowState.Status.FAILED;
+                        case CANCELLED -> InlineFixRowState.Status.CANCELLED;
+                    };
+                    String finalStage = switch (result.status()) {
+                        case SUCCESS -> "Completed";
+                        case FAILED -> "Failed";
+                        case CANCELLED -> "Cancelled";
+                    };
+                    InlineFixRowState finishedState = current
+                            .withStatus(finalStatus, finalStage, result.summaryMessage(), false)
+                            .withProgress(100)
+                            .withElapsedMs(result.durationMs() > 0 ? result.durationMs() : elapsedMs())
+                            .appendDetail(result.summaryMessage());
+                    inlineStateByCutFqn.put(cutFqn, finishedState);
+                    activeInlineCutFqn = null;
+                    activeInlineHandle.set(null);
+                }
+
+                refreshInlineUi(cutFqn);
+                startNextInlineFixIfIdle();
+            });
+        }
+
+        private long elapsedMs() {
+            return (System.nanoTime() - startedAtNanos) / 1_000_000;
+        }
+    }
+
+    private void updateInlineState(@NotNull String cutFqn, @NotNull java.util.function.UnaryOperator<InlineFixRowState> mutator) {
+        ApplicationManager.getApplication().invokeLater(() -> {
+            synchronized (inlineFixLock) {
+                InlineFixRowState current = inlineStateByCutFqn.get(cutFqn);
+                if (current == null) return;
+                InlineFixRowState next = mutator.apply(current);
+                if (next != null) {
+                    inlineStateByCutFqn.put(cutFqn, next);
+                }
+            }
+            refreshInlineUi(cutFqn);
+        });
+    }
+
+    private static String buildCoverageCacheKey(PsiClass cut, List<PsiClass> testClasses) {
+        PsiFile cutFile = cut.getContainingFile();
+        VirtualFile cutVf = cutFile == null ? null : cutFile.getVirtualFile();
+        if (cutVf == null) return null;
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(cutVf.getPath()).append('#').append(cutVf.getModificationStamp());
+
+        List<String> testTokens = new ArrayList<>(testClasses.size());
+        for (PsiClass testClass : testClasses) {
+            if (testClass == null || !testClass.isValid()) continue;
+            PsiFile testFile = testClass.getContainingFile();
+            VirtualFile testVf = testFile == null ? null : testFile.getVirtualFile();
+            if (testVf == null) continue;
+            testTokens.add(testVf.getPath() + "#" + testVf.getModificationStamp());
+        }
+        Collections.sort(testTokens);
+        for (String token : testTokens) {
+            sb.append('|').append(token);
+        }
+        return sb.toString();
+    }
+
+    private static String packageOf(String fqn) {
+        if (fqn == null) return "";
+        int idx = fqn.lastIndexOf('.');
+        return idx <= 0 ? "" : fqn.substring(0, idx);
+    }
+
+    /* =======================
+       UI
+       ======================= */
+
+    private final JPanel root = new JPanel(new BorderLayout());
+    private final JPanel centerPanel = new JPanel(new CardLayout());
+    private final ReportTableModel tableModel = new ReportTableModel();
+    private final JBTable table = new JBTable(tableModel);
+    private final JBScrollPane tableScrollPane = new JBScrollPane(table);
+    private final JLabel emptyState = new JLabel("No classes with public methods found.", SwingConstants.CENTER);
+    private final JButton regenerateButton = new JButton("Refresh", AllIcons.Actions.Refresh);
+    private final JButton analyzeCoverageButton = new JButton("Analyze Coverage", AllIcons.Actions.Execute);
+    private final SearchTextField searchField = new SearchTextField(false);
+    private final PillLabel healthLabel = new PillLabel("Test health: —", SwingConstants.CENTER);
+    private final Icon baseIcon = IconLoader.getIcon("/icons/jaipilot.svg", ReportView.class);
+    private final Icon staleIcon = new LayeredIcon(baseIcon, AllIcons.General.WarningDecorator);
+    private volatile boolean stale = false;
+    private int baseRowHeight = JBUI.scale(32);
+
+    public JComponent getComponent() {
+        return root;
+    }
+
+    private void buildUI() {
+        root.setBorder(JBUI.Borders.empty());
+
+        table.setRowHeight(JBUI.scale(28));
+        table.setShowGrid(true);
+        table.setGridColor(UIUtil.getTableGridColor());
+        table.setIntercellSpacing(new Dimension(JBUI.scale(1), JBUI.scale(1)));
+        table.setStriped(true);
+        ReportTableRenderers.install(table, project, new ReportTableRenderers.InlineFixDelegate() {
+            @Override
+            public void requestFix(@NotNull ClassTestReportRow row) {
+                requestInlineFix(row);
+            }
+
+            @Override
+            public void requestCancel(@NotNull ClassTestReportRow row) {
+                requestInlineCancel(row);
+            }
+
+            @Override
+            public void toggleDetails(@NotNull ClassTestReportRow row) {
+                toggleInlineDetails(row);
+            }
+
+            @Override
+            public @Nullable InlineFixRowState getInlineState(@NotNull ClassTestReportRow row) {
+                return ReportView.this.getInlineState(row);
+            }
+
+            @Override
+            public int getAnimationFrame() {
+                return ReportView.this.getInlineAnimationFrame();
+            }
+        });
+
+        int twoLine = table.getFontMetrics(table.getFont()).getHeight() * 2 + JBUI.scale(4);
+        baseRowHeight = Math.max(JBUI.scale(32), twoLine);
+        table.setRowHeight(baseRowHeight);
+
+        emptyState.setBorder(JBUI.Borders.empty(32));
+        emptyState.setForeground(JBColor.GRAY);
+        emptyState.setFont(emptyState.getFont().deriveFont(Font.BOLD, emptyState.getFont().getSize() + 1));
+
+        JPanel header = new JPanel(new BorderLayout());
+        header.setBorder(JBUI.Borders.empty(8, 12));
+
+        healthLabel.setVisible(false);
+
+        regenerateButton.addActionListener(e -> refreshAsync("manual"));
+        analyzeCoverageButton.addActionListener(e -> analyzeCoverageAsync());
+        searchField.getTextEditor().putClientProperty("JTextField.placeholderText", "Search class / package / test class");
+        searchField.getTextEditor().getDocument().addDocumentListener(new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent e) {
+                applySearchFilter();
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent e) {
+                applySearchFilter();
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent e) {
+                applySearchFilter();
+            }
+        });
+
+        JPanel actionsLeft = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(12), 0));
+        actionsLeft.setOpaque(false);
+        actionsLeft.add(regenerateButton);
+        actionsLeft.add(analyzeCoverageButton);
+
+        JPanel actionsCenter = new JPanel(new BorderLayout());
+        actionsCenter.setOpaque(false);
+        actionsCenter.setBorder(JBUI.Borders.empty(0, 10));
+        searchField.setPreferredSize(new Dimension(JBUI.scale(320), searchField.getPreferredSize().height));
+        actionsCenter.add(searchField, BorderLayout.CENTER);
+
+        JPanel actionsRight = new JPanel(new FlowLayout(FlowLayout.RIGHT, JBUI.scale(8), 0));
+        actionsRight.setOpaque(false);
+        actionsRight.add(healthLabel);
+
+        JPanel actionsRow = new JPanel(new BorderLayout());
+        actionsRow.setOpaque(false);
+        actionsRow.add(actionsLeft, BorderLayout.WEST);
+        actionsRow.add(actionsCenter, BorderLayout.CENTER);
+        actionsRow.add(actionsRight, BorderLayout.EAST);
+
+        header.add(actionsRow, BorderLayout.CENTER);
+
+        centerPanel.add(tableScrollPane, "table");
+        centerPanel.add(emptyState, "empty");
+        root.add(header, BorderLayout.NORTH);
+        root.add(centerPanel, BorderLayout.CENTER);
+    }
+
+    private void hookListeners() {
+        new DoubleClickListener() {
+            @Override
+            protected boolean onDoubleClick(MouseEvent event) {
+                ClassTestReportRow row = tableModel.getRowAt(table.getSelectedRow());
+                if (row != null && row.cutPsi() != null) {
+                    openPsi(row.cutPsi());
+                }
+                return true;
+            }
+        }.installOn(table);
+
+        table.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() != 1 || e.getButton() != MouseEvent.BUTTON1) return;
+                int viewRow = table.rowAtPoint(e.getPoint());
+                int viewCol = table.columnAtPoint(e.getPoint());
+                if (viewRow < 0 || viewCol < 0) return;
+                int modelCol = table.convertColumnIndexToModel(viewCol);
+                if (modelCol != ReportTableModel.Col.STATUS.ordinal()) return;
+                ClassTestReportRow row = tableModel.getRowAt(viewRow);
+                if (row == null) return;
+                toggleInlineDetails(row);
+            }
+        });
+
+        PsiManager.getInstance(project).addPsiTreeChangeListener(new PsiTreeChangeAdapter() {
+            @Override
+            public void childrenChanged(@NotNull PsiTreeChangeEvent event) {
+                PsiFile file = event.getFile();
+                if (file instanceof PsiJavaFile) {
+                    markStale();
+                }
+            }
+        }, this);
+
+        VirtualFileManager.getInstance().addVirtualFileListener(new VirtualFileListener() {
+            @Override
+            public void contentsChanged(@NotNull VirtualFileEvent event) {
+                maybeMarkStale(event.getFile());
+            }
+
+            @Override
+            public void fileDeleted(@NotNull VirtualFileEvent event) {
+                maybeMarkStale(event.getFile());
+            }
+
+            @Override
+            public void fileCreated(@NotNull VirtualFileEvent event) {
+                maybeMarkStale(event.getFile());
+            }
+
+            private void maybeMarkStale(VirtualFile file) {
+                if (file != null && "java".equalsIgnoreCase(file.getExtension())) {
+                    markStale();
+                }
+            }
+        }, this);
+    }
+
+    private void onRowsUpdated(List<ClassTestReportRow> rows) {
+        List<ClassTestReportRow> allRows = rows == null ? Collections.emptyList() : rows;
+        tableModel.setRows(allRows);
+        updateFilteredViewState();
+        updateActionButtons();
+    }
+
+    private void applySearchFilter() {
+        tableModel.setFilterText(searchField.getText());
+        updateFilteredViewState();
+    }
+
+    private void updateFilteredViewState() {
+        List<ClassTestReportRow> filteredRows = tableModel.getFilteredRows();
+        updateInlineRowHeights();
+        updateSummary(filteredRows);
+        showEmptyState(filteredRows.isEmpty());
+        updateHealthIndicator(filteredRows);
+    }
+
+    private void updateSummary(List<ClassTestReportRow> rows) {}
+
+    private void showEmptyState(boolean empty) {
+        if (empty) {
+            String query = searchField.getText() == null ? "" : searchField.getText().trim();
+            if (query.isBlank()) {
+                emptyState.setText("No classes with public methods found.");
+            } else {
+                emptyState.setText("No classes match \"" + query + "\".");
+            }
+        }
+        CardLayout cl = (CardLayout) centerPanel.getLayout();
+        cl.show(centerPanel, empty ? "empty" : "table");
+    }
+
+    private void updateHealthIndicator(@NotNull List<ClassTestReportRow> rows) {
+        if (rows.isEmpty()) {
+            healthLabel.setVisible(false);
+            return;
+        }
+
+        Map<String, CutHealthSummary> summaryByCut = new HashMap<>();
+        for (ClassTestReportRow row : rows) {
+            CutHealthSummary summary = summaryByCut.computeIfAbsent(
+                    row.cutFqn(),
+                    k -> new CutHealthSummary()
+            );
+            summary.absorb(row);
+        }
+
+        double scoreSum = 0.0;
+        for (CutHealthSummary s : summaryByCut.values()) {
+            scoreSum += s.healthScore();
+        }
+        double averageScore = summaryByCut.isEmpty() ? 0.0 : scoreSum / summaryByCut.size();
+
+        String text;
+        JBColor bg;
+        JBColor fg;
+        if (averageScore >= 90.0) {
+            text = "Test health: Perfect";
+            bg = new JBColor(new Color(223, 243, 229), new Color(60, 90, 70));
+            fg = new JBColor(new Color(30, 120, 70), new Color(200, 255, 220));
+        } else if (averageScore >= 75.0) {
+            text = "Test health: Good";
+            bg = new JBColor(new Color(230, 244, 230), new Color(70, 90, 70));
+            fg = new JBColor(new Color(50, 120, 70), new Color(200, 230, 200));
+        } else if (averageScore >= 50.0) {
+            text = "Test health: Moderate";
+            bg = new JBColor(new Color(255, 244, 214), new Color(90, 80, 50));
+            fg = new JBColor(new Color(150, 110, 20), new Color(255, 230, 180));
+        } else {
+            text = "Test health: Poor";
+            bg = new JBColor(new Color(255, 230, 230), new Color(90, 50, 50));
+            fg = new JBColor(new Color(160, 40, 40), new Color(255, 200, 200));
+        }
+        healthLabel.setText(text + " (" + Math.round(averageScore) + "%)");
+        healthLabel.setBackground(bg);
+        healthLabel.setForeground(fg);
+        healthLabel.setVisible(true);
+    }
+
+    private void updateActionButtons() {
+        boolean refreshBusy = refreshInProgress.get();
+        boolean coverageBusy = coverageInProgress.get();
+        boolean inlineBusy = !isInlineQueueDrained();
+        boolean hasRows = !lastRows.isEmpty();
+
+        regenerateButton.setEnabled(!refreshBusy && !inlineBusy);
+        analyzeCoverageButton.setEnabled(!refreshBusy && !coverageBusy && !inlineBusy && hasRows);
+
+        if (inlineBusy) {
+            regenerateButton.setToolTipText("Wait for inline fix queue to complete");
+            analyzeCoverageButton.setToolTipText("Wait for inline fix queue to complete");
+        } else {
+            regenerateButton.setToolTipText(null);
+            analyzeCoverageButton.setToolTipText(null);
+        }
+
+        if (coverageBusy) {
+            analyzeCoverageButton.setText("Analyzing...");
+        } else {
+            analyzeCoverageButton.setText("Analyze Coverage");
+        }
+    }
+
+    private void updateActionButtonsAsync() {
+        ApplicationManager.getApplication().invokeLater(this::updateActionButtons);
+    }
+
+    private static final class CutHealthSummary {
+        private boolean hasCoverage;
+        private int totalMethods;
+        private Set<String> uncoveredIntersection = new HashSet<>();
+        private boolean missingTests;
+        private boolean executionFailures;
+
+        void absorb(ClassTestReportRow row) {
+            missingTests = missingTests || row.isMissingTestClass();
+            executionFailures = executionFailures || row.hasExecutionFailures();
+
+            if (row.coverageStatus() != ClassTestReportRow.CoverageStatus.ANALYZED) {
+                return;
+            }
+            if (!hasCoverage) {
+                hasCoverage = true;
+                totalMethods = row.totalPublicMethods();
+                uncoveredIntersection = new HashSet<>(row.uncoveredMethodSignatures());
+                return;
+            }
+            uncoveredIntersection.retainAll(row.uncoveredMethodSignatures());
+        }
+
+        double healthScore() {
+            double score = 100.0;
+            if (hasCoverage && totalMethods > 0) {
+                int covered = Math.max(0, totalMethods - uncoveredIntersection.size());
+                score = (covered * 100.0) / totalMethods;
+            }
+            if (missingTests) score *= 0.5;
+            if (executionFailures) score *= 0.35;
+            return Math.max(0.0, Math.min(100.0, score));
+        }
+    }
+
+    private void markStale() {
+        if (stale) return;
+        stale = true;
+        coverageCache.clear();
+        updateStatusLine();
+        updateToolWindowIcon(staleIcon);
+    }
+
+    private void markFresh() {
+        stale = false;
+        updateStatusLine();
+        updateToolWindowIcon(baseIcon);
+    }
+
+    private void updateToolWindowIcon(Icon icon) {
+        ApplicationManager.getApplication().invokeLater(() -> {
+            var toolWindow = com.intellij.openapi.wm.ToolWindowManager.getInstance(project)
+                    .getToolWindow("JAIPilot Console");
+            if (toolWindow != null && icon != null) {
+                toolWindow.setIcon(icon);
+            }
+        });
+    }
+
+    private void updateStatusLine() {
+        if (stale) {
+            regenerateButton.setText("Re-analyse Stale Tests");
+            regenerateButton.setIcon(AllIcons.Actions.ForceRefresh);
+            return;
+        }
+        regenerateButton.setText("Refresh");
+        regenerateButton.setIcon(AllIcons.Actions.Refresh);
+    }
+
+    private void openPsi(PsiClass psiClass) {
+        PsiFile file = psiClass.getContainingFile();
+        if (file == null) return;
+        VirtualFile vf = file.getVirtualFile();
+        if (vf == null) return;
+        new OpenFileDescriptor(project, vf, psiClass.getTextOffset()).navigate(true);
+    }
+
+    @Override
+    public void dispose() {
+        inlineAnimationTimer.stop();
+        GenerationJobHandle active = activeInlineHandle.get();
+        if (active != null && !active.isFinished()) {
+            active.cancel();
+        }
+        inlineFixQueue.clear();
+        inlineStateByCutFqn.clear();
+    }
+
+    private record CutCoverageWorkItem(
+            @NotNull String cutFqn,
+            @NotNull List<String> testFqns
+    ) {}
+
+    private record InlineFixRequest(
+            @NotNull String cutFqn,
+            @NotNull SmartPsiElementPointer<PsiClass> cutPointer
+    ) {}
+
+    /** Simple pill-style label with rounded background. */
+    private static final class PillLabel extends JLabel {
+        PillLabel(String text, int alignment) {
+            super(text, alignment);
+            setOpaque(false);
+            setBorder(JBUI.Borders.empty(4, 10));
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            Color bg = getBackground() == null ? getParent().getBackground() : getBackground();
+            g2.setColor(bg);
+            int arc = JBUI.scale(12);
+            g2.fillRoundRect(0, 0, getWidth(), getHeight(), arc, arc);
+            g2.dispose();
+            super.paintComponent(g);
+        }
+    }
+}

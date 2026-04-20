@@ -81,10 +81,8 @@
                 anchor="bottom"
                 factoryClass="com.github.skrcode.javaautounittests.actions.TestGenerationToolWindowFactory"
                 icon="/icons/jaipilot.svg"
-                canCloseContents="false"/>
-
-<!--        <projectService serviceImplementation="com.github.skrcode.javaautounittests.view.report.ReportView"/>-->
-
+                canCloseContents="true"/>
+        <projectService serviceImplementation="com.github.skrcode.javaautounittests.view.report.ReportView"/>
         <applicationService serviceImplementation="com.github.skrcode.javaautounittests.state.AISettings"/>
         <projectConfigurable instance="com.github.skrcode.javaautounittests.view.AISettingsConfigurable"/>
         <statusBarWidgetFactory id="AIStatusWidget" implementation="com.github.skrcode.javaautounittests.view.AIStatusWidgetFactory"/>

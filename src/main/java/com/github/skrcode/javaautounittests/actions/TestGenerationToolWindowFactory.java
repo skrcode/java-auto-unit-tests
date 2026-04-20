@@ -4,6 +4,8 @@
 
 package com.github.skrcode.javaautounittests.actions;
 
+import com.github.skrcode.javaautounittests.view.report.ReportView;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.wm.ToolWindow;
@@ -26,6 +28,18 @@ public class TestGenerationToolWindowFactory implements ToolWindowFactory, DumbA
     public void createToolWindowContent(@NotNull Project project, @NotNull ToolWindow toolWindow) {
         if (toolWindow.getContentManager().getContentCount() > 0) return;
 
+        ReportView reportView = ReportView.getInstance(project);
+        JComponent contentComponent = reportView != null ? reportView.getComponent() : buildFallbackPanel();
+
+        Content content = ContentFactory.getInstance().createContent(contentComponent, "Overview", false);
+        content.setCloseable(false);
+        toolWindow.getContentManager().addContent(content);
+        if (reportView != null) {
+            ApplicationManager.getApplication().invokeLater(() -> reportView.refreshAsync("toolwindow_open"));
+        }
+    }
+
+    private static JComponent buildFallbackPanel() {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBorder(new EmptyBorder(12, 12, 12, 12));
         panel.setBackground(UIManager.getColor("Panel.background"));
@@ -42,9 +56,6 @@ public class TestGenerationToolWindowFactory implements ToolWindowFactory, DumbA
 
         panel.add(title, BorderLayout.NORTH);
         panel.add(subtitle, BorderLayout.CENTER);
-
-        Content content = ContentFactory.getInstance().createContent(panel, "Overview", false);
-        content.setCloseable(false);
-        toolWindow.getContentManager().addContent(content);
+        return panel;
     }
 }
