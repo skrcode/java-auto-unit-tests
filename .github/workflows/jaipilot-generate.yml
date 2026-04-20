@@ -31,7 +31,7 @@ jobs:
         id: jaipilot-auth
         shell: bash
         env:
-          JAIPILOT_TOKEN_ENDPOINT: http://otxfylhjrlaesjagfhfi.supabase.co/functions/v1/github-actions-token
+          JAIPILOT_TOKEN_ENDPOINT: https://otxfylhjrlaesjagfhfi.supabase.co/functions/v1/github-actions-token
         run: |
           set -euo pipefail
 
