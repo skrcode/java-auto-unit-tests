@@ -26,6 +26,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.head_ref }}
+          fetch-depth: 0
 
       - name: Exchange GitHub OIDC token for JAIPilot runtime token
         id: jaipilot-auth
